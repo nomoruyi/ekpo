@@ -1,4 +1,4 @@
-qt_add_library(personae_core STATIC probe.cpp)
+qt_add_library(personae_core STATIC library.cpp model.cpp probe.cpp)
 target_include_directories(personae_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(personae_core PUBLIC Qt6::Core KF6::ConfigCore)
 
