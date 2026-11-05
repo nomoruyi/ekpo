@@ -124,7 +124,7 @@ The owner wants amdgpu in the initramfs now, for the current setup. Not a Person
 - Adding `amdgpu` to `/etc/initramfs-tools/modules` packs the module (~6.7 MB) and all 692 firmware files it lists (~27 MB, already zstd-compressed), so each initrd grows from ~94 MB to ~125 MB; ×5 kernels plus Timeshift copies.
 - `/etc/initramfs-tools/conf.d/calamares-safe-initramfs.conf` (root-only) contains `UMASK=0077` (owner confirmed), which explains the 0600 initrds.
 - After the change, re-check the amdgpu bullet in `CLAUDE.md`: previews then need only the native mode, and Personae must keep amdgpu in mind when it rebuilds initrds (it doesn't remove it).
-- **Done 2026-11-05 (7.0.0-42 only):** amdgpu now replaces simpledrm ~25 ms after it starts, before plymouth-start; initrd 128 MB. The other four initrds are unchanged until `update-initramfs -u -k all`.
+- **Done 2026-11-05 (7.0.0-42 only):** amdgpu now replaces simpledrm ~25 ms after it starts, before plymouth-start; initrd 128 MB. The owner then rebuilt all five (`-k all`, 21:52); all initrds are ~128 MB.
 
 ## Round 8: editors, assets, settings (answered 2026-11-05)
 

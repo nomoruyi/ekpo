@@ -1,0 +1,1 @@
+BOOT_IMAGE=/@/boot/vmlinuz-7.0.0-42-generic root=UUID=3502296e-5c13-4e5a-a0d3-1ecd4f4367ad ro rootflags=subvol=@ quiet splash resume=UUID=e059f494-d020-4881-b09c-874773a0d2d8 amdgpu.gpu_recovery=1 amdgpu.runpm=0

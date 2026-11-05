@@ -1,0 +1,152 @@
+{
+    "cmdlineSplash": true,
+    "errors": [
+    ],
+    "grub": {
+        "personaeDropIn": false,
+        "themes": [
+            "crossgrub",
+            "hollow-grub"
+        ],
+        "values": {
+            "GRUB_DISABLE_OS_PROBER": "false",
+            "GRUB_DISTRIBUTOR": "Kubuntu",
+            "GRUB_GFXMODE": "2560x1440",
+            "GRUB_RECORDFAIL_TIMEOUT": "20",
+            "GRUB_THEME": "/boot/grub/themes/hollow-grub/theme.txt",
+            "GRUB_TIMEOUT": "10",
+            "GRUB_TIMEOUT_STYLE": "hidden"
+        }
+    },
+    "initramfsGenerator": "initramfs-tools",
+    "kernels": [
+        {
+            "initrdModified": "2026-11-05T20:52:34Z",
+            "version": "7.0.0-27-generic"
+        },
+        {
+            "initrdModified": "2026-11-05T20:52:28Z",
+            "version": "7.0.0-29-generic"
+        },
+        {
+            "initrdModified": "2026-11-05T20:52:22Z",
+            "version": "7.0.0-30-generic"
+        },
+        {
+            "initrdModified": "2026-11-05T20:52:17Z",
+            "version": "7.0.0-38-generic"
+        },
+        {
+            "initrdModified": "2026-11-05T20:52:12Z",
+            "version": "7.0.0-42-generic"
+        }
+    ],
+    "leftoverJournal": false,
+    "plasmaSplash": {
+        "engine": "",
+        "packages": [
+            {
+                "id": "Overload",
+                "user": true
+            },
+            {
+                "id": "Penrose",
+                "user": true
+            },
+            {
+                "id": "org.kde.breeze.desktop",
+                "user": false
+            },
+            {
+                "id": "org.kde.oxygen",
+                "user": false
+            }
+        ],
+        "theme": "Overload"
+    },
+    "plymouth": {
+        "alternative": "/usr/share/plymouth/themes/fallout/fallout.plymouth",
+        "alternativeMode": "manual",
+        "choices": [
+            {
+                "path": "/usr/share/plymouth/themes/bgrt/bgrt.plymouth",
+                "priority": 110
+            },
+            {
+                "path": "/usr/share/plymouth/themes/fallout/fallout.plymouth",
+                "priority": 100
+            },
+            {
+                "path": "/usr/share/plymouth/themes/kubuntu-logo/kubuntu-logo.plymouth",
+                "priority": 150
+            },
+            {
+                "path": "/usr/share/plymouth/themes/mint-galaxy/mint-galaxy.plymouth",
+                "priority": 100
+            }
+        ],
+        "daemonTheme": "fallout",
+        "themes": [
+            {
+                "id": "bgrt",
+                "module": "two-step",
+                "name": "BGRT"
+            },
+            {
+                "id": "breeze",
+                "module": "script",
+                "name": "Breeze"
+            },
+            {
+                "id": "breeze-text",
+                "module": "breeze-text",
+                "name": "Breeze (Text Mode)"
+            },
+            {
+                "id": "details",
+                "module": "details",
+                "name": "Details"
+            },
+            {
+                "id": "fallout",
+                "module": "script",
+                "name": "Fallout"
+            },
+            {
+                "id": "kubuntu-logo",
+                "module": "two-step",
+                "name": "Kubuntu Logo"
+            },
+            {
+                "id": "kubuntu-text",
+                "module": "ubuntu-text",
+                "name": "Kubuntu Text"
+            },
+            {
+                "id": "mint-galaxy",
+                "module": "script",
+                "name": "mint-galaxy"
+            },
+            {
+                "id": "spinner",
+                "module": "two-step",
+                "name": "Spinner"
+            },
+            {
+                "id": "text",
+                "module": "text",
+                "name": "Text"
+            },
+            {
+                "id": "tribar",
+                "module": "tribar",
+                "name": "Tribar"
+            },
+            {
+                "id": "ubuntu-text",
+                "module": "ubuntu-text",
+                "name": "Ubuntu Text"
+            }
+        ]
+    }
+}

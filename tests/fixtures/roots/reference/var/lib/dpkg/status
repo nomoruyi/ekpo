@@ -1,0 +1,10 @@
+Package: dracut-core
+Status: install ok installed
+Version: 110-11ubuntu0.1
+Provides: dracut-live
+
+Package: initramfs-tools
+Status: install ok installed
+Version: 0.151ubuntu1
+Provides: linux-initramfs-tool
+
