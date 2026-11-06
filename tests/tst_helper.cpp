@@ -103,6 +103,7 @@ private Q_SLOTS:
     void usesDracutWhenItBuildsInitrds();
     void rebuildsOnlyTheNewestKernel();
     void newestOnlyRollbackTouchesOnlyThatKernel();
+    void prunesCopiesHistoryNoLongerNeeds();
     void reappliesSameVersion();
     void failedRebuildRollsBack();
     void sameIdDifferentContentRollsBack();
@@ -318,6 +319,32 @@ void TestHelper::newestOnlyRollbackTouchesOnlyThatKernel()
     const QByteArray log = readAll(at(QStringLiteral("/var/log/ekpo-helper.log")));
     QVERIFY(log.contains("update-initramfs -u -k 7.0.0-42-generic"));
     QVERIFY(!log.contains("update-initramfs -u -k all"));
+}
+
+void TestHelper::prunesCopiesHistoryNoLongerNeeds()
+{
+    QCOMPARE(run(input(grubRequest(), grubFiles())).exitCode, 0);
+    QCOMPARE(run(input(plymouthRequest(), plymouthFiles())).exitCode, 0);
+
+    // A new GRUB copy; history keeps only it, so the old GRUB copy goes. The
+    // Plymouth copy stays because it is selected.
+    Request next = grubRequest(QStringLiteral("ekpo-day-v1"));
+    next.keep = QStringList{QStringLiteral("ekpo-day-v1")};
+    const Run r = run(input(next, grubFiles(QStringLiteral("ekpo-day-v1"))));
+    QVERIFY2(r.exitCode == 0, qPrintable(r.result.value(QStringLiteral("error")).toString()));
+    QCOMPARE(r.result.value(QStringLiteral("details")).toObject().value(QStringLiteral("pruned")).toArray(), QJsonArray{grubId});
+    QVERIFY(!QFileInfo::exists(at(QStringLiteral("/boot/grub/themes/ekpo-night-v1"))));
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/boot/grub/themes/ekpo-day-v1"))));
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-v1"))));
+
+    // Switching the splash away lets the old copy and its alternative go.
+    Request back;
+    back.plymouth = Request::Plymouth{QStringLiteral("manual"), QStringLiteral("fallout"), QStringLiteral("fallout")};
+    back.keep = QStringList{QStringLiteral("ekpo-day-v1")};
+    QCOMPARE(run(input(back)).exitCode, 0);
+    QVERIFY(!QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-v1"))));
+    QVERIFY(!alternativeState().contains(QLatin1String("ekpo-dots-v1")));
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/boot/grub/themes/ekpo-day-v1")))); // still selected
 }
 
 void TestHelper::reappliesSameVersion()

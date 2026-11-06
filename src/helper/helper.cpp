@@ -89,6 +89,7 @@ public:
     }
 
     HelperResult apply(const Request &request, const QMap<QString, QList<PayloadFile>> &themes);
+    QStringList prune(const Request &request, const QStringList &keep);
     HelperResult recover();
     HelperResult uninstall();
 
@@ -394,9 +395,11 @@ HelperResult Helper::apply(const Request &request, const QMap<QString, QList<Pay
 
         progress(QStringLiteral("Updating grub.cfg"));
         run(QStringLiteral("update-grub"), {});
-        const QJsonObject details = verify();
+        QJsonObject details = verify();
         removeJournal();
         log(QStringLiteral("apply: done"));
+        if (request.keep)
+            details.insert(QStringLiteral("pruned"), QJsonArray::fromStringList(prune(request, *request.keep)));
         return {Outcome::Done, {}, details};
     } catch (const StepError &e) {
         log(QStringLiteral("apply failed: %1; rolling back").arg(e.message));
@@ -479,6 +482,48 @@ HelperResult Helper::recover()
     if (restore(errors))
         return {Outcome::Done, {}, {{QStringLiteral("recovered"), true}}};
     return {Outcome::NeedsRecovery, errors.join(QStringLiteral("; ")), {}};
+}
+
+// After a successful apply: removes Ekpo's theme folders that no kept history entry
+// needs and that nothing uses right now (selected GRUB theme, Plymouth alternative,
+// plymouthd.conf). Best effort: a failure is logged and the apply still counts.
+// Older kernels' initrds keep their own copy of a removed splash.
+QStringList Helper::prune(const Request &request, const QStringList &keep)
+{
+    QStringList inUse = keep;
+    for (const Request::Theme &t : request.themes)
+        inUse << t.id;
+    QString error;
+    if (const auto grub = effectiveGrub(m_env.root, {QStringLiteral("GRUB_THEME")}, error))
+        inUse << QFileInfo(grub->value(QStringLiteral("GRUB_THEME"))).dir().dirName();
+    const auto alt = readAlternative(m_env.root, alternativeName);
+    if (alt)
+        inUse << themeIdOf(alt->value);
+    static const QRegularExpression daemonTheme(QStringLiteral("^\\s*Theme\\s*=\\s*(\\S+)"), QRegularExpression::MultilineOption);
+    inUse << daemonTheme.match(QString::fromUtf8(readFile(at(plymouthdConf)).value_or(QByteArray()))).captured(1);
+
+    QStringList removed;
+    for (const QString &dir : {grubThemesDir, plymouthThemesDir}) {
+        for (const QString &id : QDir(at(dir)).entryList({QStringLiteral("ekpo-*")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
+            if (inUse.contains(id) || !validPayloadThemeId(id))
+                continue;
+            try {
+                const QString path = dir + id + QLatin1Char('/') + id + QStringLiteral(".plymouth");
+                const bool registered = alt && std::any_of(alt->choices.cbegin(), alt->choices.cend(), [&](const auto &c) { return c.first == path; });
+                if (dir == plymouthThemesDir && registered)
+                    run(QStringLiteral("update-alternatives"), {QStringLiteral("--remove"), alternativeName, path});
+                log(QStringLiteral("prune: %1%2").arg(dir, id));
+                if (!QDir(at(dir + id)).removeRecursively())
+                    throw StepError{QStringLiteral("can't remove %1%2").arg(dir, id)};
+                removed << id;
+            } catch (const StepError &e) {
+                log(QStringLiteral("prune failed: %1").arg(e.message));
+            }
+        }
+    }
+    if (!removed.isEmpty())
+        progress(QStringLiteral("Removed %1 theme copies no history entry needs anymore").arg(removed.size()));
+    return removed;
 }
 
 // Removes what Ekpo installed. The app restores Original first, so nothing of Ekpo's

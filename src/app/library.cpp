@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
 #include <QUuid>
 
@@ -396,4 +397,22 @@ bool Library::setPendingCheck(const QJsonObject &check, QString &error)
 void Library::clearPendingCheck()
 {
     QFile::remove(m_path + QStringLiteral("/pending-check.json"));
+}
+
+void Library::pruneBuilds()
+{
+    QStringList errors;
+    QSet<QString> used;
+    for (const HistoryEntry &e : history(errors)) {
+        const QJsonObject target = e.state.value(QStringLiteral("target")).toObject();
+        for (auto it = target.constBegin(); it != target.constEnd(); ++it)
+            used.insert(it.value().toObject().value(QStringLiteral("build")).toString());
+    }
+    if (!errors.isEmpty())
+        return; // an unreadable entry might need a build: keep everything
+    const QDir builds(m_path + QStringLiteral("/builds"));
+    for (const QString &hash : builds.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        if (!used.contains(hash))
+            QDir(builds.filePath(hash)).removeRecursively();
+    }
 }

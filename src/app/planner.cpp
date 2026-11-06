@@ -410,3 +410,23 @@ QList<Stage> driftedStages(const Library &library, const Target &current)
         drifted << Stage::PlasmaSplash;
     return drifted;
 }
+
+QStringList keptThemes(const Library &library, const Target &newTarget)
+{
+    QStringList errors;
+    const QList<HistoryEntry> history = library.history(errors); // newest first
+    QList<Target> targets{newTarget};
+    // The new entry pushes the oldest out once history is full.
+    for (qsizetype i = 0; i < history.size() && i < library.settings().historySize - 1; ++i)
+        targets << Target::fromJson(history[i].state.value(QStringLiteral("target")).toObject());
+    QStringList kept;
+    for (const Target &t : targets) {
+        const QStringList ids = {t.bootMenu ? t.bootMenu->theme : QString(), t.bootSplash ? t.bootSplash->theme : QString(),
+                                 t.bootSplash ? t.bootSplash->daemonTheme : QString()};
+        for (const QString &id : ids) {
+            if (id.startsWith(QLatin1String("ekpo-")) && !kept.contains(id))
+                kept << id;
+        }
+    }
+    return kept;
+}

@@ -60,5 +60,8 @@ Plan planTarget(const PlanContext &context, const Target &target, const QString 
 Target originalTarget(const Library &library);
 // Per stage, the state the newest history entry touching it left behind.
 Target lastApplied(const Library &library);
+// Ekpo theme copies (ekpo-*) that history still needs once newTarget is applied: the
+// helper removes the others (SPEC.md §4.9).
+QStringList keptThemes(const Library &library, const Target &newTarget);
 // Stages whose current state differs from what Ekpo last applied (SPEC.md §4.12).
 QList<Stage> driftedStages(const Library &library, const Target &current);

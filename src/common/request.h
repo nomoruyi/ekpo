@@ -33,6 +33,10 @@ struct Request {
 
     Operation operation = Operation::Apply;
     QList<Theme> themes;
+    // Apply only: Ekpo's theme folders (ekpo-*) still needed by history. After a
+    // successful apply the helper removes the others that aren't in use. Absent:
+    // remove nothing.
+    std::optional<QStringList> keep;
     std::optional<Grub> grub;
     std::optional<Plymouth> plymouth;
 };

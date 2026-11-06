@@ -159,13 +159,20 @@ int status(const Library &library, const AppEnvironment &env)
         if (k.hasInitrd && state.plymouthSelectedAt.isValid() && k.initrdModified < state.plymouthSelectedAt)
             ++outdated;
     }
-    if (outdated > 0)
+    // After a deliberate "newest kernel only" apply the older initrds are a fallback, not a problem.
+    const auto lastSplash = lastApplied(library).bootSplash;
+    QStringList notes;
+    if (outdated > 0 && lastSplash && !lastSplash->allKernels)
+        notes << QStringLiteral("The other %1 kernels keep the previous splash as a fallback (the last apply rebuilt only the newest kernel).").arg(outdated);
+    else if (outdated > 0)
         attention << QStringLiteral("%1 kernels still boot with an older splash.").arg(outdated);
     QStringList errors;
     const QList<HistoryEntry> history = library.history(errors);
     if (!history.isEmpty())
         out() << "Last apply:    #" << history.first().number << " " << history.first().title << " ("
               << history.first().createdAt.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")) << ")\n";
+    for (const QString &note : notes)
+        out() << "Note:          " << note << "\n";
     out() << (attention.isEmpty() ? QStringLiteral("\nNothing needs attention.\n") : QStringLiteral("\nNeeds attention:\n  - ") + attention.join(QStringLiteral("\n  - ")) + QLatin1Char('\n'))
           << Qt::flush;
     return attention.isEmpty() ? 0 : 3;

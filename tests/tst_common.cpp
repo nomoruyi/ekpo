@@ -296,6 +296,9 @@ void TestCommon::requestRoundTrip()
     QVERIFY(parseRequest(R"({"format":1,"operation":"apply","grub":{"original":true}})", error));
     QVERIFY(parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","daemonTheme":"fallout"}})", error));
     QVERIFY(parseRequest(R"({"format":1,"operation":"recover"})", error));
+    const auto keep = parseRequest(R"({"format":1,"operation":"apply","grub":{"original":true},"keep":["ekpo-a-v1"]})", error);
+    QVERIFY2(keep, qPrintable(error));
+    QCOMPARE(*keep->keep, QStringList{QStringLiteral("ekpo-a-v1")});
     const auto newest = parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout","initrds":"newest"}})", error);
     QVERIFY2(newest, qPrintable(error));
     QVERIFY(!newest->plymouth->allKernels);
@@ -328,6 +331,9 @@ void TestCommon::requestRejects_data()
     QTest::newRow("manual without theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","daemonTheme":"fallout"}})");
     QTest::newRow("auto with theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","theme":"fallout","daemonTheme":"fallout"}})");
     QTest::newRow("bad daemon theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","daemonTheme":"x\nThemeDir=/tmp"}})");
+    QTest::newRow("keep with a bad id") << QByteArrayLiteral(R"({"format":1,"operation":"apply","grub":{"original":true},"keep":["../x"]})");
+    QTest::newRow("keep not a list") << QByteArrayLiteral(R"({"format":1,"operation":"apply","grub":{"original":true},"keep":"ekpo-a-v1"})");
+    QTest::newRow("keep on recover") << QByteArrayLiteral(R"({"format":1,"operation":"recover","keep":[]})");
     QTest::newRow("bad initrd scope") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout","initrds":"oldest"}})");
     QTest::newRow("oversized") << QByteArray(maxRequestBytes + 1, ' ');
 }

@@ -115,7 +115,10 @@ void TestCli::appliesAndRestoresOriginal()
     QVERIFY(applied.out.contains(QLatin1String("# update-initramfs -u -k 7.0.0-42-generic"))); // the default: newest kernel only
     QVERIFY(applied.out.contains(QLatin1String("Done. Saved as history entry #1.")));
     QCOMPARE(plymouth(), QStringLiteral("/usr/share/plymouth/themes/ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth"));
-    QVERIFY(ekpo({QStringLiteral("status")}).out.contains(QLatin1String("Last apply:    #1 Night")));
+    const CliRun afterApply = ekpo({QStringLiteral("status")});
+    QVERIFY(afterApply.out.contains(QLatin1String("Last apply:    #1 Night")));
+    QVERIFY2(afterApply.out.contains(QLatin1String("keep the previous splash as a fallback")), qPrintable(afterApply.out));
+    QCOMPARE(afterApply.exitCode, 0);
 
     const CliRun restored = ekpo({QStringLiteral("restore"), QStringLiteral("original")}, "yes\n");
     QVERIFY2(restored.exitCode == 0, qPrintable(restored.err));

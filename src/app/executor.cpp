@@ -136,7 +136,9 @@ void Executor::apply(const Plan &plan)
     Q_EMIT progress(tr("Asking for permission to change the boot stages"));
     QBuffer input;
     input.open(QIODevice::WriteOnly);
-    input.write(serializeRequest(*plan.request) + '\n');
+    Request request = *plan.request;
+    request.keep = keptThemes(m_library, plan.target);
+    input.write(serializeRequest(request) + '\n');
     writePayload(input, plan.payload);
     startHelper(input.data());
 }
@@ -288,6 +290,8 @@ void Executor::succeed(const QJsonArray &menuEntries)
                         {QStringLiteral("menuEntries"), menuEntries}}};
     QString error;
     const bool saved = m_library.addHistoryEntry(entry, error, {{QStringLiteral("RESTORE.txt"), restoreText(m_plan)}});
+    if (saved)
+        m_library.pruneBuilds();
     // Boot stages only show after a reboot: ask then whether they worked (SPEC.md §4.9).
     if (saved && (m_plan.target.bootMenu || m_plan.target.bootSplash))
         m_library.setPendingCheck({{QStringLiteral("number"), entry.number}, {QStringLiteral("title"), m_plan.title}, {QStringLiteral("bootId"), currentBootId()}}, error);

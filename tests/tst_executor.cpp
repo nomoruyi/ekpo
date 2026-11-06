@@ -30,6 +30,7 @@ private Q_SLOTS:
     void recoversAnInterruptedApply();
     void timeoutOnlyChange();
     void newestKernelOnlyThenRestoreAll();
+    void historyLimitPrunesCopiesAndBuilds();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -319,6 +320,25 @@ void TestExecutor::newestKernelOnlyThenRestoreAll()
     const Plan restore = planTarget(PlanContext{*m_library, now, m_root, m_home}, originalTarget(*m_library), QStringLiteral("Restore Original"));
     QVERIFY(restore.allKernels);
     QVERIFY(restore.commands.contains(QStringLiteral("update-initramfs -u -k all")));
+}
+
+void TestExecutor::historyLimitPrunesCopiesAndBuilds()
+{
+    QString error;
+    Settings settings = m_library->settings();
+    settings.historySize = 2;
+    QVERIFY(m_library->saveSettings(settings, error));
+    const QString vortex = importOne(at(QStringLiteral("/usr/share/plymouth/themes/vortex-ubuntu")));
+    const QString dots = importOne(QStringLiteral(FIXTURES_DIR "/themes/plymouth-two-step"));
+
+    for (const QString &id : {m_windoze, vortex, dots})
+        QVERIFY2(execute(plan(Mask{{}, id, {{Stage::BootSplash, Slot{Slot::Kind::Import, id}}}}), &error), qPrintable(error));
+
+    // History keeps the last two entries: the first copy and its build are gone.
+    QVERIFY(!QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-windozexp-v1"))));
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-vortex-ubuntu-v1"))));
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-fixture-v1"))));
+    QCOMPARE(QDir(m_library->path() + QStringLiteral("/builds")).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 2);
 }
 
 EKPO_TEST_MAIN(TestExecutor)

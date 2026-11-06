@@ -36,6 +36,8 @@ public:
     static QString buildHash(const QList<PayloadFile> &files);
     bool saveBuild(const QList<PayloadFile> &files, QString &error); // no-op if stored already
     std::optional<QList<PayloadFile>> buildFiles(const QString &hash) const;
+    // Deletes builds no history entry refers to (history/<n>/entry.json target.*.build).
+    void pruneBuilds();
 
     QList<Mask> masks(QStringList &errors) const; // sorted by name; unreadable files go to errors
     bool saveMask(Mask &mask, QString &error); // assigns the id on first save

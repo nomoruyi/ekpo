@@ -71,7 +71,8 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         return std::nullopt;
     }
     const QJsonObject o = doc.object();
-    if (!onlyKeys(o, {QStringLiteral("format"), QStringLiteral("operation"), QStringLiteral("themes"), QStringLiteral("grub"), QStringLiteral("plymouth")}, QStringLiteral("request"), error))
+    if (!onlyKeys(o, {QStringLiteral("format"), QStringLiteral("operation"), QStringLiteral("themes"), QStringLiteral("grub"), QStringLiteral("plymouth"), QStringLiteral("keep")},
+                  QStringLiteral("request"), error))
         return std::nullopt;
     if (o.value(QStringLiteral("format")) != QJsonValue(1)) {
         error = QStringLiteral("request: unsupported format");
@@ -93,7 +94,7 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         return std::nullopt;
     }
 
-    const bool hasChanges = o.contains(QStringLiteral("themes")) || o.contains(QStringLiteral("grub")) || o.contains(QStringLiteral("plymouth"));
+    const bool hasChanges = o.contains(QStringLiteral("themes")) || o.contains(QStringLiteral("grub")) || o.contains(QStringLiteral("plymouth")) || o.contains(QStringLiteral("keep"));
     if (r.operation != Request::Operation::Apply) {
         if (hasChanges) {
             error = QStringLiteral("request: %1 takes no themes or changes").arg(op);
@@ -204,6 +205,22 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         error = QStringLiteral("request: apply needs a grub or plymouth change");
         return std::nullopt;
     }
+    if (o.contains(QStringLiteral("keep"))) {
+        const QJsonValue keep = o.value(QStringLiteral("keep"));
+        QStringList ids;
+        for (const QJsonValue &v : keep.toArray()) {
+            if (!v.isString() || !validPayloadThemeId(v.toString())) {
+                error = QStringLiteral("request: keep holds an invalid theme id");
+                return std::nullopt;
+            }
+            ids << v.toString();
+        }
+        if (!keep.isArray() || ids.size() > 512) {
+            error = QStringLiteral("request: keep must be a list of at most 512 theme ids");
+            return std::nullopt;
+        }
+        r.keep = ids;
+    }
     for (const Request::Theme &t : std::as_const(r.themes)) {
         const bool used = (r.grub && r.grub->theme == t.id) || (r.plymouth && (r.plymouth->theme == t.id || r.plymouth->daemonTheme == t.id));
         if (!used) {
@@ -228,6 +245,8 @@ QByteArray serializeRequest(const Request &r)
             themes.append(QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("target"), targetKey(t.target)}});
         o.insert(QStringLiteral("themes"), themes);
     }
+    if (r.keep)
+        o.insert(QStringLiteral("keep"), QJsonArray::fromStringList(*r.keep));
     if (r.grub) {
         QJsonObject g;
         if (r.grub->original) {
