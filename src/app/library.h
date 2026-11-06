@@ -57,6 +57,8 @@ public:
     std::optional<QJsonObject> original(Stage stage) const;
     // Original is captured once per stage, right before Ekpo first changes it.
     bool saveOriginalIfMissing(Stage stage, const QJsonObject &state, QString &error);
+    // Replaces Original for every stage, e.g. after a reinstall ("Start fresh").
+    bool resetOriginal(const QJsonObject &stages, QString &error);
 
     // The after-reboot question for the last boot-stage apply: {number, title, bootId}.
     std::optional<QJsonObject> pendingCheck() const;

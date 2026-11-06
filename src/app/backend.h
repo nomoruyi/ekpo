@@ -41,6 +41,7 @@ class Backend : public QObject
     Q_PROPERTY(QString libraryPath READ libraryPath NOTIFY changed)
     Q_PROPERTY(int historySize READ historySize NOTIFY changed)
     Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
+    Q_PROPERTY(bool welcomeBack READ welcomeBack NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -68,6 +69,11 @@ public:
     bool atOriginal() const { return m_atOriginal; }
     int ekpoCopies() const { return m_ekpoCopies; }
     Q_INVOKABLE void removeEkpoFiles();
+
+    // After a reinstall (SPEC.md §4.2).
+    bool welcomeBack() const { return m_welcomeBack; }
+    Q_INVOKABLE void planReapplyLastLook();
+    Q_INVOKABLE void startFresh();
 
     QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
     int historySize() const { return m_library ? m_library->settings().historySize : 10; }
@@ -125,6 +131,7 @@ private:
     bool m_atOriginal = true;
     int m_ekpoCopies = 0;
     bool m_removingFiles = false;
+    bool m_welcomeBack = false;
 
     void createExecutor();
     void setPlan(const Plan &plan);

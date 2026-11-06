@@ -190,6 +190,9 @@ void Backend::refresh()
         }
 
         m_atOriginal = isAtOriginal(PlanContext{*m_library, m_state, m_rootDir, m_homeDir});
+        m_welcomeBack = looksLikeFreshSystem(PlanContext{*m_library, m_state, m_rootDir, m_homeDir});
+        if (m_welcomeBack)
+            m_library->clearPendingCheck(); // a question about the old system makes no sense now
         m_ekpoCopies = int(installedEkpoCopies(m_rootDir).size());
 
         // Ask after a reboot whether the last boot-stage apply worked.
@@ -594,4 +597,27 @@ void Backend::setHistorySize(int size)
     QString error;
     m_library->saveSettings(settings, error);
     Q_EMIT changed();
+}
+
+void Backend::planReapplyLastLook()
+{
+    if (!m_library)
+        return;
+    refresh();
+    preparePlan([target = lastApplied(*m_library), title = tr("Re-apply my last look")](const PlanContext &c) { return planTarget(c, target, title); },
+                m_library->settings().rebuildAllKernels);
+}
+
+void Backend::startFresh()
+{
+    if (!m_library)
+        return;
+    // The current state becomes both Original and Ekpo's reference.
+    const QJsonObject current = currentTarget(m_state, m_rootDir).toJson();
+    QString error;
+    m_library->resetOriginal(current, error);
+    HistoryEntry entry{0, QDateTime::currentDateTimeUtc(), tr("Started fresh after a reinstall"),
+                       {{QStringLiteral("target"), current}, {QStringLiteral("before"), current}}};
+    m_library->addHistoryEntry(entry, error);
+    refresh();
 }

@@ -31,6 +31,7 @@ private Q_SLOTS:
     void timeoutOnlyChange();
     void newestKernelOnlyThenRestoreAll();
     void historyLimitPrunesCopiesAndBuilds();
+    void welcomeBackAfterReinstall();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -339,6 +340,48 @@ void TestExecutor::historyLimitPrunesCopiesAndBuilds()
     QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-vortex-ubuntu-v1"))));
     QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-fixture-v1"))));
     QCOMPARE(QDir(m_library->path() + QStringLiteral("/builds")).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 2);
+}
+
+void TestExecutor::welcomeBackAfterReinstall()
+{
+    const Mask mask{{}, QStringLiteral("Night"),
+                    {{Stage::BootMenu, Slot{Slot::Kind::Import, m_hollow}}, {Stage::BootSplash, Slot{Slot::Kind::Import, m_windoze}}}};
+    QString error;
+    QVERIFY2(execute(plan(mask), &error), qPrintable(error));
+    const auto fresh = [this] {
+        const SystemState state = probe();
+        return looksLikeFreshSystem(PlanContext{*m_library, state, m_root, m_home});
+    };
+    QVERIFY(!fresh());
+
+    // A reinstall replaces / but keeps the library in /home.
+    const auto reinstall = [this] {
+        QVERIFY(QDir(m_root).removeRecursively());
+        QCOMPARE(QProcess::execute(QStringLiteral("cp"), {QStringLiteral("-a"), QStringLiteral(FIXTURES_DIR "/roots/reference"), m_root}), 0);
+        QDir().mkpath(at(QStringLiteral("/boot/grub")));
+        QDir().mkpath(at(QStringLiteral("/var/log")));
+        runStub(QStringLiteral("update-grub"));
+        runStub(QStringLiteral("update-initramfs"), {QStringLiteral("-u"), QStringLiteral("-k"), QStringLiteral("all")});
+    };
+    reinstall();
+    QVERIFY(fresh());
+
+    // "Re-apply my last look": the copy comes back from its stored build.
+    const SystemState state = probe();
+    const Plan redo = planTarget(PlanContext{*m_library, state, m_root, m_home}, lastApplied(*m_library), QStringLiteral("Re-apply"));
+    QVERIFY2(redo.canApply(), qPrintable(redo.problems.join(QLatin1Char('\n'))));
+    QVERIFY2(execute(redo, &error), qPrintable(error));
+    QVERIFY(!fresh());
+
+    // "Start fresh": the current state becomes Original and Ekpo's reference.
+    reinstall();
+    QVERIFY(fresh());
+    const QJsonObject current = currentTarget(probe(), m_root).toJson();
+    QVERIFY(m_library->resetOriginal(current, error));
+    HistoryEntry entry{0, QDateTime::currentDateTimeUtc(), QStringLiteral("Fresh"), {{QStringLiteral("target"), current}, {QStringLiteral("before"), current}}};
+    QVERIFY(m_library->addHistoryEntry(entry, error));
+    QVERIFY(!fresh());
+    QCOMPARE(m_library->original(Stage::BootSplash)->value(QStringLiteral("theme")).toString(), QStringLiteral("fallout"));
 }
 
 EKPO_TEST_MAIN(TestExecutor)

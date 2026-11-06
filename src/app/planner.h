@@ -68,5 +68,9 @@ QStringList installedEkpoCopies(const QString &rootDir);
 // True when every stage Ekpo ever changed is back at Original and Ekpo's GRUB
 // drop-in is gone: the precondition for removing Ekpo's files (SPEC.md §5).
 bool isAtOriginal(const PlanContext &context);
+// After a reinstall (SPEC.md §4.2): history says Ekpo set a look, but none of
+// Ekpo's traces (drop-in, theme copies, selected copy) are on the system and the
+// boot stages differ from what Ekpo last applied.
+bool looksLikeFreshSystem(const PlanContext &context);
 // Stages whose current state differs from what Ekpo last applied (SPEC.md §4.12).
 QList<Stage> driftedStages(const Library &library, const Target &current);

@@ -35,6 +35,29 @@ Kirigami.ScrollablePage {
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true
+            visible: Backend.welcomeBack
+            type: Kirigami.MessageType.Information
+            text: qsTr("Welcome back. Your Ekpo library is here, but this system doesn't have the look Ekpo last set; it looks like a fresh install. Re-apply your last look (themes that were installed by hand may need importing again), or start fresh from what is on this system now.")
+            actions: [
+                Kirigami.Action {
+                    text: qsTr("Re-apply My Last Look…")
+                    icon.name: "edit-redo"
+                    enabled: !Backend.applying
+                    onTriggered: {
+                        Backend.planReapplyLastLook();
+                        page.review();
+                    }
+                },
+                Kirigami.Action {
+                    text: qsTr("Start Fresh")
+                    icon.name: "document-new"
+                    onTriggered: Backend.startFresh()
+                }
+            ]
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
             visible: Backend.system.leftoverJournal
             type: Kirigami.MessageType.Error
             text: qsTr("An earlier apply was cut off. Roll it back to return to the state from before it.")

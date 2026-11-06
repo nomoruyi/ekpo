@@ -444,3 +444,13 @@ bool isAtOriginal(const PlanContext &context)
 {
     return !context.state.ekpoGrubDropIn && planTarget(context, originalTarget(context.library), QString()).stages.isEmpty();
 }
+
+bool looksLikeFreshSystem(const PlanContext &context)
+{
+    const Target last = lastApplied(context.library);
+    const bool ekpoSetBootLook = (last.bootMenu && !last.bootMenu->original) || last.bootSplash;
+    if (!ekpoSetBootLook || context.state.ekpoGrubDropIn || !installedEkpoCopies(context.rootDir).isEmpty())
+        return false;
+    const QList<Stage> drifted = driftedStages(context.library, currentTarget(context.state, context.rootDir));
+    return drifted.contains(Stage::BootMenu) || drifted.contains(Stage::BootSplash);
+}

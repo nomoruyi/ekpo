@@ -481,3 +481,8 @@ void Library::pruneBuilds()
             QDir(builds.filePath(hash)).removeRecursively();
     }
 }
+
+bool Library::resetOriginal(const QJsonObject &stages, QString &error)
+{
+    return writeJson(m_path + QStringLiteral("/history/original.json"), stages, error);
+}
