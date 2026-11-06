@@ -18,6 +18,8 @@ std::optional<QMap<QString, QString>> effectiveGrub(const QString &root, const Q
 
 // "initramfs-tools", "dracut", or empty: the installed provider of linux-initramfs-tool.
 QString initramfsGenerator(const QString &root);
+// The installed version of a dpkg package, or empty.
+QString packageVersion(const QString &root, const QString &package);
 
 // A dpkg alternative: /var/lib/dpkg/alternatives/<name> plus /etc/alternatives/<name>.
 struct Alternative {

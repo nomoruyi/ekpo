@@ -71,6 +71,20 @@ QString initramfsGenerator(const QString &root)
     return {};
 }
 
+QString packageVersion(const QString &root, const QString &package)
+{
+    const QStringList stanzas = readFile(root + QStringLiteral("/var/lib/dpkg/status")).split(QStringLiteral("\n\n"));
+    for (const QString &stanza : stanzas) {
+        if (!stanza.startsWith(QStringLiteral("Package: ") + package + QLatin1Char('\n')) || !stanza.contains(QLatin1String("\nStatus: install ok installed")))
+            continue;
+        for (const QString &line : stanza.split(QLatin1Char('\n'))) {
+            if (line.startsWith(QLatin1String("Version: ")))
+                return line.mid(9).trimmed();
+        }
+    }
+    return {};
+}
+
 // Format of /var/lib/dpkg/alternatives/<name>: mode, link, slave name/link pairs, a
 // blank line, then per choice its path, priority and one line per slave.
 std::optional<Alternative> readAlternative(const QString &root, const QString &name)

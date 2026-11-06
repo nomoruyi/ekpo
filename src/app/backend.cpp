@@ -1,8 +1,14 @@
 #include "backend.h"
 
 #include "importer.h"
+#include "sysinfo.h"
 
+#include <QClipboard>
+#include <QCoreApplication>
 #include <QDir>
+#include <QFile>
+#include <QGuiApplication>
+#include <QSysInfo>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QStorageInfo>
@@ -620,4 +626,54 @@ void Backend::startFresh()
                        {{QStringLiteral("target"), current}, {QStringLiteral("before"), current}}};
     m_library->addHistoryEntry(entry, error);
     refresh();
+}
+
+QString Backend::systemReport()
+{
+    refresh();
+    const QString root = m_rootDir == QLatin1String("/") ? QString() : m_rootDir;
+    QString osName;
+    QFile osRelease(root + QStringLiteral("/etc/os-release"));
+    if (osRelease.open(QIODevice::ReadOnly)) {
+        static const QRegularExpression pretty(QStringLiteral("^PRETTY_NAME=\"?([^\"\\n]*)"), QRegularExpression::MultilineOption);
+        osName = pretty.match(QString::fromUtf8(osRelease.readAll())).captured(1);
+    }
+    const Target current = currentTarget(m_state, m_rootDir);
+    QStringList lines{
+        QStringLiteral("Ekpo %1").arg(QCoreApplication::applicationVersion()),
+        QStringLiteral("System: %1, kernel %2").arg(osName.isEmpty() ? QSysInfo::prettyProductName() : osName, QSysInfo::kernelVersion()),
+    };
+    QStringList packages;
+    for (const QString &p : {QStringLiteral("grub2-common"), QStringLiteral("plymouth"), QStringLiteral("initramfs-tools"), QStringLiteral("dracut"),
+                             QStringLiteral("plasma-workspace")}) {
+        if (const QString v = packageVersion(root, p); !v.isEmpty())
+            packages << QStringLiteral("%1 %2").arg(p, v);
+    }
+    lines << QStringLiteral("Packages: %1").arg(packages.join(QStringLiteral(", ")))
+          << QStringLiteral("Initrds built by: %1").arg(m_state.initramfsGenerator.isEmpty() ? QStringLiteral("unknown") : m_state.initramfsGenerator)
+          << QString()
+          << QStringLiteral("Boot menu: %1 (%2)").arg(current.bootMenu->label, current.bootMenu->original ? QStringLiteral("/etc/default/grub") : QStringLiteral("Ekpo drop-in"));
+    for (auto it = m_state.grub.cbegin(); it != m_state.grub.cend(); ++it)
+        lines << QStringLiteral("  %1=%2").arg(it.key(), it.value());
+    lines << QStringLiteral("Boot splash: %1 (%2, plymouthd.conf Theme=%3)").arg(current.bootSplash->label, current.bootSplash->mode, m_state.plymouthDaemonTheme)
+          << QStringLiteral("Plasma splash: %1").arg(current.plasmaSplash->label.isEmpty() ? QStringLiteral("Plasma default") : current.plasmaSplash->label)
+          << QStringLiteral("Kernel command line has splash: %1").arg(m_state.cmdlineSplash ? QStringLiteral("yes") : QStringLiteral("no"))
+          << QStringLiteral("Kernels:");
+    for (const SystemState::Kernel &k : m_state.kernels)
+        lines << QStringLiteral("  %1, initrd %2").arg(k.version, k.hasInitrd ? k.initrdModified.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")) : QStringLiteral("missing"));
+    lines << QString() << QStringLiteral("Library: %1").arg(libraryPath());
+    if (!m_history.isEmpty()) {
+        const QVariantMap last = m_history.first().toMap();
+        lines << QStringLiteral("Last apply: #%1 %2").arg(last.value(QStringLiteral("number")).toInt()).arg(last.value(QStringLiteral("title")).toString());
+    }
+    lines << QStringLiteral("Ekpo theme copies installed: %1").arg(m_ekpoCopies);
+    const QStringList problems = m_system.value(QStringLiteral("errors")).toStringList();
+    if (!problems.isEmpty())
+        lines << QStringLiteral("Problems: %1").arg(problems.join(QStringLiteral("; ")));
+    return lines.join(QLatin1Char('\n'));
+}
+
+void Backend::copyToClipboard(const QString &text)
+{
+    QGuiApplication::clipboard()->setText(text);
 }

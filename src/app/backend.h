@@ -75,6 +75,10 @@ public:
     Q_INVOKABLE void planReapplyLastLook();
     Q_INVOKABLE void startFresh();
 
+    // For the About page: versions and the current state as plain text.
+    Q_INVOKABLE QString systemReport();
+    Q_INVOKABLE void copyToClipboard(const QString &text);
+
     QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
     int historySize() const { return m_library ? m_library->settings().historySize : 10; }
     // Moves the library to an empty folder, or switches to a library found there.

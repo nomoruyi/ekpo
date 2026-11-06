@@ -1,5 +1,6 @@
 #include "golden.h"
 #include "probe.h"
+#include "sysinfo.h"
 #include "testmain.h"
 
 #include <QJsonDocument>
@@ -13,6 +14,7 @@ class TestProbe : public QObject
 private Q_SLOTS:
     void referenceSystem();
     void missingFilesAreReported();
+    void packageVersions();
 };
 
 // The reference fixture mirrors this machine on 2026-11-05 (read-only copies, theme
@@ -55,6 +57,15 @@ void TestProbe::missingFilesAreReported()
     QVERIFY(state.grub.isEmpty());
     QVERIFY(state.kernels.isEmpty());
     QCOMPARE(state.errors.size(), 2); // GRUB settings and the Plymouth alternative
+}
+
+void TestProbe::packageVersions()
+{
+    const QString root = QStringLiteral(FIXTURES_DIR "/roots/reference");
+    QCOMPARE(packageVersion(root, QStringLiteral("initramfs-tools")), QStringLiteral("0.151ubuntu1"));
+    QCOMPARE(packageVersion(root, QStringLiteral("dracut-core")), QStringLiteral("110-11ubuntu0.1"));
+    QCOMPARE(packageVersion(root, QStringLiteral("dracut")), QString()); // a prefix of dracut-core, not installed
+    QCOMPARE(installedKernels(root).last(), QStringLiteral("7.0.0-42-generic"));
 }
 
 EKPO_TEST_MAIN(TestProbe)
