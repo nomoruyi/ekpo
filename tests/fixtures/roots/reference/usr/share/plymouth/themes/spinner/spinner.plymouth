@@ -1,3 +1,6 @@
 [Plymouth Theme]
 Name=Spinner
 ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes//spinner

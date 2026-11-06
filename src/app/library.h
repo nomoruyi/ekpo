@@ -6,8 +6,8 @@
 
 #include <optional>
 
-// The plain-file library (ARCHITECTURE.md §5): library.json, personas/, history/.
-// Imports, assets, designs and builds join it in later steps.
+// The plain-file library (ARCHITECTURE.md §5): library.json, imports/, personas/,
+// history/. Assets, designs and builds join it in later steps.
 class Library
 {
 public:
@@ -22,6 +22,13 @@ public:
     const QString &path() const { return m_path; }
     const Settings &settings() const { return m_settings; }
     bool saveSettings(const Settings &settings, QString &error);
+
+    QList<ImportedTheme> imports(QStringList &errors) const; // sorted by name
+    // Copies the theme folder verbatim into imports/<id>/files (replacing an earlier
+    // copy) and writes import.json. Symlinks are followed only within the folder.
+    bool saveImport(ImportedTheme &theme, const QString &themeRoot, QString &error);
+    bool removeImport(const QString &id, QString &error, QString *trashedPath = nullptr);
+    QString importFilesPath(const QString &id) const;
 
     QList<Persona> personas(QStringList &errors) const; // sorted by name; unreadable files go to errors
     bool savePersona(Persona &persona, QString &error); // assigns the id on first save

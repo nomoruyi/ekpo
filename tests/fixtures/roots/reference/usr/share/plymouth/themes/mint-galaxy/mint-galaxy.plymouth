@@ -1,3 +1,7 @@
 [Plymouth Theme]
 Name=mint-galaxy
 ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/mint-galaxy
+ScriptFile=/usr/share/plymouth/themes/mint-galaxy/mint-galaxy.script

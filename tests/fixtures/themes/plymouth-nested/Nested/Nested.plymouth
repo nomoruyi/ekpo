@@ -1,0 +1,7 @@
+[Plymouth Theme]
+Name=Nested Fixture
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/Nested
+ScriptFile=/usr/share/plymouth/themes/Nested/Nested.script

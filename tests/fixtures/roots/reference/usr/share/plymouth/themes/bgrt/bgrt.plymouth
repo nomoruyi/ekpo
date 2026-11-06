@@ -1,3 +1,6 @@
 [Plymouth Theme]
 Name=BGRT
 ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes//spinner

@@ -1,3 +1,7 @@
 [Plymouth Theme]
 Name=Breeze
 ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes//breeze
+ScriptFile=/usr/share/plymouth/themes//breeze/breeze.script

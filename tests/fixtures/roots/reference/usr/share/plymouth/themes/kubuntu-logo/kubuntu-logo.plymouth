@@ -1,3 +1,6 @@
 [Plymouth Theme]
 Name=Kubuntu Logo
 ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/kubuntu-logo

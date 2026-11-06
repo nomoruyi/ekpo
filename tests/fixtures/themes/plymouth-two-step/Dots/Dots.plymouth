@@ -1,0 +1,6 @@
+[Plymouth Theme]
+Name=Dots Fixture
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/Dots

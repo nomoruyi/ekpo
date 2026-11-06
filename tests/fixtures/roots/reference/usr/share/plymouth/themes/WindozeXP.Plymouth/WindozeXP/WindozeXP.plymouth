@@ -1,3 +1,7 @@
 [Plymouth Theme]
 Name=WindozeXP
 ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/WindozeXP
+ScriptFile=/usr/share/plymouth/themes/WindozeXP/WindozeXP.script

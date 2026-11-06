@@ -1,0 +1,5 @@
+# Fixture: missing background, fonts in a folder GRUB doesn't load from
+desktop-image: "missing.png"
++ boot_menu {
+    selected_item_pixmap_style = "select_*.png"
+}

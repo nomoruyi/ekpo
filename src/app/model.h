@@ -5,6 +5,7 @@
 #include <QList>
 #include <QMap>
 #include <QString>
+#include <QStringList>
 
 #include <optional>
 
@@ -15,6 +16,30 @@ inline const QList<Stage> allStages = {Stage::BootMenu, Stage::BootSplash, Stage
 
 QString stageKey(Stage stage); // "bootMenu", "bootSplash", "plasmaSplash"
 std::optional<Stage> stageFromKey(const QString &key);
+
+// A third-party theme copied into the library read-only (SPEC.md §4.3).
+struct ImportedTheme {
+    enum class Verdict {
+        Works, // no problems found
+        Warnings, // applies, but parts may not show
+        Repaired, // structure fixed on import; installs as a cleaned-up copy
+        Broken, // can't be applied
+    };
+
+    QString id; // folder name in imports/, assigned on first save
+    Stage stage = Stage::BootMenu;
+    QString name;
+    QString sourcePath; // the theme folder it came from, for Re-import
+    QString installedId; // set when the source is installed and can be selected in place
+    QDateTime importedAt;
+    Verdict verdict = Verdict::Works;
+    QStringList report; // one finding per line, for the import report
+
+    QJsonObject toJson() const;
+    static std::optional<ImportedTheme> fromJson(const QString &id, const QJsonObject &json);
+};
+
+QString verdictKey(ImportedTheme::Verdict verdict); // "works", "warnings", "repaired", "broken"
 
 // One slot of a Persona (SPEC.md §4.8). M2 adds designs as a third kind.
 struct Slot {

@@ -1,6 +1,7 @@
 #include "library.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QJsonDocument>
 #include <QSaveFile>
@@ -34,6 +35,42 @@ bool writeJson(const QString &path, const QJsonObject &json, QString &error)
     if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(json).toJson()) < 0 || !file.commit()) {
         error = QStringLiteral("%1: %2").arg(path, file.errorString());
         return false;
+    }
+    return true;
+}
+
+// Copies a theme folder. Links count only if they stay inside the folder; their
+// target's content is copied. Anything skipped is described in notes.
+bool copyTree(const QString &src, const QString &dst, QStringList &notes, QString &error)
+{
+    const QDir srcDir(src);
+    const QString rootCanonical = QFileInfo(src).canonicalFilePath() + QLatin1Char('/');
+    QDirIterator it(src, QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QFileInfo info = it.nextFileInfo();
+        const QString rel = srcDir.relativeFilePath(info.filePath());
+        const QString target = dst + QLatin1Char('/') + rel;
+        QString from = info.filePath();
+        if (info.isSymLink()) {
+            from = info.canonicalFilePath();
+            if (!from.startsWith(rootCanonical) || !QFileInfo(from).isFile()) {
+                notes << QStringLiteral("Not copied: the link %1 points outside the theme folder or to a folder.").arg(rel);
+                continue;
+            }
+        } else if (info.isDir()) {
+            if (!QDir().mkpath(target)) {
+                error = QStringLiteral("Can't create %1").arg(target);
+                return false;
+            }
+            continue;
+        } else if (!info.isFile()) {
+            notes << QStringLiteral("Not copied: %1 is not a regular file.").arg(rel);
+            continue;
+        }
+        if (!QDir().mkpath(QFileInfo(target).path()) || !QFile::copy(from, target)) {
+            error = QStringLiteral("Can't copy %1").arg(rel);
+            return false;
+        }
     }
     return true;
 }
@@ -79,7 +116,7 @@ std::optional<Library> Library::open(const QString &path, QString &error)
     }
     library.m_settings = Settings::fromJson(manifest->value(QStringLiteral("settings")).toObject());
 
-    for (const QString &sub : {QStringLiteral("personas"), QStringLiteral("history")}) {
+    for (const QString &sub : {QStringLiteral("imports"), QStringLiteral("personas"), QStringLiteral("history")}) {
         if (!dir.mkpath(sub)) {
             error = QStringLiteral("Can't create %1").arg(dir.filePath(sub));
             return std::nullopt;
@@ -99,6 +136,72 @@ bool Library::saveSettings(const Settings &settings, QString &error)
     if (!saveManifest(settings, error))
         return false;
     m_settings = settings;
+    return true;
+}
+
+QString Library::importFilesPath(const QString &id) const
+{
+    return m_path + QStringLiteral("/imports/") + id + QStringLiteral("/files");
+}
+
+QList<ImportedTheme> Library::imports(QStringList &errors) const
+{
+    QList<ImportedTheme> result;
+    const QDir dir(m_path + QStringLiteral("/imports"));
+    for (const QString &id : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        QString error;
+        const auto json = readJson(dir.filePath(id + QStringLiteral("/import.json")), error);
+        const auto theme = json ? ImportedTheme::fromJson(id, *json) : std::nullopt;
+        if (theme)
+            result.append(*theme);
+        else
+            errors << (error.isEmpty() ? QStringLiteral("%1: not a valid import").arg(dir.filePath(id)) : error);
+    }
+    std::sort(result.begin(), result.end(), [](const ImportedTheme &a, const ImportedTheme &b) {
+        return QString::localeAwareCompare(a.name, b.name) < 0;
+    });
+    return result;
+}
+
+bool Library::saveImport(ImportedTheme &theme, const QString &themeRoot, QString &error)
+{
+    const QString id = theme.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : theme.id;
+    const QString files = importFilesPath(id);
+    const QString fresh = files + QStringLiteral(".new");
+    QDir(fresh).removeRecursively();
+
+    QStringList notes;
+    if (!QDir().mkpath(fresh) || !copyTree(themeRoot, fresh, notes, error)) {
+        QDir(fresh).removeRecursively();
+        if (error.isEmpty())
+            error = QStringLiteral("Can't create %1").arg(fresh);
+        return false;
+    }
+    // Swap in the new copy only once it is complete.
+    QDir(files).removeRecursively();
+    if (!QDir().rename(fresh, files)) {
+        error = QStringLiteral("Can't replace %1").arg(files);
+        return false;
+    }
+
+    ImportedTheme saved = theme;
+    saved.id = id;
+    saved.report << notes;
+    if (!writeJson(m_path + QStringLiteral("/imports/") + id + QStringLiteral("/import.json"), saved.toJson(), error))
+        return false;
+    theme = saved;
+    return true;
+}
+
+bool Library::removeImport(const QString &id, QString &error, QString *trashedPath)
+{
+    QString inTrash;
+    if (id.isEmpty() || !QFile::moveToTrash(m_path + QStringLiteral("/imports/") + id, &inTrash)) {
+        error = QStringLiteral("Can't move import %1 to the trash.").arg(id);
+        return false;
+    }
+    if (trashedPath)
+        *trashedPath = inTrash;
     return true;
 }
 

@@ -28,3 +28,4 @@ set_tests_properties(smoke_main_window PROPERTIES ENVIRONMENT
 
 personae_test(tst_probe)
 personae_test(tst_library)
+personae_test(tst_importer)

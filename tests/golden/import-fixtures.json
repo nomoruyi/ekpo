@@ -1,0 +1,124 @@
+[
+    {
+        "errors": [
+            "No theme found in <fixtures>/themes/empty-folder (looked for theme.txt, *.plymouth and contents/splash/Splash.qml, up to three folders deep)."
+        ],
+        "source": "empty-folder",
+        "themes": [
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "grub-ok",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "grub-ok",
+                "report": [
+                ],
+                "stage": "bootMenu",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "grub-warnings",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "grub-warnings",
+                "report": [
+                    "theme.txt refers to missing.png, which isn't in the theme.",
+                    "theme.txt refers to select_*.png, which isn't in the theme.",
+                    "The font fonts/fixture_16.pf2 won't load: GRUB loads fonts only from the theme folder and f/.",
+                    "No fonts of its own that GRUB loads; the menu uses GRUB's built-in font."
+                ],
+                "stage": "bootMenu",
+                "verdict": "warnings"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "plasma-legacy",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "old",
+                "report": [
+                    "There is no metadata.json; Plasma 6 needs one (metadata.desktop is the Plasma 5 format)."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "broken"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "plasma-ok",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Example Splash",
+                "report": [
+                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "plymouth-missing-module",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Odd Fixture",
+                "report": [
+                    "It needs the Plymouth module \"fancy\", which isn't installed."
+                ],
+                "stage": "bootSplash",
+                "verdict": "broken"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "plymouth-nested",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Nested Fixture",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs).",
+                    "Not imported: install.sh (Personae never runs bundled scripts)."
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "plymouth-two-step",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Dots Fixture",
+                "report": [
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    }
+]

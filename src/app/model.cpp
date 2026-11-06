@@ -1,11 +1,20 @@
 #include "model.h"
 
+#include <QJsonArray>
+
 namespace {
 
 const QMap<Stage, QString> stageKeys = {
     {Stage::BootMenu, QStringLiteral("bootMenu")},
     {Stage::BootSplash, QStringLiteral("bootSplash")},
     {Stage::PlasmaSplash, QStringLiteral("plasmaSplash")},
+};
+
+const QMap<ImportedTheme::Verdict, QString> verdictKeys = {
+    {ImportedTheme::Verdict::Works, QStringLiteral("works")},
+    {ImportedTheme::Verdict::Warnings, QStringLiteral("warnings")},
+    {ImportedTheme::Verdict::Repaired, QStringLiteral("repaired")},
+    {ImportedTheme::Verdict::Broken, QStringLiteral("broken")},
 };
 
 } // namespace
@@ -22,6 +31,44 @@ std::optional<Stage> stageFromKey(const QString &key)
             return it.key();
     }
     return std::nullopt;
+}
+
+QString verdictKey(ImportedTheme::Verdict verdict)
+{
+    return verdictKeys.value(verdict);
+}
+
+QJsonObject ImportedTheme::toJson() const
+{
+    return {
+        {QStringLiteral("stage"), stageKey(stage)},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("sourcePath"), sourcePath},
+        {QStringLiteral("installedId"), installedId},
+        {QStringLiteral("importedAt"), importedAt.toUTC().toString(Qt::ISODate)},
+        {QStringLiteral("verdict"), verdictKey(verdict)},
+        {QStringLiteral("report"), QJsonArray::fromStringList(report)},
+    };
+}
+
+std::optional<ImportedTheme> ImportedTheme::fromJson(const QString &id, const QJsonObject &json)
+{
+    const auto stage = stageFromKey(json.value(QStringLiteral("stage")).toString());
+    const auto verdict = verdictKeys.key(json.value(QStringLiteral("verdict")).toString(), ImportedTheme::Verdict(-1));
+    if (!stage || !verdictKeys.contains(verdict))
+        return std::nullopt;
+
+    ImportedTheme t;
+    t.id = id;
+    t.stage = *stage;
+    t.name = json.value(QStringLiteral("name")).toString();
+    t.sourcePath = json.value(QStringLiteral("sourcePath")).toString();
+    t.installedId = json.value(QStringLiteral("installedId")).toString();
+    t.importedAt = QDateTime::fromString(json.value(QStringLiteral("importedAt")).toString(), Qt::ISODate);
+    t.verdict = verdict;
+    for (const QJsonValue &line : json.value(QStringLiteral("report")).toArray())
+        t.report << line.toString();
+    return t;
 }
 
 QJsonObject Slot::toJson() const

@@ -1,3 +1,7 @@
 [Plymouth Theme]
 Name=Fallout
 ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/fallout
+ScriptFile=/usr/share/plymouth/themes/fallout/fallout.script

@@ -1,0 +1,227 @@
+[
+    {
+        "errors": [
+        ],
+        "source": "boot/grub/themes/crossgrub",
+        "themes": [
+            {
+                "installedId": "crossgrub",
+                "name": "crossgrub",
+                "report": [
+                    "No fonts of its own that GRUB loads; the menu uses GRUB's built-in font."
+                ],
+                "stage": "bootMenu",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "boot/grub/themes/hollow-grub",
+        "themes": [
+            {
+                "installedId": "hollow-grub",
+                "name": "hollow-grub",
+                "report": [
+                    "No fonts of its own that GRUB loads; the menu uses GRUB's built-in font."
+                ],
+                "stage": "bootMenu",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/bgrt",
+        "themes": [
+            {
+                "installedId": "bgrt",
+                "name": "BGRT",
+                "report": [
+                    "ImageDir uses /usr/share/plymouth/themes/spinner from another installed theme; it works only while that theme stays installed."
+                ],
+                "stage": "bootSplash",
+                "verdict": "warnings"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/breeze",
+        "themes": [
+            {
+                "installedId": "breeze",
+                "name": "Breeze",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs)."
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/fallout",
+        "themes": [
+            {
+                "installedId": "fallout",
+                "name": "Fallout",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs)."
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/kubuntu-logo",
+        "themes": [
+            {
+                "installedId": "kubuntu-logo",
+                "name": "Kubuntu Logo",
+                "report": [
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/mint-galaxy",
+        "themes": [
+            {
+                "installedId": "mint-galaxy",
+                "name": "mint-galaxy",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs)."
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/spinner",
+        "themes": [
+            {
+                "installedId": "spinner",
+                "name": "Spinner",
+                "report": [
+                ],
+                "stage": "bootSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/WindozeXP.Plymouth",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "WindozeXP",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs).",
+                    "It's installed one folder deeper than Plymouth looks; it installs as a cleaned-up copy.",
+                    "Not imported: Install.Plymouth.Theme.sh (Personae never runs bundled scripts)."
+                ],
+                "stage": "bootSplash",
+                "verdict": "repaired"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plymouth/themes/vortex-ubuntu",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Vortex Ubuntu",
+                "report": [
+                    "Its script runs at every boot (Plymouth's script language can't read files or run programs).",
+                    "It's installed one folder deeper than Plymouth looks; it installs as a cleaned-up copy."
+                ],
+                "stage": "bootSplash",
+                "verdict": "repaired"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "home/.local/share/plasma/look-and-feel/Overload",
+        "themes": [
+            {
+                "installedId": "Overload",
+                "name": "Overload",
+                "report": [
+                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "home/.local/share/plasma/look-and-feel/Penrose",
+        "themes": [
+            {
+                "installedId": "Penrose",
+                "name": "Penrose",
+                "report": [
+                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plasma/look-and-feel/org.kde.breeze.desktop",
+        "themes": [
+            {
+                "installedId": "org.kde.breeze.desktop",
+                "name": "Breeze",
+                "report": [
+                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
+        "source": "usr/share/plasma/look-and-feel/org.kde.oxygen",
+        "themes": [
+            {
+                "installedId": "org.kde.oxygen",
+                "name": "Oxygen",
+                "report": [
+                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                ],
+                "stage": "plasmaSplash",
+                "verdict": "works"
+            }
+        ]
+    }
+]

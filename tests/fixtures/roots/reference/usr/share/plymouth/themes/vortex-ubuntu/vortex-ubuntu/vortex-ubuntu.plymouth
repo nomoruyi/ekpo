@@ -1,3 +1,7 @@
 [Plymouth Theme]
 Name=Vortex Ubuntu
 ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/vortex-ubuntu
+ScriptFile=/usr/share/plymouth/themes/vortex-ubuntu/vortex-ubuntu.script
