@@ -31,6 +31,7 @@ jobs:
     container: ubuntu:26.04
     env:
       DEBIAN_FRONTEND: noninteractive
+      LANG: C.UTF-8 # Qt warns about a non-UTF-8 locale, and app tests fail on any warning
     outputs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
