@@ -12,11 +12,17 @@ Kirigami.ScrollablePage {
 
     signal openStage(string stage)
     signal review
+    signal intro
 
     readonly property var stageTitles: ({ bootMenu: qsTr("Boot Menu"), bootSplash: qsTr("Boot Splash"), plasmaSplash: qsTr("Plasma Splash") })
 
     title: qsTr("Overview")
     actions: [
+        Kirigami.Action {
+            text: qsTr("Introduction")
+            icon.name: "help-about"
+            onTriggered: page.intro()
+        },
         Kirigami.Action {
             text: qsTr("Refresh")
             icon.name: "view-refresh"

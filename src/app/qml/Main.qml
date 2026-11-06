@@ -37,7 +37,7 @@ Kirigami.ApplicationWindow {
         currentSection = allSections.find(s => s.name === name);
     }
     function pageFor(name) {
-        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, history: historyPage })[name] ?? placeholderPage;
+        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, history: historyPage })[name] ?? placeholderPage;
     }
     // The review takes over the window until it is closed (SPEC.md §4.1).
     // (Not a Kirigami layer: pushing any page onto layers warns in Kirigami 6.24.)
@@ -95,6 +95,15 @@ Kirigami.ApplicationWindow {
         onTriggered: checkDialog.open()
     }
 
+    IntroDialog {
+        id: introDialog
+    }
+    Timer {
+        running: Backend.showIntro && Backend.pendingCheck.number === undefined && root.startReview === ""
+        interval: 500
+        onTriggered: introDialog.open()
+    }
+
     Timer {
         running: root.startReview !== ""
         interval: 300
@@ -150,6 +159,12 @@ Kirigami.ApplicationWindow {
         id: overviewPage
         visible: false
         onOpenStage: stage => root.showSection(stage)
+        onReview: root.showReview()
+        onIntro: introDialog.open()
+    }
+    MasksPage {
+        id: masksPage
+        visible: false
         onReview: root.showReview()
     }
     HistoryPage {

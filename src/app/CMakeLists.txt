@@ -8,7 +8,7 @@ target_compile_definitions(ekpo PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
 qt_add_qml_module(ekpo
     URI Ekpo
     SOURCES backend.cpp backend.h
-    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml
+    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml
 )
 target_link_libraries(ekpo PRIVATE ekpo_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 # Sandbox mode only (EKPO_DEV + EKPO_SYSTEM_ROOT): the test helper and its stub commands.

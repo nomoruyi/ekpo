@@ -33,6 +33,8 @@ class Backend : public QObject
     Q_PROPERTY(QVariantMap plan READ plan NOTIFY planChanged)
     Q_PROPERTY(bool applying READ applying NOTIFY applyingChanged)
     Q_PROPERTY(QVariantMap pendingCheck READ pendingCheck NOTIFY changed)
+    Q_PROPERTY(QVariantList masks READ masks NOTIFY changed)
+    Q_PROPERTY(bool showIntro READ showIntro NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -47,6 +49,14 @@ public:
     QVariantMap plan() const { return m_planMap; }
     bool applying() const { return m_executor && m_executor->isRunning(); }
     QVariantMap pendingCheck() const { return m_pendingCheck; }
+    QVariantList masks() const { return m_masks; }
+    bool showIntro() const { return m_library && m_library->settings().showIntro; }
+    Q_INVOKABLE void setShowIntro(bool show);
+
+    // Masks (SPEC.md §4.8). Empty refs leave a stage as it is.
+    Q_INVOKABLE QString saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash);
+    Q_INVOKABLE QString removeMask(const QString &id);
+    Q_INVOKABLE void planApplyMask(const QString &id);
 
     Q_INVOKABLE void refresh();
     // Imports a folder or archive; returns {names: [...], errors: [...]}.
@@ -89,6 +99,7 @@ private:
     QVariantList m_installed;
     QVariantList m_history;
     QVariantMap m_pendingCheck;
+    QVariantList m_masks;
 
     void setPlan(const Plan &plan);
     Plan m_plan;

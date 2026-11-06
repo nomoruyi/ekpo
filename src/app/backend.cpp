@@ -211,6 +211,24 @@ void Backend::refresh()
         m_system[QStringLiteral("errors")] = errors + loadErrors;
     }
 
+    m_masks.clear();
+    if (m_library) {
+        QStringList maskErrors;
+        QMap<QString, QString> names;
+        for (const QVariant &v : std::as_const(m_imports))
+            names.insert(v.toMap().value(QStringLiteral("id")).toString(), v.toMap().value(QStringLiteral("name")).toString());
+        for (const Mask &mask : m_library->masks(maskErrors)) {
+            QVariantMap maskSlots;
+            for (Stage stage : allStages) {
+                const Slot slot = mask.stageSlots.value(stage);
+                maskSlots.insert(stageKey(stage), slot.kind == Slot::Kind::Import
+                                                  ? QVariantMap{{QStringLiteral("ref"), slot.ref}, {QStringLiteral("name"), names.value(slot.ref, tr("(missing theme)"))}}
+                                                  : QVariantMap());
+            }
+            m_masks << QVariantMap{{QStringLiteral("id"), mask.id}, {QStringLiteral("name"), mask.name}, {QStringLiteral("slots"), maskSlots}};
+        }
+    }
+
     m_history.clear();
     if (m_library) {
         QStringList historyErrors;
@@ -269,6 +287,15 @@ QVariantMap Backend::reimport(const QString &id)
 QString Backend::removeImport(const QString &id)
 {
     QString error;
+    QStringList errors;
+    if (m_library) {
+        for (const Mask &mask : m_library->masks(errors)) {
+            for (const Slot &slot : mask.stageSlots) {
+                if (slot.kind == Slot::Kind::Import && slot.ref == id)
+                    return tr("Used by the Mask \u201c%1\u201d; remove it from there first.").arg(mask.name);
+            }
+        }
+    }
     if (!m_library || !m_library->removeImport(id, error))
         return error.isEmpty() ? m_libraryError : error;
     refresh();
@@ -430,4 +457,53 @@ void Backend::planRevertCheck()
         return;
     }
     keepCheck();
+}
+
+void Backend::setShowIntro(bool show)
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.showIntro = show;
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
+}
+
+QString Backend::saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash)
+{
+    if (!m_library)
+        return m_libraryError;
+    Mask mask{id, name.trimmed(), {}};
+    const QList<std::pair<Stage, QString>> refs = {{Stage::BootMenu, bootMenu}, {Stage::BootSplash, bootSplash}, {Stage::PlasmaSplash, plasmaSplash}};
+    for (const auto &[stage, ref] : refs) {
+        if (!ref.isEmpty())
+            mask.stageSlots.insert(stage, Slot{Slot::Kind::Import, ref});
+    }
+    QString error;
+    if (!m_library->saveMask(mask, error))
+        return error;
+    refresh();
+    return {};
+}
+
+QString Backend::removeMask(const QString &id)
+{
+    QString error;
+    if (!m_library || !m_library->removeMask(id, error))
+        return error.isEmpty() ? m_libraryError : error;
+    refresh();
+    return {};
+}
+
+void Backend::planApplyMask(const QString &id)
+{
+    if (!m_library)
+        return;
+    refresh();
+    QStringList errors;
+    for (const Mask &mask : m_library->masks(errors)) {
+        if (mask.id == id)
+            return setPlan(planMask(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, mask));
+    }
 }

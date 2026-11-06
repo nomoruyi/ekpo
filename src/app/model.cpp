@@ -138,6 +138,7 @@ QJsonObject Settings::toJson() const
     return {
         {QStringLiteral("historySize"), historySize},
         {QStringLiteral("technicalDetailsExpanded"), technicalDetailsExpanded},
+        {QStringLiteral("showIntro"), showIntro},
     };
 }
 
@@ -146,5 +147,6 @@ Settings Settings::fromJson(const QJsonObject &json)
     Settings s;
     s.historySize = qBound(1, json.value(QStringLiteral("historySize")).toInt(s.historySize), 100);
     s.technicalDetailsExpanded = json.value(QStringLiteral("technicalDetailsExpanded")).toBool(s.technicalDetailsExpanded);
+    s.showIntro = json.value(QStringLiteral("showIntro")).toBool(s.showIntro);
     return s;
 }

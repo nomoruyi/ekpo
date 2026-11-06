@@ -32,7 +32,7 @@ set(SAMPLE_DATA ${CMAKE_BINARY_DIR}/sample-data)
 add_test(NAME prepare_sample_library COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/library ${SAMPLE_DATA}/ekpo)
 set_tests_properties(prepare_sample_library PROPERTIES FIXTURES_SETUP sample_library)
-foreach(section bootMenu bootSplash plasmaSplash history)
+foreach(section bootMenu bootSplash plasmaSplash masks history)
     add_test(NAME smoke_${section} COMMAND ekpo)
     set_tests_properties(smoke_${section} PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
         "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SECTION=${section};EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/${section}.png")

@@ -76,6 +76,7 @@ struct HistoryEntry {
 struct Settings {
     int historySize = 10;
     bool technicalDetailsExpanded = false;
+    bool showIntro = true; // the intro dialog at start (SPEC.md §4.2)
 
     QJsonObject toJson() const;
     static Settings fromJson(const QJsonObject &json);
