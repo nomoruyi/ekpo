@@ -11,6 +11,7 @@ Kirigami.ScrollablePage {
     id: page
 
     signal openStage(string stage)
+    signal review
 
     readonly property var stageTitles: ({ bootMenu: qsTr("Boot Menu"), bootSplash: qsTr("Boot Splash"), plasmaSplash: qsTr("Plasma Splash") })
 
@@ -30,7 +31,15 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: Backend.system.leftoverJournal
             type: Kirigami.MessageType.Error
-            text: qsTr("An earlier apply was cut off. Ekpo will offer to roll it back.")
+            text: qsTr("An earlier apply was cut off. Roll it back to return to the state from before it.")
+            actions: [
+                Kirigami.Action {
+                    text: qsTr("Roll Back Now")
+                    icon.name: "edit-undo"
+                    enabled: !Backend.applying
+                    onTriggered: Backend.recover()
+                }
+            ]
         }
         Repeater {
             model: Backend.system.errors
@@ -86,10 +95,40 @@ Kirigami.ScrollablePage {
                         Item {
                             Layout.fillHeight: true
                         }
-                        QQC2.Button {
-                            Layout.alignment: Qt.AlignRight
-                            text: qsTr("Change…")
-                            onClicked: page.openStage(stageCard.modelData.stage)
+                        Flow {
+                            Layout.fillWidth: true
+                            layoutDirection: Qt.RightToLeft
+                            spacing: Kirigami.Units.smallSpacing
+
+                            QQC2.Button {
+                                text: qsTr("Change…")
+                                onClicked: page.openStage(stageCard.modelData.stage)
+                            }
+                            QQC2.Button {
+                                visible: stageCard.modelData.stage === "bootMenu"
+                                text: qsTr("Timeout…")
+                                enabled: !Backend.applying
+                                onClicked: {
+                                    timeoutDialog.seconds = stageCard.modelData.timeout;
+                                    timeoutDialog.open();
+                                }
+                            }
+                            QQC2.Button {
+                                visible: stageCard.modelData.drift
+                                text: qsTr("Re-apply…")
+                                enabled: !Backend.applying
+                                onClicked: {
+                                    Backend.planReapplyStage(stageCard.modelData.stage);
+                                    page.review();
+                                }
+                            }
+                            QQC2.Button {
+                                visible: stageCard.modelData.drift
+                                text: qsTr("Keep This")
+                                QQC2.ToolTip.text: qsTr("Make the current state Ekpo's new reference")
+                                QQC2.ToolTip.visible: hovered
+                                onClicked: Backend.adoptStage(stageCard.modelData.stage)
+                            }
                         }
                     }
                 }
@@ -101,6 +140,63 @@ Kirigami.ScrollablePage {
             opacity: 0.7
             wrapMode: Text.Wrap
             text: qsTr("Initrds are built by %1.").arg(Backend.system.generator || qsTr("an unknown tool"))
+        }
+    }
+
+    // The GRUB menu timeout, one machine-wide value (SPEC.md §4.10).
+    Kirigami.Dialog {
+        id: timeoutDialog
+
+        property int seconds: 20
+
+        title: qsTr("Boot Menu Timeout")
+        padding: Kirigami.Units.largeSpacing
+        preferredWidth: Kirigami.Units.gridUnit * 24
+        standardButtons: Kirigami.Dialog.Cancel
+        customFooterActions: [
+            Kirigami.Action {
+                text: qsTr("Review…")
+                icon.name: "dialog-ok-apply"
+                enabled: spin.value > 0 || liveUsb.checked
+                onTriggered: {
+                    timeoutDialog.close();
+                    Backend.planTimeout(spin.value);
+                    page.review();
+                }
+            }
+        ]
+        onOpened: {
+            spin.value = seconds;
+            liveUsb.checked = false;
+        }
+
+        ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            RowLayout {
+                QQC2.Label {
+                    text: qsTr("Show the boot menu for")
+                }
+                QQC2.SpinBox {
+                    id: spin
+                    from: 0
+                    to: 600
+                }
+                QQC2.Label {
+                    text: qsTr("seconds")
+                }
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                visible: spin.value === 0
+                text: qsTr("With 0 s the computer boots straight through. On this system GRUB can't detect failed boots, so there is no way back into the menu, the older kernels or recovery mode without a live USB.")
+            }
+            QQC2.CheckBox {
+                id: liveUsb
+                visible: spin.value === 0
+                text: qsTr("I have a live USB and can recover with it")
+            }
         }
     }
 }

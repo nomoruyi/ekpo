@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QStorageInfo>
 
 namespace {
 
@@ -16,6 +17,16 @@ QVariantMap line(const QString &level, const QString &text) // level: ok, info, 
 QVariantMap card(Stage stage, const QString &current, const QVariantList &lines)
 {
     return {{QStringLiteral("stage"), stageKey(stage)}, {QStringLiteral("current"), current}, {QStringLiteral("lines"), lines}};
+}
+
+// What GRUB actually waits for. On EFI with /boot on btrfs or ZFS, GRUB can't record
+// failed boots, so 00_header uses GRUB_RECORDFAIL_TIMEOUT instead (CLAUDE.md).
+int effectiveTimeout(const SystemState &s, const QString &root)
+{
+    const QString fs = QString::fromLatin1(QStorageInfo(root + QStringLiteral("/boot")).fileSystemType());
+    if (fs == QLatin1String("btrfs") || fs == QLatin1String("zfs"))
+        return s.grub.value(QStringLiteral("GRUB_RECORDFAIL_TIMEOUT"), QStringLiteral("30")).toInt();
+    return s.grub.value(QStringLiteral("GRUB_TIMEOUT"), QStringLiteral("5")).toInt();
 }
 
 QVariantMap bootMenuCard(const SystemState &s, const QString &root)
@@ -35,7 +46,14 @@ QVariantMap bootMenuCard(const SystemState &s, const QString &root)
     lines << line(QStringLiteral("info"), s.ekpoGrubDropIn ? Backend::tr("Set by Ekpo.") : Backend::tr("Set in /etc/default/grub; Ekpo hasn't changed GRUB yet."));
     if (const QString mode = s.grub.value(QStringLiteral("GRUB_GFXMODE")); !mode.isEmpty())
         lines << line(QStringLiteral("info"), Backend::tr("Video mode: %1").arg(mode));
-    return card(Stage::BootMenu, current, lines);
+    const int timeout = effectiveTimeout(s, root);
+    if (timeout == 0)
+        lines << line(QStringLiteral("warning"), Backend::tr("The menu is skipped (0 s); it can't be reached without a live USB."));
+    else
+        lines << line(QStringLiteral("info"), Backend::tr("The menu shows for %1 s.").arg(timeout));
+    QVariantMap c = card(Stage::BootMenu, current, lines);
+    c.insert(QStringLiteral("timeout"), timeout);
+    return c;
 }
 
 QVariantMap bootSplashCard(const SystemState &s)
@@ -150,6 +168,29 @@ void Backend::refresh()
     const QString root = m_rootDir == QLatin1String("/") ? QString() : m_rootDir;
     m_state = probeSystem(m_rootDir, m_homeDir);
     m_stageCards = {bootMenuCard(m_state, root), bootSplashCard(m_state), plasmaSplashCard(m_state)};
+    if (m_library) {
+        const Target current = currentTarget(m_state, m_rootDir);
+        const Target last = lastApplied(*m_library);
+        const QList<Stage> drifted = driftedStages(*m_library, current);
+        for (QVariant &v : m_stageCards) {
+            QVariantMap c = v.toMap();
+            const auto stage = stageFromKey(c.value(QStringLiteral("stage")).toString());
+            const bool drift = stage && drifted.contains(*stage);
+            c.insert(QStringLiteral("drift"), drift);
+            if (drift) {
+                QVariantList lines = c.value(QStringLiteral("lines")).toList();
+                const QString applied = last.stageJson(*stage).value(QStringLiteral("label")).toString();
+                lines.prepend(line(QStringLiteral("warning"), tr("Changed outside Ekpo since it last applied \u201c%1\u201d.").arg(applied)));
+                c.insert(QStringLiteral("lines"), lines);
+            }
+            v = c;
+        }
+
+        // Ask after a reboot whether the last boot-stage apply worked.
+        m_pendingCheck.clear();
+        if (const auto check = m_library->pendingCheck(); check && check->value(QStringLiteral("bootId")).toString() != currentBootId())
+            m_pendingCheck = check->toVariantMap();
+    }
 
     QStringList errors = m_state.errors;
     if (!m_library)
@@ -306,4 +347,87 @@ void Backend::applyPlan()
         return;
     m_executor->apply(m_plan);
     Q_EMIT applyingChanged();
+}
+
+void Backend::adoptStage(const QString &stage)
+{
+    const auto s = stageFromKey(stage);
+    if (!m_library || !s)
+        return;
+    // Recorded as a history entry so Ekpo treats the current state as its own from now on.
+    const QJsonObject current = currentTarget(m_state, m_rootDir).stageJson(*s);
+    HistoryEntry entry{0, QDateTime::currentDateTimeUtc(), tr("Adopted a change made outside Ekpo"),
+                       {{QStringLiteral("target"), QJsonObject{{stage, current}}}, {QStringLiteral("before"), QJsonObject{{stage, current}}}}};
+    QString error;
+    m_library->addHistoryEntry(entry, error);
+    refresh();
+}
+
+void Backend::planReapplyStage(const QString &stage)
+{
+    const auto s = stageFromKey(stage);
+    if (!m_library || !s)
+        return;
+    refresh();
+    const QJsonObject last = lastApplied(*m_library).stageJson(*s);
+    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Target::fromJson({{stage, last}}),
+                       tr("Re-apply \u201c%1\u201d").arg(last.value(QStringLiteral("label")).toString())));
+}
+
+void Backend::planTimeout(int seconds)
+{
+    if (!m_library)
+        return;
+    refresh();
+    // Keeps whatever Ekpo already set (theme, video modes) and only changes the timeout.
+    BootMenuTarget menu = *currentTarget(m_state, m_rootDir).bootMenu;
+    if (menu.original) {
+        menu = BootMenuTarget{};
+        menu.label = tr("default theme");
+    }
+    menu.timeout = seconds;
+    menu.timeoutStyle = seconds == 0 ? QStringLiteral("hidden") : QStringLiteral("menu");
+    menu.label = tr("%1, %2 s menu").arg(menu.label).arg(seconds);
+    Target target;
+    target.bootMenu = menu;
+    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, target, tr("Menu timeout: %1 s").arg(seconds)));
+}
+
+void Backend::recover()
+{
+    if (!m_executor || m_executor->isRunning())
+        return;
+    m_executor->recover();
+    Q_EMIT applyingChanged();
+}
+
+void Backend::keepCheck()
+{
+    if (m_library)
+        m_library->clearPendingCheck();
+    m_pendingCheck.clear();
+    Q_EMIT changed();
+}
+
+void Backend::planRevertCheck()
+{
+    if (!m_library || m_pendingCheck.isEmpty())
+        return;
+    const int number = m_pendingCheck.value(QStringLiteral("number")).toInt();
+    QStringList errors;
+    for (const HistoryEntry &e : m_library->history(errors)) {
+        if (e.number != number)
+            continue;
+        // Only the stages that entry changed go back.
+        const QJsonObject target = e.state.value(QStringLiteral("target")).toObject();
+        const QJsonObject before = e.state.value(QStringLiteral("before")).toObject();
+        QJsonObject revert;
+        for (auto it = target.constBegin(); it != target.constEnd(); ++it)
+            revert.insert(it.key(), before.value(it.key()));
+        keepCheck();
+        refresh();
+        setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Target::fromJson(revert), tr("Undo \u201c%1\u201d").arg(e.title)));
+        return;
+    }
+    keepCheck();
 }

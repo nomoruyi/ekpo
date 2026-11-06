@@ -19,6 +19,9 @@ struct HelperLauncher {
 // systemd-inhibit (no shutdown or sleep meanwhile) + pkexec + the installed helper.
 HelperLauncher systemHelperLauncher();
 
+// Identifies the current boot; it changes with every reboot.
+QString currentBootId();
+
 // Carries out a Plan (SPEC.md §4.9): stores new builds, captures Original, applies
 // the Plasma splash, runs the helper for the boot stages, and records history. If
 // the helper fails, the Plasma splash change is undone too.
@@ -32,6 +35,8 @@ public:
 
     bool isRunning() const { return m_running; }
     void apply(const Plan &plan);
+    // Rolls back an apply the helper didn't finish (its journal is still there).
+    void recover();
 
 Q_SIGNALS:
     void progress(const QString &text);
@@ -45,6 +50,7 @@ private:
         bool changed = false;
     };
 
+    void startHelper(const QByteArray &input);
     bool applyPlasma(const PlasmaSplashTarget &target, QString &error);
     void undoPlasma();
     void readHelperOutput();
@@ -61,4 +67,5 @@ private:
     QByteArray m_buffer;
     QJsonObject m_result;
     bool m_running = false;
+    bool m_recovering = false;
 };

@@ -50,3 +50,7 @@ Plan planMask(const PlanContext &context, const Mask &mask);
 Plan planTarget(const PlanContext &context, const Target &target, const QString &title, const QMap<QString, QList<PayloadFile>> &builds = {});
 // The Target that restores Original, for stages Ekpo has changed.
 Target originalTarget(const Library &library);
+// Per stage, the state the newest history entry touching it left behind.
+Target lastApplied(const Library &library);
+// Stages whose current state differs from what Ekpo last applied (SPEC.md §4.12).
+QList<Stage> driftedStages(const Library &library, const Target &current);

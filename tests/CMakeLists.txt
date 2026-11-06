@@ -38,6 +38,17 @@ foreach(section bootMenu bootSplash plasmaSplash history)
         "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SECTION=${section};EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/${section}.png")
 endforeach()
 
+# The after-reboot question: the sample library plus a pending check from an earlier boot.
+add_test(NAME prepare_check_library COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/library ${CMAKE_BINARY_DIR}/check-data/ekpo)
+add_test(NAME prepare_check_file COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/pending-check.json ${CMAKE_BINARY_DIR}/check-data/ekpo/pending-check.json)
+set_tests_properties(prepare_check_library PROPERTIES FIXTURES_SETUP check_library)
+set_tests_properties(prepare_check_file PROPERTIES FIXTURES_SETUP check_library DEPENDS prepare_check_library)
+add_test(NAME smoke_check COMMAND ekpo)
+set_tests_properties(smoke_check PROPERTIES FIXTURES_REQUIRED check_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${CMAKE_BINARY_DIR}/check-data;QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/check.png")
+
 add_test(NAME smoke_review COMMAND ekpo)
 set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_REVIEW_IMPORT=00000000-0000-0000-0000-000000000004;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/review.png")

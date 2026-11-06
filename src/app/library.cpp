@@ -381,3 +381,19 @@ bool Library::saveOriginalIfMissing(Stage stage, const QJsonObject &state, QStri
     all.insert(stageKey(stage), state);
     return writeJson(file, all, error);
 }
+
+std::optional<QJsonObject> Library::pendingCheck() const
+{
+    QString error;
+    return readJson(m_path + QStringLiteral("/pending-check.json"), error);
+}
+
+bool Library::setPendingCheck(const QJsonObject &check, QString &error)
+{
+    return writeJson(m_path + QStringLiteral("/pending-check.json"), check, error);
+}
+
+void Library::clearPendingCheck()
+{
+    QFile::remove(m_path + QStringLiteral("/pending-check.json"));
+}

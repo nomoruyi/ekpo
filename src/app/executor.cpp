@@ -59,6 +59,14 @@ QByteArray restoreText(const Plan &plan)
 
 } // namespace
 
+QString currentBootId()
+{
+    if (qEnvironmentVariableIsSet("EKPO_DEV") && qEnvironmentVariableIsSet("EKPO_BOOT_ID"))
+        return qEnvironmentVariable("EKPO_BOOT_ID"); // tests and the sandbox "reboot" this way
+    QFile f(QStringLiteral("/proc/sys/kernel/random/boot_id"));
+    return f.open(QIODevice::ReadOnly) ? QString::fromLatin1(f.readAll()).trimmed() : QString();
+}
+
 HelperLauncher systemHelperLauncher()
 {
     return {QStringLiteral("/usr/bin/systemd-inhibit"),
@@ -115,7 +123,27 @@ void Executor::apply(const Plan &plan)
     input.open(QIODevice::WriteOnly);
     input.write(serializeRequest(*plan.request) + '\n');
     writePayload(input, plan.payload);
+    startHelper(input.data());
+}
 
+void Executor::recover()
+{
+    if (m_running)
+        return;
+    m_plan = {};
+    m_plasmaUndo = {};
+    m_buffer.clear();
+    m_result = {};
+    m_running = true;
+    m_recovering = true;
+    Q_EMIT progress(tr("Asking for permission to roll back the interrupted apply"));
+    Request request;
+    request.operation = Request::Operation::Recover;
+    startHelper(serializeRequest(request) + '\n');
+}
+
+void Executor::startHelper(const QByteArray &input)
+{
     m_process = std::make_unique<QProcess>();
     m_process->setProcessEnvironment(m_launcher.environment);
     connect(m_process.get(), &QProcess::readyReadStandardOutput, this, &Executor::readHelperOutput);
@@ -125,7 +153,7 @@ void Executor::apply(const Plan &plan)
             helperFinished();
     });
     m_process->start(m_launcher.program, m_launcher.arguments);
-    m_process->write(input.data());
+    m_process->write(input);
     m_process->closeWriteChannel();
 }
 
@@ -220,6 +248,12 @@ void Executor::helperFinished()
     const int outcome = m_result.value(QStringLiteral("outcome")).toInt(-1);
     QString error = m_result.value(QStringLiteral("error")).toString();
     m_process.release()->deleteLater();
+    if (m_recovering) {
+        m_recovering = false;
+        m_running = false;
+        Q_EMIT finished(outcome == 0, outcome == -1 ? tr("The helper didn't run (the password prompt may have been cancelled).") : error, 0);
+        return;
+    }
     if (outcome == 0)
         return succeed(m_result.value(QStringLiteral("details")).toObject().value(QStringLiteral("menuEntries")).toArray());
 
@@ -239,6 +273,9 @@ void Executor::succeed(const QJsonArray &menuEntries)
                         {QStringLiteral("menuEntries"), menuEntries}}};
     QString error;
     const bool saved = m_library.addHistoryEntry(entry, error, {{QStringLiteral("RESTORE.txt"), restoreText(m_plan)}});
+    // Boot stages only show after a reboot: ask then whether they worked (SPEC.md §4.9).
+    if (saved && (m_plan.target.bootMenu || m_plan.target.bootSplash))
+        m_library.setPendingCheck({{QStringLiteral("number"), entry.number}, {QStringLiteral("title"), m_plan.title}, {QStringLiteral("bootId"), currentBootId()}}, error);
     m_running = false;
     Q_EMIT finished(true, saved ? QString() : tr("Applied, but the history entry couldn't be saved: %1").arg(error), entry.number);
 }

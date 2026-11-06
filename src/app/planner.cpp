@@ -257,10 +257,17 @@ Plan planTarget(const PlanContext &context, const Target &wanted, const QString 
             if (!menu.build.isEmpty()) {
                 addPayload(menu.theme, menu.build, ThemeTarget::Grub);
                 stage.actions << QStringLiteral("Install a copy as %1%2.").arg(grubThemesDir, menu.theme);
-            } else if (!QFileInfo::exists(root + grubThemesDir + menu.theme + QStringLiteral("/theme.txt"))) {
+            } else if (!menu.theme.isEmpty() && !QFileInfo::exists(root + grubThemesDir + menu.theme + QStringLiteral("/theme.txt"))) {
                 plan.problems << QStringLiteral("The GRUB theme %1 is no longer installed.").arg(menu.theme);
             }
-            stage.actions << QStringLiteral("Write Ekpo's GRUB settings (theme, video modes%1).").arg(menu.timeout ? QStringLiteral(", timeout") : QString());
+            QStringList parts;
+            if (!menu.theme.isEmpty())
+                parts << QStringLiteral("theme");
+            if (!menu.gfxmode.isEmpty())
+                parts << QStringLiteral("video modes");
+            if (menu.timeout)
+                parts << QStringLiteral("timeout %1 s").arg(*menu.timeout);
+            stage.actions << QStringLiteral("Write Ekpo's GRUB settings (%1).").arg(parts.join(QStringLiteral(", ")));
             stage.diffs << FileDiff{dropIn, readText(root + dropIn), QString::fromUtf8(grubDropInText(*request.grub))};
         }
         plan.target.bootMenu = menu;
@@ -359,4 +366,31 @@ Target originalTarget(const Library &library)
             json.insert(stageKey(stage), *original);
     }
     return Target::fromJson(json);
+}
+
+Target lastApplied(const Library &library)
+{
+    QStringList errors;
+    QJsonObject merged;
+    for (const HistoryEntry &e : library.history(errors)) { // newest first
+        const QJsonObject target = e.state.value(QStringLiteral("target")).toObject();
+        for (auto it = target.constBegin(); it != target.constEnd(); ++it) {
+            if (!merged.contains(it.key()))
+                merged.insert(it.key(), it.value());
+        }
+    }
+    return Target::fromJson(merged);
+}
+
+QList<Stage> driftedStages(const Library &library, const Target &current)
+{
+    const Target last = lastApplied(library);
+    QList<Stage> drifted;
+    if (last.bootMenu && current.bootMenu && !last.bootMenu->sameState(*current.bootMenu))
+        drifted << Stage::BootMenu;
+    if (last.bootSplash && current.bootSplash && !last.bootSplash->sameState(*current.bootSplash))
+        drifted << Stage::BootSplash;
+    if (last.plasmaSplash && current.plasmaSplash && !last.plasmaSplash->sameState(*current.plasmaSplash))
+        drifted << Stage::PlasmaSplash;
+    return drifted;
 }

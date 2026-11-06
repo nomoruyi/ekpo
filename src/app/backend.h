@@ -32,6 +32,7 @@ class Backend : public QObject
     Q_PROPERTY(bool technicalDetailsExpanded READ technicalDetailsExpanded NOTIFY changed)
     Q_PROPERTY(QVariantMap plan READ plan NOTIFY planChanged)
     Q_PROPERTY(bool applying READ applying NOTIFY applyingChanged)
+    Q_PROPERTY(QVariantMap pendingCheck READ pendingCheck NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -45,6 +46,7 @@ public:
     bool technicalDetailsExpanded() const { return m_library && m_library->settings().technicalDetailsExpanded; }
     QVariantMap plan() const { return m_planMap; }
     bool applying() const { return m_executor && m_executor->isRunning(); }
+    QVariantMap pendingCheck() const { return m_pendingCheck; }
 
     Q_INVOKABLE void refresh();
     // Imports a folder or archive; returns {names: [...], errors: [...]}.
@@ -57,6 +59,15 @@ public:
     Q_INVOKABLE void planRestoreEntry(int number);
     Q_INVOKABLE void planRestoreOriginal();
     Q_INVOKABLE void applyPlan();
+
+    // Changes made outside Ekpo (SPEC.md §4.12).
+    Q_INVOKABLE void adoptStage(const QString &stage);
+    Q_INVOKABLE void planReapplyStage(const QString &stage);
+    Q_INVOKABLE void planTimeout(int seconds);
+    Q_INVOKABLE void recover(); // rolls back an interrupted apply
+    // The after-reboot question.
+    Q_INVOKABLE void keepCheck();
+    Q_INVOKABLE void planRevertCheck();
 
 Q_SIGNALS:
     void changed();
@@ -77,6 +88,7 @@ private:
     QVariantList m_imports;
     QVariantList m_installed;
     QVariantList m_history;
+    QVariantMap m_pendingCheck;
 
     void setPlan(const Plan &plan);
     Plan m_plan;

@@ -55,6 +55,46 @@ Kirigami.ApplicationWindow {
     // Pages are kept as items: pushing components makes Kirigami warn, and the
     // pages keep their state (e.g. the last import message) between visits.
     pageStack.initialPage: pageFor(currentSection.name)
+    // Checks for outside changes whenever the window comes back (SPEC.md §4.12).
+    onActiveChanged: {
+        if (active && !Backend.applying && pageStack.currentItem !== reviewPage)
+            Backend.refresh();
+    }
+
+    // After a reboot: did the last boot-stage apply work? (SPEC.md §4.9)
+    Kirigami.PromptDialog {
+        id: checkDialog
+
+        title: qsTr("Did the New Look Work?")
+        subtitle: qsTr("You applied \u201c%1\u201d before restarting. If the boot menu or splash looked wrong, Ekpo can put back what was there before.")
+            .arg(Backend.pendingCheck.title ?? "")
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: qsTr("Keep It")
+                icon.name: "dialog-ok-apply"
+                onTriggered: {
+                    Backend.keepCheck();
+                    checkDialog.close();
+                }
+            },
+            Kirigami.Action {
+                text: qsTr("Revert…")
+                icon.name: "edit-undo"
+                onTriggered: {
+                    checkDialog.close();
+                    Backend.planRevertCheck();
+                    root.showReview();
+                }
+            }
+        ]
+    }
+    Timer {
+        running: Backend.pendingCheck.number !== undefined
+        interval: 500
+        onTriggered: checkDialog.open()
+    }
+
     Timer {
         running: root.startReview !== ""
         interval: 300
@@ -110,6 +150,7 @@ Kirigami.ApplicationWindow {
         id: overviewPage
         visible: false
         onOpenStage: stage => root.showSection(stage)
+        onReview: root.showReview()
     }
     HistoryPage {
         id: historyPage

@@ -26,6 +26,9 @@ private Q_SLOTS:
     void failedHelperUndoesThePlasmaSplash();
     void brokenImportBlocks();
     void activeThemeIsNoChange();
+    void asksAfterRebootAndSeesOutsideChanges();
+    void recoversAnInterruptedApply();
+    void timeoutOnlyChange();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -97,7 +100,10 @@ bool TestExecutor::execute(const Plan &plan, QString *error, int *number)
     launcher.environment.insert(QStringLiteral("EKPO_HELPER_BIN"), QStringLiteral(STUBS_DIR));
     Executor executor(*m_library, m_home, launcher);
     QSignalSpy spy(&executor, &Executor::finished);
-    executor.apply(plan);
+    if (plan.title == QLatin1String("<recover>"))
+        executor.recover();
+    else
+        executor.apply(plan);
     if (spy.isEmpty() && !spy.wait(60000))
         qFatal("executor timed out");
     const QList<QVariant> args = spy.takeFirst();
@@ -226,6 +232,63 @@ void TestExecutor::activeThemeIsNoChange()
     const Plan p = plan(Mask{{}, QStringLiteral("Same"), {{Stage::BootSplash, Slot{Slot::Kind::Import, m_fallout}}}});
     QVERIFY(p.stages.isEmpty());
     QVERIFY(!p.canApply());
+}
+
+void TestExecutor::asksAfterRebootAndSeesOutsideChanges()
+{
+    qputenv("EKPO_BOOT_ID", "boot-1");
+    QString error;
+    QVERIFY2(execute(plan(Mask{{}, QStringLiteral("XP"), {{Stage::BootSplash, Slot{Slot::Kind::Import, m_windoze}}}}), &error), qPrintable(error));
+    const auto check = m_library->pendingCheck();
+    QVERIFY(check);
+    QCOMPARE(check->value(QStringLiteral("number")).toInt(), 1);
+    QCOMPARE(check->value(QStringLiteral("bootId")).toString(), QStringLiteral("boot-1"));
+    QCOMPARE(currentBootId(), QStringLiteral("boot-1"));
+    qunsetenv("EKPO_BOOT_ID");
+
+    QVERIFY(driftedStages(*m_library, currentTarget(probe(), m_root)).isEmpty());
+    // Something else (e.g. System Settings) switches the splash back.
+    runStub(QStringLiteral("update-alternatives"), {QStringLiteral("--set"), QStringLiteral("default.plymouth"), QStringLiteral("/usr/share/plymouth/themes/fallout/fallout.plymouth")});
+    QCOMPARE(driftedStages(*m_library, currentTarget(probe(), m_root)), QList<Stage>{Stage::BootSplash});
+    QCOMPARE(lastApplied(*m_library).bootSplash->theme, QStringLiteral("ekpo-windozexp-v1"));
+}
+
+void TestExecutor::recoversAnInterruptedApply()
+{
+    QDir().mkpath(at(QStringLiteral("/stub-fail")));
+    QFile marker(at(QStringLiteral("/stub-fail/update-grub")));
+    QVERIFY(marker.open(QIODevice::WriteOnly));
+    marker.write("always");
+    marker.close();
+    QString error;
+    QVERIFY(!execute(plan(Mask{{}, QStringLiteral("XP"), {{Stage::BootSplash, Slot{Slot::Kind::Import, m_windoze}}}}), &error));
+    QVERIFY(error.contains(QLatin1String("Open Ekpo again")));
+    QVERIFY(probe().leftoverJournal);
+
+    QVERIFY(QFile::remove(at(QStringLiteral("/stub-fail/update-grub"))));
+    Plan recover;
+    recover.title = QStringLiteral("<recover>");
+    QVERIFY2(execute(recover, &error), qPrintable(error));
+    QVERIFY(!probe().leftoverJournal);
+    QCOMPARE(readAlternative(m_root, QStringLiteral("default.plymouth"))->value, QStringLiteral("/usr/share/plymouth/themes/fallout/fallout.plymouth"));
+}
+
+void TestExecutor::timeoutOnlyChange()
+{
+    Target target;
+    target.bootMenu = BootMenuTarget{false, {}, {}, 0, QStringLiteral("hidden"), {}, QStringLiteral("0 s")};
+    const SystemState state = probe();
+    const Plan p = planTarget(PlanContext{*m_library, state, m_root, m_home}, target, QStringLiteral("Timeout"));
+    QVERIFY2(p.canApply(), qPrintable(QStringLiteral("%1 stages; %2").arg(p.stages.size()).arg(p.problems.join(QLatin1Char(';')))));
+    QCOMPARE(p.stages.first().diffs.first().after,
+             QStringLiteral("# Written by Ekpo (io.github.nomoruyi.ekpo). Delete this file to return to /etc/default/grub.\n"
+                            "GRUB_TIMEOUT=0\nGRUB_RECORDFAIL_TIMEOUT=0\nGRUB_TIMEOUT_STYLE=hidden\n"));
+    QString error;
+    QVERIFY2(execute(p, &error), qPrintable(error));
+    // GRUB keeps the theme from /etc/default/grub.
+    QFile cfg(at(QStringLiteral("/boot/grub/grub.cfg")));
+    QVERIFY(cfg.open(QIODevice::ReadOnly));
+    QVERIFY(cfg.readAll().contains("themes/hollow-grub/theme.txt"));
 }
 
 EKPO_TEST_MAIN(TestExecutor)
