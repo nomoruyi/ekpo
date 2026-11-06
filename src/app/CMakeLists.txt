@@ -18,7 +18,7 @@ qt_add_qml_module(ekpo
     SOURCES backend.cpp backend.h
     QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml qml/SettingsPage.qml qml/AboutPage.qml
 )
-target_link_libraries(ekpo PRIVATE ekpo_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(ekpo PRIVATE ekpo_core Qt6::DBus Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2)
 # The import scan only matters for static Qt builds; with the distro's shared Qt it
 # just warns about plugin targets the -dev packages don't ship.
 set_target_properties(ekpo PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)

@@ -4,6 +4,8 @@
 #include "sysinfo.h"
 
 #include <QClipboard>
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -676,4 +678,13 @@ QString Backend::systemReport()
 void Backend::copyToClipboard(const QString &text)
 {
     QGuiApplication::clipboard()->setText(text);
+}
+
+void Backend::notify(const QString &summary, const QString &body)
+{
+    QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("/org/freedesktop/Notifications"),
+                                                          QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("Notify"));
+    message << QStringLiteral("Ekpo") << uint(0) << QStringLiteral("io.github.nomoruyi.ekpo") << summary << body << QStringList()
+            << QVariantMap{{QStringLiteral("desktop-entry"), QStringLiteral("io.github.nomoruyi.ekpo")}} << int(-1);
+    QDBusConnection::sessionBus().call(message, QDBus::NoBlock);
 }

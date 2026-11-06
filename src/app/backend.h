@@ -78,6 +78,9 @@ public:
     // For the About page: versions and the current state as plain text.
     Q_INVOKABLE QString systemReport();
     Q_INVOKABLE void copyToClipboard(const QString &text);
+    // A desktop notification (org.freedesktop.Notifications), for applies that end
+    // while the window is in the background.
+    Q_INVOKABLE void notify(const QString &summary, const QString &body);
 
     QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
     int historySize() const { return m_library ? m_library->settings().historySize : 10; }

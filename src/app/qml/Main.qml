@@ -55,6 +55,16 @@ Kirigami.ApplicationWindow {
     // Pages are kept as items: pushing components makes Kirigami warn, and the
     // pages keep their state (e.g. the last import message) between visits.
     pageStack.initialPage: pageFor(currentSection.name)
+    // Tell the user when an apply ends while the window is in the background.
+    Connections {
+        target: Backend
+        function onApplyFinished(ok, error, number) {
+            if (!root.active)
+                Backend.notify(ok ? qsTr("Done") : qsTr("Nothing was changed"),
+                               ok ? (number > 0 ? qsTr("Saved as history entry #%1.").arg(number) : qsTr("Finished.")) : error);
+        }
+    }
+
     // Checks for outside changes whenever the window comes back (SPEC.md §4.12).
     onActiveChanged: {
         if (active && !Backend.applying && pageStack.currentItem !== reviewPage)
