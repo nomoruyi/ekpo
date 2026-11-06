@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Lets pkexec run Ekpo's helper, and nothing else, after asking for an admin
+     password; the password is remembered for a few minutes (ARCHITECTURE.md §1). -->
+<policyconfig>
+  <vendor>Ekpo</vendor>
+  <icon_name>io.github.nomoruyi.ekpo</icon_name>
+  <action id="io.github.nomoruyi.ekpo.apply">
+    <description>Change the boot menu and boot splash</description>
+    <message>Ekpo needs your password to change the boot menu or the boot splash.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@EKPO_HELPER_INSTALL_PATH@</annotate>
+  </action>
+</policyconfig>

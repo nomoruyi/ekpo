@@ -1,9 +1,13 @@
 qt_add_library(ekpo_core STATIC cli.cpp executor.cpp importer.cpp library.cpp model.cpp planner.cpp probe.cpp target.cpp)
-target_compile_definitions(ekpo_core PRIVATE
-    EKPO_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ekpo/ekpo-helper"
-    # Sandbox mode only (EKPO_DEV + EKPO_SYSTEM_ROOT): the test helper and its stub commands.
-    EKPO_HELPER_TEST_PATH="$<TARGET_FILE:ekpo-helper-test>"
-    EKPO_STUBS_DIR="${CMAKE_SOURCE_DIR}/tests/stubs")
+target_compile_definitions(ekpo_core PRIVATE EKPO_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ekpo/ekpo-helper")
+# Sandbox mode (EKPO_DEV + EKPO_SYSTEM_ROOT): the test helper and its stub commands.
+# Packages are built with -DEKPO_SANDBOX=OFF (top-level option), so the installed
+# app has no dev hook.
+if(EKPO_SANDBOX)
+    target_compile_definitions(ekpo_core PRIVATE EKPO_SANDBOX
+        EKPO_HELPER_TEST_PATH="$<TARGET_FILE:ekpo-helper-test>"
+        EKPO_STUBS_DIR="${CMAKE_SOURCE_DIR}/tests/stubs")
+endif()
 target_include_directories(ekpo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ekpo_core PUBLIC ekpo_common Qt6::Core KF6::ConfigCore)
 

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Ekpo
+GenericName=Boot Look Manager
+Comment=Design and switch the look of the boot menu, boot splash and Plasma splash
+Exec=ekpo
+Icon=io.github.nomoruyi.ekpo
+Terminal=false
+Categories=Qt;KDE;System;
+Keywords=grub;plymouth;splash;ksplash;boot;theme;

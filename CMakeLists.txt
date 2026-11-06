@@ -10,8 +10,16 @@ find_package(KF6Config 6.0 REQUIRED)
 qt_standard_project_setup(REQUIRES 6.8)
 
 include(GNUInstallDirs)
-enable_testing()
+# Installed folders are 0755 whatever the builder's umask.
+set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+# OFF for packages: no sandbox hook in the app, and no tests, since without the
+# sandbox the CLI and app tests would reach the real helper through pkexec.
+option(EKPO_SANDBOX "Build the sandbox mode and the tests" ON)
 add_subdirectory(src/common)
 add_subdirectory(src/helper)
 add_subdirectory(src/app)
-add_subdirectory(tests)
+add_subdirectory(packaging)
+if(EKPO_SANDBOX)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -77,6 +77,7 @@ HelperLauncher systemHelperLauncher()
 AppEnvironment detectEnvironment()
 {
     AppEnvironment env{QStringLiteral("/"), QDir::homePath(), systemHelperLauncher()};
+#ifdef EKPO_SANDBOX
     if (qEnvironmentVariableIsSet("EKPO_DEV") && qEnvironmentVariableIsSet("EKPO_SYSTEM_ROOT")) {
         env.rootDir = qEnvironmentVariable("EKPO_SYSTEM_ROOT");
         env.homeDir = qEnvironmentVariable("EKPO_SYSTEM_HOME", env.homeDir);
@@ -84,6 +85,7 @@ AppEnvironment detectEnvironment()
         env.launcher.environment.insert(QStringLiteral("EKPO_HELPER_ROOT"), env.rootDir);
         env.launcher.environment.insert(QStringLiteral("EKPO_HELPER_BIN"), QStringLiteral(EKPO_STUBS_DIR));
     }
+#endif
     return env;
 }
 
