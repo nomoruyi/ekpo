@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""Fake update-grub: writes a grub.cfg with the theme line and one entry per kernel."""
+from _stub import at, effective_grub_theme, kernels, maybe_fail
+
+maybe_fail("update-grub")
+lines = ["# fake grub.cfg written by tests/stubs/update-grub"]
+theme = effective_grub_theme()
+if theme:
+    lines.append(f"set theme=($root)/@{theme}")
+lines.append("menuentry 'Kubuntu' {\n}")
+lines.append("submenu 'Advanced options for Kubuntu' {")
+for v in reversed(kernels()):
+    lines.append(f"  menuentry 'Kubuntu, with Linux {v}' {{\n  }}")
+    lines.append(f"  menuentry 'Kubuntu, with Linux {v} (recovery mode)' {{\n  }}")
+lines.append("}")
+with open(at("/boot/grub/grub.cfg"), "w") as f:
+    f.write("\n".join(lines) + "\n")

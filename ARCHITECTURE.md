@@ -117,7 +117,7 @@ dev/            env.sh (HOME, XDG_*, TMPDIR → .dev/), sandbox root builder
 ## 8. Testing and the repo-only rule
 
 - **Golden files** for every generator output; regenerate with an explicit flag, review the diff.
-- **Helper against fake roots:** a test build (`-DEKPO_TESTING=ON`) compiles the helper with a root prefix and a stub `PATH`. The production helper has `/` and absolute command paths compiled in and no such option, so an argument can never redirect it.
+- **Helper against fake roots:** every build also produces `ekpo-helper-test`, the same code compiled with `EKPO_HELPER_TESTING`: it reads its root from `EKPO_HELPER_ROOT` and runs the Python stubs in `tests/stubs/` from `EKPO_HELPER_BIN`. Only `ekpo-helper` is installed; it has `/` and absolute command paths compiled in, no code that reads them from the environment, and refuses to run unless it is root. Apply, rollback and recover leave nothing behind in `/var/lib/ekpo`.
 - **Sandbox mode:** the test build of the app talks to the test helper without pkexec, against `.dev/root/` (a copy of this system's relevant files). Lets the owner and Claude click through applies safely.
 - **Screenshot mode:** `QT_QPA_PLATFORM=offscreen` renders pages to PNG so Claude can check the UI.
 - `dev/env.sh` points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` (gitignored) for every build, test and run, per `CLAUDE.md`.

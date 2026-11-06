@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Fake update-initramfs -u -k all."""
+import sys
+
+from _stub import build_initrds, maybe_fail
+
+maybe_fail("update-initramfs")
+if sys.argv[1:] != ["-u", "-k", "all"]:
+    sys.exit("update-initramfs: expected -u -k all")
+build_initrds()

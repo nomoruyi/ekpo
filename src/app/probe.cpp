@@ -1,5 +1,7 @@
 #include "probe.h"
 
+#include "sysinfo.h"
+
 #include <KConfig>
 #include <KConfigGroup>
 
@@ -8,12 +10,9 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QProcess>
 #include <QVersionNumber>
 
 #include <algorithm>
-
-#include <sys/stat.h>
 
 namespace {
 
@@ -48,86 +47,6 @@ QStringList subdirs(const QString &path)
     return QDir(path).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
 }
 
-// Sources /etc/default/grub and grub.d/*.cfg the way grub-mkconfig does, so
-// shell syntax and drop-in overrides resolve exactly as at update-grub time.
-QMap<QString, QString> effectiveGrub(const QString &root, QStringList &errors)
-{
-    static const QString script = QStringLiteral(
-        "set -a\n"
-        ". \"$1/etc/default/grub\" || exit 3\n"
-        "for f in \"$1\"/etc/default/grub.d/*.cfg; do [ -e \"$f\" ] && . \"$f\"; done\n"
-        "shift\n"
-        "for k; do [ -n \"${!k+x}\" ] && printf '%s=%s\\0' \"$k\" \"${!k}\"; done\n"
-        "exit 0\n");
-
-    QProcess bash;
-    QProcessEnvironment env; // clean: no GRUB_* leaking in from the caller
-    env.insert(QStringLiteral("PATH"), QStringLiteral("/usr/bin:/bin"));
-    env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
-    bash.setProcessEnvironment(env);
-    bash.start(QStringLiteral("/usr/bin/bash"),
-               QStringList{QStringLiteral("-c"), script, QStringLiteral("bash"), root} + grubKeys);
-    if (!bash.waitForFinished(5000) || bash.exitStatus() != QProcess::NormalExit || bash.exitCode() != 0) {
-        errors << QStringLiteral("GRUB settings: %1").arg(QString::fromUtf8(bash.readAllStandardError()).trimmed());
-        return {};
-    }
-
-    QMap<QString, QString> values;
-    for (const QByteArray &pair : bash.readAllStandardOutput().split('\0')) {
-        const qsizetype eq = pair.indexOf('=');
-        if (eq > 0)
-            values.insert(QString::fromUtf8(pair.left(eq)), QString::fromUtf8(pair.mid(eq + 1)));
-    }
-    return values;
-}
-
-// The provider of linux-initramfs-tool decides which generator builds the initrds.
-QString initramfsGenerator(const QString &root)
-{
-    const QStringList stanzas = readFile(root + QStringLiteral("/var/lib/dpkg/status")).split(QStringLiteral("\n\n"));
-    for (const QString &stanza : stanzas) {
-        QString package;
-        bool installed = false;
-        bool provides = false;
-        for (const QString &line : stanza.split(QLatin1Char('\n'))) {
-            if (line.startsWith(QLatin1String("Package: ")))
-                package = line.mid(9).trimmed();
-            else if (line.startsWith(QLatin1String("Status: ")))
-                installed = line.endsWith(QLatin1String(" installed"));
-            else if (line.startsWith(QLatin1String("Provides: ")))
-                provides = line.contains(QLatin1String("linux-initramfs-tool"));
-        }
-        if (installed && provides)
-            return package == QLatin1String("initramfs-tools") ? package : QStringLiteral("dracut");
-    }
-    return {};
-}
-
-// Format of /var/lib/dpkg/alternatives/<name>: mode, link, slave name/link pairs, a
-// blank line, then per choice its path, priority and one line per slave.
-void readPlymouthAlternative(const QString &root, SystemState &s)
-{
-    const QStringList lines = readFile(root + QStringLiteral("/var/lib/dpkg/alternatives/default.plymouth")).split(QLatin1Char('\n'));
-    if (lines.size() < 3) {
-        s.errors << QStringLiteral("default.plymouth alternative not found");
-        return;
-    }
-    s.plymouthAlternativeMode = lines[0];
-    qsizetype i = 2;
-    int slaves = 0;
-    for (; i < lines.size() && !lines[i].isEmpty(); i += 2)
-        ++slaves;
-    for (++i; i + 1 < lines.size() && !lines[i].isEmpty(); i += 2 + slaves)
-        s.plymouthChoices.append({lines[i], lines[i + 1].toInt()});
-
-    const QFileInfo link(root + QStringLiteral("/etc/alternatives/default.plymouth"));
-    s.plymouthAlternative = link.readSymLink();
-    // lastModified() follows the link; lstat gives the time the selection changed.
-    struct stat st;
-    if (::lstat(QFile::encodeName(link.filePath()).constData(), &st) == 0)
-        s.plymouthSelectedAt = QDateTime::fromSecsSinceEpoch(st.st_mtim.tv_sec, QTimeZone::UTC);
-}
-
 QVersionNumber kernelVersion(QString version)
 {
     return QVersionNumber::fromString(version.replace(QLatin1Char('-'), QLatin1Char('.')));
@@ -142,14 +61,26 @@ SystemState probeSystem(const QString &rootDir, const QString &homeDir)
 
     s.initramfsGenerator = initramfsGenerator(root);
 
-    s.grub = effectiveGrub(root, s.errors);
+    QString grubError;
+    if (const auto grub = effectiveGrub(root, grubKeys, grubError))
+        s.grub = *grub;
+    else
+        s.errors << grubError;
     s.ekpoGrubDropIn = QFileInfo::exists(root + QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg"));
     for (const QString &id : subdirs(root + QStringLiteral("/boot/grub/themes"))) {
         if (QFileInfo::exists(root + QStringLiteral("/boot/grub/themes/") + id + QStringLiteral("/theme.txt")))
             s.grubThemes << id;
     }
 
-    readPlymouthAlternative(root, s);
+    if (const auto alt = readAlternative(root, QStringLiteral("default.plymouth"))) {
+        s.plymouthAlternativeMode = alt->mode;
+        s.plymouthAlternative = alt->value;
+        s.plymouthSelectedAt = alt->selectedAt;
+        for (const auto &[path, priority] : alt->choices)
+            s.plymouthChoices.append({path, priority});
+    } else {
+        s.errors << QStringLiteral("default.plymouth alternative not found");
+    }
     const QString daemonConf = root + QStringLiteral("/etc/plymouth/plymouthd.conf");
     s.plymouthDaemonTheme = iniValue(daemonConf, QStringLiteral("Daemon"), QStringLiteral("Theme"));
     if (const QFileInfo conf(daemonConf); conf.exists())

@@ -1,6 +1,6 @@
 qt_add_library(ekpo_core STATIC importer.cpp library.cpp model.cpp probe.cpp)
 target_include_directories(ekpo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ekpo_core PUBLIC Qt6::Core KF6::ConfigCore)
+target_link_libraries(ekpo_core PUBLIC ekpo_common Qt6::Core KF6::ConfigCore)
 
 qt_add_executable(ekpo main.cpp)
 target_compile_definitions(ekpo PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")

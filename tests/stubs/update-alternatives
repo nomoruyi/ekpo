@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Fake update-alternatives: --install, --set, --auto and --remove on the fake root."""
+import sys
+
+from _stub import maybe_fail, read_alternative, select, write_alternative
+
+maybe_fail("update-alternatives")
+args = sys.argv[1:]
+action = args[0]
+if action == "--install":
+    link, name, path, priority = args[1:5]
+    mode, link, slaves, choices = read_alternative(name)
+    choices = [c for c in choices if c[0] != path] + [[path, int(priority), [""] * len(slaves)]]
+    write_alternative(name, mode, link, slaves, choices)
+    if mode == "auto":
+        select(name, max(choices, key=lambda c: c[1])[0])
+elif action == "--set":
+    name, path = args[1:3]
+    mode, link, slaves, choices = read_alternative(name)
+    if path not in [c[0] for c in choices]:
+        sys.exit(f"update-alternatives: {path} isn't a choice for {name}")
+    write_alternative(name, "manual", link, slaves, choices)
+    select(name, path)
+elif action == "--auto":
+    name = args[1]
+    mode, link, slaves, choices = read_alternative(name)
+    write_alternative(name, "auto", link, slaves, choices)
+    select(name, max(choices, key=lambda c: c[1])[0])
+elif action == "--remove":
+    name, path = args[1:3]
+    mode, link, slaves, choices = read_alternative(name)
+    choices = [c for c in choices if c[0] != path]
+    import os
+    from _stub import at
+    current = os.readlink(at(f"/etc/alternatives/{name}"))
+    if current == path:
+        mode = "auto"
+        select(name, max(choices, key=lambda c: c[1])[0])
+    write_alternative(name, mode, link, slaves, choices)
+else:
+    sys.exit(f"update-alternatives: unsupported {action}")

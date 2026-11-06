@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Fake lsinitramfs: prints the file list of a fake initrd."""
+import sys
+
+from _stub import at, maybe_fail
+
+maybe_fail("lsinitramfs")
+print(open(at(sys.argv[1])).read(), end="")

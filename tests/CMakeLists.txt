@@ -42,3 +42,9 @@ ekpo_test(tst_probe)
 ekpo_test(tst_library)
 ekpo_test(tst_importer)
 ekpo_test(tst_common)
+ekpo_test(tst_helper)
+add_dependencies(tst_helper ekpo-helper ekpo-helper-test)
+target_compile_definitions(tst_helper PRIVATE
+    HELPER_BIN="$<TARGET_FILE:ekpo-helper>"
+    HELPER_TEST_BIN="$<TARGET_FILE:ekpo-helper-test>"
+    STUBS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stubs")
