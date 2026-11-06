@@ -89,19 +89,23 @@ Kirigami.ApplicationWindow {
             }
         ]
     }
+    // Start dialogs open once per run: their conditions are bound to Backend, which
+    // emits changed() on every refresh and setting change, restarting a bound timer.
+    property bool startDialogsShown: false
     Timer {
-        running: Backend.pendingCheck.number !== undefined
+        running: !root.startDialogsShown && root.startReview === ""
         interval: 500
-        onTriggered: checkDialog.open()
+        onTriggered: {
+            root.startDialogsShown = true;
+            if (Backend.pendingCheck.number !== undefined)
+                checkDialog.open();
+            else if (Backend.showIntro)
+                introDialog.open();
+        }
     }
 
     IntroDialog {
         id: introDialog
-    }
-    Timer {
-        running: Backend.showIntro && Backend.pendingCheck.number === undefined && root.startReview === ""
-        interval: 500
-        onTriggered: introDialog.open()
     }
 
     Timer {
