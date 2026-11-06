@@ -38,6 +38,8 @@ class Backend : public QObject
     Q_PROPERTY(bool showIntro READ showIntro NOTIFY changed)
     Q_PROPERTY(bool rebuildAllKernels READ rebuildAllKernels NOTIFY changed)
     Q_PROPERTY(bool atOriginal READ atOriginal NOTIFY changed)
+    Q_PROPERTY(QString libraryPath READ libraryPath NOTIFY changed)
+    Q_PROPERTY(int historySize READ historySize NOTIFY changed)
     Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
 
 public:
@@ -66,6 +68,12 @@ public:
     bool atOriginal() const { return m_atOriginal; }
     int ekpoCopies() const { return m_ekpoCopies; }
     Q_INVOKABLE void removeEkpoFiles();
+
+    QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
+    int historySize() const { return m_library ? m_library->settings().historySize : 10; }
+    // Moves the library to an empty folder, or switches to a library found there.
+    Q_INVOKABLE QString setLibraryLocation(const QUrl &folder); // empty on success
+    Q_INVOKABLE void setHistorySize(int size);
 
     // Masks (SPEC.md §4.8). Empty refs leave a stage as it is.
     Q_INVOKABLE QString saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash);
@@ -118,6 +126,7 @@ private:
     int m_ekpoCopies = 0;
     bool m_removingFiles = false;
 
+    void createExecutor();
     void setPlan(const Plan &plan);
     void preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels);
     std::function<Plan(const PlanContext &)> m_makePlan;

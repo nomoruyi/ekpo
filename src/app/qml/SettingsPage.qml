@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import Ekpo
@@ -13,6 +14,13 @@ Kirigami.ScrollablePage {
     property string removalMessage: ""
     property bool removalOk: false
     property bool removing: false
+    property string libraryMessage: ""
+
+    FolderDialog {
+        id: libraryDialog
+        title: qsTr("Choose an empty folder, or one that holds an Ekpo library")
+        onAccepted: page.libraryMessage = Backend.setLibraryLocation(selectedFolder)
+    }
 
     title: qsTr("Settings")
 
@@ -30,6 +38,44 @@ Kirigami.ScrollablePage {
     }
 
     Kirigami.FormLayout {
+        RowLayout {
+            Kirigami.FormData.label: qsTr("Library:")
+            QQC2.Label {
+                text: Backend.libraryPath
+                elide: Text.ElideMiddle
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+            }
+            QQC2.Button {
+                text: qsTr("Change…")
+                enabled: !Backend.applying
+                onClicked: libraryDialog.open()
+            }
+        }
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            wrapMode: Text.Wrap
+            opacity: 0.7
+            text: qsTr("An empty folder: the library moves there. A folder with an Ekpo library: Ekpo uses that one instead.")
+        }
+        Kirigami.InlineMessage {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            Layout.fillWidth: true
+            visible: page.libraryMessage !== ""
+            type: Kirigami.MessageType.Error
+            text: page.libraryMessage
+        }
+        RowLayout {
+            Kirigami.FormData.label: qsTr("History:")
+            QQC2.SpinBox {
+                from: 1
+                to: 100
+                value: Backend.historySize
+                onValueModified: Backend.setHistorySize(value)
+            }
+            QQC2.Label {
+                text: qsTr("entries kept, plus Original")
+            }
+        }
         QQC2.Switch {
             Kirigami.FormData.label: qsTr("Boot splash changes:")
             text: qsTr("Rebuild all kernels by default")

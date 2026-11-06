@@ -1,10 +1,13 @@
 #include "library.h"
 
+#include <KConfig>
+#include <KConfigGroup>
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
-#include <QFileInfo>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QSet>
@@ -88,6 +91,68 @@ QString manifestPath(const QString &library)
 QString Library::defaultPath()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/ekpo");
+}
+
+namespace {
+QString configFile()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/ekporc");
+}
+} // namespace
+
+QString Library::configuredPath()
+{
+    const QString path = KConfig(configFile(), KConfig::SimpleConfig).group(QStringLiteral("Library")).readEntry("Path");
+    return path.isEmpty() ? defaultPath() : path;
+}
+
+bool Library::setConfiguredPath(const QString &path, QString &error)
+{
+    KConfig config(configFile(), KConfig::SimpleConfig);
+    KConfigGroup group = config.group(QStringLiteral("Library"));
+    if (QDir::cleanPath(path) == QDir::cleanPath(defaultPath()))
+        group.deleteEntry("Path");
+    else
+        group.writeEntry("Path", QDir::cleanPath(path));
+    if (!config.sync()) {
+        error = QStringLiteral("Can't write %1").arg(configFile());
+        return false;
+    }
+    return true;
+}
+
+std::optional<QString> Library::relocate(const QString &from, const QString &to, QString &error)
+{
+    const QString source = QDir::cleanPath(from);
+    const QString target = QDir::cleanPath(to);
+    if (source == target)
+        return target;
+    if (QFile::exists(manifestPath(target)))
+        return target; // use the library found there
+    const QDir targetDir(target);
+    if (targetDir.exists() && !targetDir.isEmpty()) {
+        error = QStringLiteral("%1 is not empty and not an Ekpo library.").arg(target);
+        return std::nullopt;
+    }
+    if (target.startsWith(source + QLatin1Char('/'))) {
+        error = QStringLiteral("The library can't move into itself.");
+        return std::nullopt;
+    }
+    targetDir.rmdir(QStringLiteral("."));
+    QDir().mkpath(QFileInfo(target).path());
+    if (QDir().rename(source, target))
+        return target;
+
+    // Another file system: copy, check, then move the old copy to the trash.
+    QStringList notes;
+    if (!QDir().mkpath(target) || !copyTree(source, target, notes, error) || !notes.isEmpty()) {
+        QDir(target).removeRecursively();
+        if (error.isEmpty())
+            error = QStringLiteral("Can't copy the library to %1.").arg(target);
+        return std::nullopt;
+    }
+    QFile::moveToTrash(source);
+    return target;
 }
 
 std::optional<Library> Library::open(const QString &path, QString &error)

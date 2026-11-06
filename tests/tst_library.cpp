@@ -20,6 +20,8 @@ private Q_SLOTS:
     void historyKeepsNewest();
     void originalIsCapturedOnce();
     void removedMaskGoesToTrash();
+    void configuredPath();
+    void relocate();
 
 private:
     static Library openFresh(const QTemporaryDir &tmp)
@@ -165,6 +167,45 @@ void TestLibrary::removedMaskGoesToTrash()
     QVERIFY(library.masks(errors).isEmpty());
     QFile::remove(trashed);
     QFile::remove(trash + QStringLiteral("/info/") + QFileInfo(trashed).fileName() + QStringLiteral(".trashinfo"));
+}
+
+void TestLibrary::configuredPath()
+{
+    QCOMPARE(Library::configuredPath(), Library::defaultPath());
+    QString error;
+    QVERIFY(Library::setConfiguredPath(QStringLiteral("/somewhere/else"), error));
+    QCOMPARE(Library::configuredPath(), QStringLiteral("/somewhere/else"));
+    QVERIFY(Library::setConfiguredPath(Library::defaultPath(), error)); // back to the default: the key goes away
+    QCOMPARE(Library::configuredPath(), Library::defaultPath());
+}
+
+void TestLibrary::relocate()
+{
+    QTemporaryDir tmp;
+    QString error;
+    auto library = Library::open(tmp.filePath(QStringLiteral("a")), error);
+    QVERIFY(library);
+    Mask mask{{}, QStringLiteral("Moving"), {}};
+    QVERIFY(library->saveMask(mask, error));
+
+    // An empty or missing folder: the library moves.
+    const auto moved = Library::relocate(tmp.filePath(QStringLiteral("a")), tmp.filePath(QStringLiteral("b/lib")), error);
+    QVERIFY2(moved, qPrintable(error));
+    QCOMPARE(*moved, tmp.filePath(QStringLiteral("b/lib")));
+    QVERIFY(!QFileInfo::exists(tmp.filePath(QStringLiteral("a"))));
+    QStringList errors;
+    QCOMPARE(Library::open(*moved, error)->masks(errors).first().name, QStringLiteral("Moving"));
+
+    // A folder with a library: used as it is, nothing moves.
+    QVERIFY(Library::open(tmp.filePath(QStringLiteral("c")), error));
+    QCOMPARE(*Library::relocate(*moved, tmp.filePath(QStringLiteral("c")), error), tmp.filePath(QStringLiteral("c")));
+    QVERIFY(QFileInfo::exists(*moved + QStringLiteral("/library.json")));
+
+    // Other files, or the library's own subfolder: refused.
+    QDir().mkpath(tmp.filePath(QStringLiteral("d")));
+    writeFile(tmp.filePath(QStringLiteral("d/notes.txt")), "x");
+    QVERIFY(!Library::relocate(*moved, tmp.filePath(QStringLiteral("d")), error));
+    QVERIFY(!Library::relocate(*moved, *moved + QStringLiteral("/inside"), error));
 }
 
 EKPO_TEST_MAIN(TestLibrary)

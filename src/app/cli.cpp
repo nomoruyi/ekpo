@@ -207,7 +207,7 @@ int runCli(const QStringList &rawArgs)
         return usage(2);
 
     QString error;
-    auto library = Library::open(Library::defaultPath(), error);
+    auto library = Library::open(Library::configuredPath(), error);
     if (!library) {
         err() << error << "\n";
         return 1;

@@ -15,6 +15,13 @@ public:
     static constexpr int currentFormat = 1;
 
     static QString defaultPath(); // ~/.local/share/ekpo
+    // The library location from ~/.config/ekporc ([Library] Path), else defaultPath().
+    static QString configuredPath();
+    static bool setConfiguredPath(const QString &path, QString &error);
+    // Moves the library at from to the folder to (missing or empty), or, if to
+    // already holds an Ekpo library, leaves both alone and uses that one. Returns
+    // the path to use; refuses a folder with other files.
+    static std::optional<QString> relocate(const QString &from, const QString &to, QString &error);
 
     // Opens the library at path, creating it if the folder is missing or empty.
     // Refuses a folder that holds other files, and a newer or unknown format.

@@ -144,7 +144,14 @@ Backend::Backend(QObject *parent)
     m_rootDir = env.rootDir;
     m_homeDir = env.homeDir;
     m_launcher = env.launcher;
-    m_library = Library::open(Library::defaultPath(), m_libraryError);
+    m_library = Library::open(Library::configuredPath(), m_libraryError);
+    createExecutor();
+    refresh();
+}
+
+void Backend::createExecutor()
+{
+    m_executor.reset();
     if (m_library) {
         m_executor = std::make_unique<Executor>(*m_library, m_homeDir, m_launcher);
         connect(m_executor.get(), &Executor::progress, this, &Backend::applyProgress);
@@ -156,7 +163,6 @@ Backend::Backend(QObject *parent)
             Q_EMIT applyFinished(ok, error, number);
         });
     }
-    refresh();
 }
 
 void Backend::refresh()
@@ -559,4 +565,33 @@ void Backend::removeEkpoFiles()
     m_removingFiles = true;
     m_executor->removeEkpoFiles();
     Q_EMIT applyingChanged();
+}
+
+QString Backend::setLibraryLocation(const QUrl &folder)
+{
+    if (applying())
+        return tr("Wait until the apply has finished.");
+    QString error;
+    const auto path = Library::relocate(m_library ? m_library->path() : Library::configuredPath(), folder.toLocalFile(), error);
+    if (!path)
+        return error;
+    auto library = Library::open(*path, error);
+    if (!library || !Library::setConfiguredPath(*path, error))
+        return error;
+    m_executor.reset();
+    m_library = std::move(library);
+    createExecutor();
+    refresh();
+    return {};
+}
+
+void Backend::setHistorySize(int size)
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.historySize = qBound(1, size, 100);
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
 }
