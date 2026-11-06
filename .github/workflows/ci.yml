@@ -1,0 +1,149 @@
+name: CI
+
+# Every push and pull request builds Ekpo and runs all tests in an Ubuntu 26.04
+# container, the release Ekpo targets, then builds the .deb.
+#
+# Releases: a push to main whose head commit message contains [major], [minor]
+# or [patch] bumps the newest vX.Y.Z tag (or the fallback version in
+# CMakeLists.txt before the first release), builds the .deb with that version
+# and publishes it as a GitHub release with that tag.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per branch at a time, so a release sees the tag of the one before it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - name: Install build and test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates cmake ninja-build g++ dpkg-dev fakeroot file \
+            qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools \
+            libkirigami-dev libkf6config-dev extra-cmake-modules \
+            python3 qt6-svg-plugins fontconfig fonts-noto-core breeze-icon-theme \
+            qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
+            qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # all tags, for the version
+
+      - name: Work out the version
+        id: version
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          base=${latest#v}
+          if [ -z "$base" ]; then
+            base=$(sed -n 's/^ *set(ekpo_version \([0-9.]*\))$/\1/p' CMakeLists.txt)
+          fi
+          IFS=. read -r major minor patch <<<"$base"
+          bump=""
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            case "$MESSAGE" in
+              *"[major]"*) bump=major ;;
+              *"[minor]"*) bump=minor ;;
+              *"[patch]"*) bump=patch ;;
+            esac
+          fi
+          case "$bump" in
+            major) version="$((major + 1)).0.0" ;;
+            minor) version="$major.$((minor + 1)).0" ;;
+            patch) version="$major.$minor.$((patch + 1))" ;;
+            *) version="$base" ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$([ -n "$bump" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "Version $version (newest tag: ${latest:-none}, bump: ${bump:-none})"
+
+      - name: Build and test
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p -m 0700 /tmp/runtime
+          export XDG_RUNTIME_DIR=/tmp/runtime
+          source dev/env.sh
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DEKPO_VERSION="$VERSION"
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+      - name: Build the package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          source dev/env.sh
+          cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+            -DEKPO_SANDBOX=OFF -DEKPO_VERSION="$VERSION"
+          cmake --build build-release
+          (cd build-release && cpack && sha256sum ekpo_*_amd64.deb > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ekpo-deb
+          path: |
+            build-release/ekpo_*_amd64.deb
+            build-release/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Keep screenshots of failed smoke tests
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: build/screenshots/
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ekpo-deb
+
+      - name: Tag and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION is already released; push with a higher bump." >&2
+            exit 1
+          fi
+          # Creating the release creates the tag too, on exactly this commit.
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Ekpo $VERSION" --generate-notes \
+            "ekpo_${VERSION}_amd64.deb" SHA256SUMS

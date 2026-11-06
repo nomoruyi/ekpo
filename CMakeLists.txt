@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.28)
-project(ekpo VERSION 0.2.0 LANGUAGES CXX)
+
+# Release versions come from git tags (vX.Y.Z), which CI creates from "[major]",
+# "[minor]" or "[patch]" in a commit message and passes as -DEKPO_VERSION.
+# Local builds use the latest tag, or the fallback before the first release.
+set(EKPO_VERSION "" CACHE STRING "Version to build (default: latest vX.Y.Z git tag)")
+set(ekpo_version "${EKPO_VERSION}")
+if(NOT ekpo_version)
+    execute_process(COMMAND git describe --tags --abbrev=0 --match "v[0-9]*.[0-9]*.[0-9]*"
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    OUTPUT_VARIABLE ekpo_tag OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE ekpo_git_result)
+    if(ekpo_git_result EQUAL 0)
+        string(REGEX REPLACE "^v" "" ekpo_version "${ekpo_tag}")
+    else()
+        set(ekpo_version 0.2.0)
+    endif()
+endif()
+project(ekpo VERSION ${ekpo_version} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
