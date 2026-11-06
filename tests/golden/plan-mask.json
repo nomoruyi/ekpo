@@ -1,0 +1,109 @@
+{
+    "commands": [
+        "update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth /usr/share/plymouth/themes/ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth 50",
+        "update-alternatives --set default.plymouth /usr/share/plymouth/themes/ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth",
+        "update-initramfs -u -k all",
+        "update-grub"
+    ],
+    "estimatedSeconds": 45,
+    "notes": [
+    ],
+    "payload": [
+        "ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth",
+        "ekpo-windozexp-v1/WindozeXP.script"
+    ],
+    "problems": [
+    ],
+    "request": {
+        "format": 1,
+        "grub": {
+            "gfxmode": "2560x1440,1920x1080,1280x720,auto",
+            "theme": "hollow-grub"
+        },
+        "operation": "apply",
+        "plymouth": {
+            "alternativeMode": "manual",
+            "daemonTheme": "ekpo-windozexp-v1",
+            "theme": "ekpo-windozexp-v1"
+        },
+        "themes": [
+            {
+                "id": "ekpo-windozexp-v1",
+                "target": "plymouth"
+            }
+        ]
+    },
+    "stages": [
+        {
+            "actions": [
+                "Copy the package to <home>/.local/share/plasma/look-and-feel/org.example.splash.",
+                "Set it as the Plasma splash (no password needed)."
+            ],
+            "diffs": [
+                {
+                    "after": "[KSplash]\nTheme=org.example.splash\n",
+                    "before": "[KSplash]\nTheme=Overload\n",
+                    "path": "~/.config/ksplashrc"
+                }
+            ],
+            "from": "Overload",
+            "stage": "plasmaSplash",
+            "to": "Example Splash"
+        },
+        {
+            "actions": [
+                "Write Ekpo's GRUB settings (theme, video modes)."
+            ],
+            "diffs": [
+                {
+                    "after": "# Written by Ekpo (io.github.nomoruyi.ekpo). Delete this file to return to /etc/default/grub.\nGRUB_THEME=\"/boot/grub/themes/hollow-grub/theme.txt\"\nGRUB_GFXMODE=\"2560x1440,1920x1080,1280x720,auto\"\n",
+                    "before": "",
+                    "path": "/etc/default/grub.d/zz-ekpo.cfg"
+                }
+            ],
+            "from": "hollow-grub",
+            "stage": "bootMenu",
+            "to": "hollow-grub"
+        },
+        {
+            "actions": [
+                "Install a copy as /usr/share/plymouth/themes/ekpo-windozexp-v1.",
+                "Select it as the boot splash.",
+                "Rebuild the initrds of all 5 kernels (about 40 s)."
+            ],
+            "diffs": [
+                {
+                    "after": "[Daemon]\nTheme=ekpo-windozexp-v1\n",
+                    "before": "[Daemon]\nTheme=fallout\n",
+                    "path": "/etc/plymouth/plymouthd.conf"
+                }
+            ],
+            "from": "Fallout",
+            "stage": "bootSplash",
+            "to": "WindozeXP"
+        }
+    ],
+    "target": {
+        "bootMenu": {
+            "build": "",
+            "gfxmode": "2560x1440,1920x1080,1280x720,auto",
+            "label": "hollow-grub",
+            "theme": "hollow-grub",
+            "timeoutStyle": ""
+        },
+        "bootSplash": {
+            "build": "ad5bc0fd24c0aee93515fc60",
+            "daemonTheme": "ekpo-windozexp-v1",
+            "label": "WindozeXP",
+            "mode": "manual",
+            "theme": "ekpo-windozexp-v1"
+        },
+        "plasmaSplash": {
+            "build": "d3e802ea3d99c2ef4ea7c971",
+            "engine": "",
+            "label": "Example Splash",
+            "theme": "org.example.splash"
+        }
+    },
+    "title": "Night"
+}

@@ -1,7 +1,9 @@
 #include "library.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
+#include <QFileInfo>
 #include <QFile>
 #include <QJsonDocument>
 #include <QSaveFile>
@@ -205,6 +207,58 @@ bool Library::removeImport(const QString &id, QString &error, QString *trashedPa
     return true;
 }
 
+QString Library::buildHash(const QList<PayloadFile> &files)
+{
+    QList<PayloadFile> sorted = files;
+    std::sort(sorted.begin(), sorted.end(), [](const PayloadFile &a, const PayloadFile &b) { return a.path < b.path; });
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    for (const PayloadFile &f : sorted) {
+        hash.addData(f.path.toUtf8() + '\0' + QByteArray::number(f.data.size()) + '\0');
+        hash.addData(f.data);
+    }
+    return QString::fromLatin1(hash.result().toHex().left(24));
+}
+
+bool Library::saveBuild(const QList<PayloadFile> &files, QString &error)
+{
+    const QString dir = m_path + QStringLiteral("/builds/") + buildHash(files);
+    if (QFileInfo::exists(dir))
+        return true;
+    const QString fresh = dir + QStringLiteral(".new");
+    QDir(fresh).removeRecursively();
+    for (const PayloadFile &f : files) {
+        const QString target = fresh + QLatin1Char('/') + f.path;
+        QSaveFile out(target);
+        if (!validRelativePath(f.path) || !QDir().mkpath(QFileInfo(target).path()) || !out.open(QIODevice::WriteOnly) || out.write(f.data) < 0 || !out.commit()) {
+            error = QStringLiteral("Can't store build file %1").arg(f.path);
+            QDir(fresh).removeRecursively();
+            return false;
+        }
+    }
+    if (files.isEmpty())
+        QDir().mkpath(fresh);
+    if (!QDir().rename(fresh, dir)) {
+        error = QStringLiteral("Can't store build %1").arg(dir);
+        return false;
+    }
+    return true;
+}
+
+std::optional<QList<PayloadFile>> Library::buildFiles(const QString &hash) const
+{
+    const QString dir = m_path + QStringLiteral("/builds/") + hash;
+    if (hash.isEmpty() || !QFileInfo(dir).isDir())
+        return std::nullopt;
+    QList<PayloadFile> files;
+    for (QDirIterator it(dir, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories); it.hasNext();) {
+        QFile f(it.next());
+        if (!f.open(QIODevice::ReadOnly))
+            return std::nullopt;
+        files.append({QDir(dir).relativeFilePath(f.fileName()), f.readAll()});
+    }
+    return files;
+}
+
 QList<Mask> Library::masks(QStringList &errors) const
 {
     QList<Mask> result;
@@ -279,7 +333,7 @@ QList<HistoryEntry> Library::history(QStringList &errors) const
     return result;
 }
 
-bool Library::addHistoryEntry(HistoryEntry &entry, QString &error)
+bool Library::addHistoryEntry(HistoryEntry &entry, QString &error, const QMap<QString, QByteArray> &files)
 {
     QList<int> numbers = historyNumbers();
     const int number = numbers.isEmpty() ? 1 : numbers.last() + 1;
@@ -288,6 +342,13 @@ bool Library::addHistoryEntry(HistoryEntry &entry, QString &error)
         if (error.isEmpty())
             error = QStringLiteral("Can't create %1").arg(dir);
         return false;
+    }
+    for (auto it = files.cbegin(); it != files.cend(); ++it) {
+        QSaveFile extra(dir + QLatin1Char('/') + it.key());
+        if (!extra.open(QIODevice::WriteOnly) || extra.write(it.value()) < 0 || !extra.commit()) {
+            error = QStringLiteral("Can't write %1/%2").arg(dir, it.key());
+            return false;
+        }
     }
     entry.number = number;
 

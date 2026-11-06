@@ -1,5 +1,6 @@
 #include "helper.h"
 
+#include "configtext.h"
 #include "sysinfo.h"
 
 #include <QDir>
@@ -236,37 +237,9 @@ void Helper::rebuildInitrds() const
         run(QStringLiteral("update-initramfs"), {QStringLiteral("-u"), QStringLiteral("-k"), QStringLiteral("all")}, 900000);
 }
 
-// Sets [Daemon] Theme= and keeps every other line of plymouthd.conf.
 void Helper::setDaemonTheme(const QString &theme) const
 {
-    const QStringList lines = QString::fromUtf8(readFile(at(plymouthdConf)).value_or(QByteArray())).split(QLatin1Char('\n'));
-    QStringList out;
-    QString section;
-    bool written = false;
-    for (const QString &line : lines) {
-        const QString trimmed = line.trimmed();
-        if (trimmed.startsWith(QLatin1Char('['))) {
-            if (section == QLatin1String("Daemon") && !written) {
-                out << QStringLiteral("Theme=") + theme;
-                written = true;
-            }
-            section = trimmed.mid(1).chopped(1).trimmed();
-        } else if (section == QLatin1String("Daemon") && trimmed.startsWith(QLatin1String("Theme")) && trimmed.mid(5).trimmed().startsWith(QLatin1Char('='))) {
-            if (!written)
-                out << QStringLiteral("Theme=") + theme;
-            written = true;
-            continue;
-        }
-        out << line;
-    }
-    while (!out.isEmpty() && out.last().isEmpty())
-        out.removeLast();
-    if (!written) {
-        if (section != QLatin1String("Daemon"))
-            out << QStringLiteral("[Daemon]");
-        out << QStringLiteral("Theme=") + theme;
-    }
-    writeFile(plymouthdConf, (out.join(QLatin1Char('\n')) + QLatin1Char('\n')).toUtf8());
+    writeFile(plymouthdConf, withDaemonTheme(readFile(at(plymouthdConf)).value_or(QByteArray()), theme));
 }
 
 QJsonObject Helper::verify() const
@@ -374,18 +347,7 @@ HelperResult Helper::apply(const Request &request, const QMap<QString, QList<Pay
             if (request.grub->original) {
                 removeFile(dropInFile);
             } else {
-                QStringList lines{QStringLiteral("# Written by Ekpo (io.github.nomoruyi.ekpo). Delete this file to return to /etc/default/grub.")};
-                if (!request.grub->theme.isEmpty())
-                    lines << QStringLiteral("GRUB_THEME=\"%1%2/theme.txt\"").arg(grubThemesDir, request.grub->theme);
-                if (!request.grub->gfxmode.isEmpty())
-                    lines << QStringLiteral("GRUB_GFXMODE=\"%1\"").arg(request.grub->gfxmode);
-                if (request.grub->timeout) {
-                    lines << QStringLiteral("GRUB_TIMEOUT=%1").arg(*request.grub->timeout);
-                    lines << QStringLiteral("GRUB_RECORDFAIL_TIMEOUT=%1").arg(*request.grub->timeout);
-                }
-                if (!request.grub->timeoutStyle.isEmpty())
-                    lines << QStringLiteral("GRUB_TIMEOUT_STYLE=%1").arg(request.grub->timeoutStyle);
-                writeFile(dropInFile, (lines.join(QLatin1Char('\n')) + QLatin1Char('\n')).toUtf8());
+                writeFile(dropInFile, grubDropInText(*request.grub));
             }
         }
 

@@ -1,4 +1,5 @@
-qt_add_library(ekpo_core STATIC importer.cpp library.cpp model.cpp probe.cpp)
+qt_add_library(ekpo_core STATIC executor.cpp importer.cpp library.cpp model.cpp planner.cpp probe.cpp target.cpp)
+target_compile_definitions(ekpo_core PRIVATE EKPO_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ekpo/ekpo-helper")
 target_include_directories(ekpo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ekpo_core PUBLIC ekpo_common Qt6::Core KF6::ConfigCore)
 
