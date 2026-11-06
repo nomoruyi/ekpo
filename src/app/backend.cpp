@@ -32,7 +32,7 @@ QVariantMap bootMenuCard(const SystemState &s, const QString &root)
         if (!QFileInfo::exists(root + themePath))
             lines << line(QStringLiteral("warning"), Backend::tr("The theme file is missing; GRUB falls back to its text menu."));
     }
-    lines << line(QStringLiteral("info"), s.personaeGrubDropIn ? Backend::tr("Set by Personae.") : Backend::tr("Set in /etc/default/grub; Personae hasn't changed GRUB yet."));
+    lines << line(QStringLiteral("info"), s.ekpoGrubDropIn ? Backend::tr("Set by Ekpo.") : Backend::tr("Set in /etc/default/grub; Ekpo hasn't changed GRUB yet."));
     if (const QString mode = s.grub.value(QStringLiteral("GRUB_GFXMODE")); !mode.isEmpty())
         lines << line(QStringLiteral("info"), Backend::tr("Video mode: %1").arg(mode));
     return card(Stage::BootMenu, current, lines);
@@ -120,9 +120,9 @@ Backend::Backend(QObject *parent)
     , m_homeDir(QDir::homePath())
 {
     // Sandbox mode for dev runs and screenshots (ARCHITECTURE.md §8): read a fake system root.
-    if (qEnvironmentVariableIsSet("PERSONAE_DEV") && qEnvironmentVariableIsSet("PERSONAE_SYSTEM_ROOT")) {
-        m_rootDir = qEnvironmentVariable("PERSONAE_SYSTEM_ROOT");
-        m_homeDir = qEnvironmentVariable("PERSONAE_SYSTEM_HOME", m_homeDir);
+    if (qEnvironmentVariableIsSet("EKPO_DEV") && qEnvironmentVariableIsSet("EKPO_SYSTEM_ROOT")) {
+        m_rootDir = qEnvironmentVariable("EKPO_SYSTEM_ROOT");
+        m_homeDir = qEnvironmentVariable("EKPO_SYSTEM_HOME", m_homeDir);
     }
     m_library = Library::open(Library::defaultPath(), m_libraryError);
     refresh();

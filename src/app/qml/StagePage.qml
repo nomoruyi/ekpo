@@ -5,7 +5,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Personae
+import Ekpo
 
 // One stage's themes: imported ones, and installed ones not imported yet (SPEC.md §4.1, §4.3).
 Kirigami.ScrollablePage {

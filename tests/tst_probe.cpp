@@ -57,5 +57,5 @@ void TestProbe::missingFilesAreReported()
     QCOMPARE(state.errors.size(), 2); // GRUB settings and the Plymouth alternative
 }
 
-PERSONAE_TEST_MAIN(TestProbe)
+EKPO_TEST_MAIN(TestProbe)
 #include "tst_probe.moc"

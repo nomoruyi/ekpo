@@ -1,4 +1,4 @@
-# Personae: architecture
+# Ekpo: architecture
 
 Status: **approved by the owner** (2026-11-05). Implements `SPEC.md` (approved). Stack from round 7: C++ / Qt 6.10 Quick + Kirigami 6.24, CMake 4 + Ninja, QtTest.
 
@@ -6,23 +6,23 @@ Status: **approved by the owner** (2026-11-05). Implements `SPEC.md` (approved).
 
 ```
  ┌──────────────────────────── user session (unprivileged) ───────────────────────────┐
- │  personae            one binary: GUI without arguments, CLI with a subcommand        │
- │   ├─ Library         plain JSON + files in ~/.local/share/personae/                  │
+ │  ekpo            one binary: GUI without arguments, CLI with a subcommand        │
+ │   ├─ Library         plain JSON + files in ~/.local/share/ekpo/                  │
  │   ├─ Generators      Design → plain theme package (pure functions)                   │
  │   ├─ Probe           reads system state (no root needed)                             │
  │   ├─ Planner         desired state vs current → Plan (steps, diffs, commands)        │
  │   └─ Executor        Plasma step itself; boot steps via the helper                   │
  └───────────────┬─────────────────────────────────────────────────────────────────────┘
-                 │ systemd-inhibit --what=shutdown:sleep  pkexec  personae-helper
+                 │ systemd-inhibit --what=shutdown:sleep  pkexec  ekpo-helper
                  │ stdin: request (JSON) + payload (framed files)   stdout: JSON progress lines
  ┌───────────────▼──────────────────────── root ───────────────────────────────────────┐
- │  personae-helper     fixed operations only: apply, recover, uninstall                │
+ │  ekpo-helper     fixed operations only: apply, recover, uninstall                │
  │   validate → journal → install → configure → rebuild → verify (rollback on failure)  │
  └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Why pkexec, not KAuth:** round 6 chose a pkexec helper with a polkit policy. KAuth would add a D-Bus system service and `libkf6auth-dev` (not installed) for no gain here.
-- **Polkit policy** `io.github.nomoruyi.personae.apply`: `allow_active = auth_admin_keep` (password kept ~5 min), `exec.path` annotation pins `/usr/libexec/personae/personae-helper`.
+- **Polkit policy** `io.github.nomoruyi.ekpo.apply`: `allow_active = auth_admin_keep` (password kept ~5 min), `exec.path` annotation pins `/usr/libexec/ekpo/ekpo-helper`.
 - The helper never reads `/home`. Everything it installs arrives on stdin.
 - The inhibitor wrapper blocks shutdown and suspend for the duration (polkit allows `inhibit-block-shutdown` for active sessions without a prompt; checked); the helper ignores `SIGPIPE`, so closing the window can't cut an apply in half.
 
@@ -38,7 +38,7 @@ The caller is untrusted: any process of the owner can start the helper once the 
 **Payload:** length-prefixed file records `{path, mode, size}` + bytes, one tree per theme. Own framing (~60 lines) instead of tar, so there is no symlink, device, owner or `..` handling to get wrong.
 
 **Validation, all before the first write:**
-- IDs `^personae-[a-z0-9-]{1,48}-v[0-9]+$`; paths relative, no `..`, regular files only, size caps (Plymouth 15 MB, GRUB 64 MB), allowed extensions.
+- IDs `^ekpo-[a-z0-9-]{1,48}-v[0-9]+$`; paths relative, no `..`, regular files only, size caps (Plymouth 15 MB, GRUB 64 MB), allowed extensions.
 - Image headers checked (PNG/JPEG/TGA), `.pf2` magic checked.
 - `theme.txt`: own parser with a whitelist of GRUB 2.14 global properties and components; every referenced file must exist inside the theme.
 - `.plymouth`: whitelist of keys per module; `ImageDir`/`ScriptFile` must point inside the theme dir. Imported `script` themes are code run by plymouthd at boot (its script language has no file or process access); the import report says so.
@@ -49,9 +49,9 @@ The caller is untrusted: any process of the owner can start the helper once the 
 ## 3. Helper transaction
 
 1. Take the dpkg frontend lock (`/var/lib/dpkg/lock-frontend`, as apt does) so apt, Discover and unattended-upgrades wait. Check free space on `/` and `/boot`.
-2. Write the journal `/var/lib/personae/txn/` (only thing Personae keeps on the system during an apply): the plan, pre-state values, copies of every file it will change (`zz-personae.cfg`, `plymouthd.conf`), the alternative's state.
-3. Stage payload into `/var/lib/personae/txn/stage/`, validate, then move into versioned folders `/boot/grub/themes/<id>`, `/usr/share/plymouth/themes/<id>`.
-4. GRUB: write `/etc/default/grub.d/zz-personae.cfg` (or delete it for "original": Original GRUB means "no Personae file"); `update-grub` (grub-mkconfig itself runs `grub-script-check` before replacing `grub.cfg`).
+2. Write the journal `/var/lib/ekpo/txn/` (only thing Ekpo keeps on the system during an apply): the plan, pre-state values, copies of every file it will change (`zz-ekpo.cfg`, `plymouthd.conf`), the alternative's state.
+3. Stage payload into `/var/lib/ekpo/txn/stage/`, validate, then move into versioned folders `/boot/grub/themes/<id>`, `/usr/share/plymouth/themes/<id>`.
+4. GRUB: write `/etc/default/grub.d/zz-ekpo.cfg` (or delete it for "original": Original GRUB means "no Ekpo file"); `update-grub` (grub-mkconfig itself runs `grub-script-check` before replacing `grub.cfg`).
 5. Plymouth: `update-alternatives --install` (priority 50, below every distro theme) and `--set`, or restore the captured mode; set only the `Theme=` line in `plymouthd.conf`; rebuild all initrds through the detected generator adapter; then `update-grub` again (the alternative's `default.grub` slave lands in `grub.cfg`).
 6. Verify: `grub.cfg` has the expected `theme=` line and the file exists; every initrd contains the theme (`lsinitramfs` / `lsinitrd`). The result includes the real menu entry titles from `grub.cfg` (root-only), so the app can re-run the entry-width fit check and warn.
 7. Success: emit the result (post-state values, backups of replaced files), delete the journal. Failure at any step: undo in reverse from the journal (incl. rebuilding initrds again), emit the log.
@@ -81,7 +81,7 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
 ## 5. Library layout
 
 ```
-~/.local/share/personae/
+~/.local/share/ekpo/
   library.json                 format version, settings
   designs/<uuid>/design.json   current; versions/<n>.json; draft.json (crash recovery)
   imports/<uuid>/import.json   metadata + report; files/ (verbatim copy)
@@ -117,7 +117,7 @@ dev/            env.sh (HOME, XDG_*, TMPDIR → .dev/), sandbox root builder
 ## 8. Testing and the repo-only rule
 
 - **Golden files** for every generator output; regenerate with an explicit flag, review the diff.
-- **Helper against fake roots:** a test build (`-DPERSONAE_TESTING=ON`) compiles the helper with a root prefix and a stub `PATH`. The production helper has `/` and absolute command paths compiled in and no such option, so an argument can never redirect it.
+- **Helper against fake roots:** a test build (`-DEKPO_TESTING=ON`) compiles the helper with a root prefix and a stub `PATH`. The production helper has `/` and absolute command paths compiled in and no such option, so an argument can never redirect it.
 - **Sandbox mode:** the test build of the app talks to the test helper without pkexec, against `.dev/root/` (a copy of this system's relevant files). Lets the owner and Claude click through applies safely.
 - **Screenshot mode:** `QT_QPA_PLATFORM=offscreen` renders pages to PNG so Claude can check the UI.
 - `dev/env.sh` points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` (gitignored) for every build, test and run, per `CLAUDE.md`.
@@ -141,5 +141,5 @@ Spikes for SPEC §10 run before M2 (reading Plymouth 24 sources and measuring fr
 ## 10. Decisions for the owner
 
 1. pkexec helper with stdin payload and own framing (above), or KAuth?
-2. One `personae` binary for GUI and CLI, or two?
-3. Plymouth alternative priority 50 for Personae themes (never wins in auto mode), or match the distro's 100?
+2. One `ekpo` binary for GUI and CLI, or two?
+3. Plymouth alternative priority 50 for Ekpo themes (never wins in auto mode), or match the distro's 100?

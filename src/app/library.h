@@ -13,7 +13,7 @@ class Library
 public:
     static constexpr int currentFormat = 1;
 
-    static QString defaultPath(); // ~/.local/share/personae
+    static QString defaultPath(); // ~/.local/share/ekpo
 
     // Opens the library at path, creating it if the folder is missing or empty.
     // Refuses a folder that holds other files, and a newer or unknown format.
@@ -37,7 +37,7 @@ public:
     QList<HistoryEntry> history(QStringList &errors) const; // newest first
     bool addHistoryEntry(HistoryEntry &entry, QString &error); // numbers it, keeps the newest historySize
     std::optional<QJsonObject> original(Stage stage) const;
-    // Original is captured once per stage, right before Personae first changes it.
+    // Original is captured once per stage, right before Ekpo first changes it.
     bool saveOriginalIfMissing(Stage stage, const QJsonObject &state, QString &error);
 
 private:

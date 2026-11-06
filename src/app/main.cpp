@@ -10,27 +10,27 @@ int main(int argc, char *argv[])
 {
     // Dev and test runs (dev/env.sh): no core dumps, so a crash can't make
     // systemd-coredump and DrKonqi write outside the repo.
-    if (qEnvironmentVariableIsSet("PERSONAE_DEV"))
+    if (qEnvironmentVariableIsSet("EKPO_DEV"))
         prctl(PR_SET_DUMPABLE, 0);
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("personae"));
-    app.setApplicationDisplayName(QStringLiteral("Personae"));
+    app.setApplicationName(QStringLiteral("ekpo"));
+    app.setApplicationDisplayName(QStringLiteral("Ekpo"));
     app.setApplicationVersion(QStringLiteral(PROJECT_VERSION));
-    app.setDesktopFileName(QStringLiteral("io.github.nomoruyi.personae"));
+    app.setDesktopFileName(QStringLiteral("io.github.nomoruyi.ekpo"));
 
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     QQmlApplicationEngine engine;
-    if (const QString section = qEnvironmentVariable("PERSONAE_SECTION"); !section.isEmpty())
+    if (const QString section = qEnvironmentVariable("EKPO_SECTION"); !section.isEmpty())
         engine.setInitialProperties({{QStringLiteral("startSection"), section}});
-    engine.loadFromModule("Personae", "Main");
+    engine.loadFromModule("Ekpo", "Main");
     if (engine.rootObjects().isEmpty())
         return 1;
 
     // Screenshot mode (ARCHITECTURE.md §8): render once, save, quit.
-    const QString shot = qEnvironmentVariable("PERSONAE_SCREENSHOT");
+    const QString shot = qEnvironmentVariable("EKPO_SCREENSHOT");
     if (!shot.isEmpty()) {
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         QTimer::singleShot(1000, &app, [window, shot] {

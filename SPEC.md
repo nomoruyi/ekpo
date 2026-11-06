@@ -1,6 +1,6 @@
-# Personae: specification
+# Ekpo: specification
 
-Status: **approved by the owner** (2026-11-05). Source: `INTERVIEW.md` rounds 1–9; where they disagree, the later round wins. System facts are in `CLAUDE.md`. "Personae" is a placeholder name.
+Status: **approved by the owner** (2026-11-05). Source: `INTERVIEW.md` rounds 1–9; where they disagree, the later round wins. System facts are in `CLAUDE.md`. Named Ekpo (Edo/Bini for "mask") on 2026-11-06; earlier drafts called it Personae.
 
 ## 1. Purpose
 
@@ -18,25 +18,25 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 1. **Never leave the system unbootable.** Validate every generated file, back up every file touched, keep a fallback, log every privileged action, make every apply reversible.
 2. **Change as little on the host as possible.** No extra `/etc/grub.d` scripts, no font or initramfs hooks, no daemon, no edits to `/etc/default/grub` or the kernel command line.
-3. **Output is plain, standard theme packages** that keep working after Personae is uninstalled.
+3. **Output is plain, standard theme packages** that keep working after Ekpo is uninstalled.
 4. **Nothing happens silently.** Every apply shows a review (file changes and commands) first; changes made outside the app are detected, never overwritten without asking.
 5. **Detect, don't assume** the toolchain (initramfs-tools or dracut, GRUB paths, Plymouth alternative state).
 
 ## 3. Concepts
 
-- **Design:** a named profile for one stage, made in Personae's editor. Editable; every save is a restorable version.
+- **Design:** a named profile for one stage, made in Ekpo's editor. Editable; every save is a restorable version.
 - **Imported theme:** a third-party theme copied into the library read-only. It can be previewed, applied and put into Personas, not edited (hand edits happen outside the app; *Re-import* pulls them in).
 - **Persona** (a bundle): one slot per stage, each holding a design, an imported theme, or *Leave as is*. Slots reference items; nothing is copied. A single design applied on its own is a one-slot Persona.
 - **Asset:** an image, video, spinner or font stored once in the library and referenced by designs. Shared elements (e.g. a logo or palette) are *linked*: editing them updates every design that uses them; applied looks change only when re-applied ("update available"). A design can unlink an element.
-- **History entry:** one apply (or restore) of the system state, restorable. **Original** is a pinned entry: each stage's state right before Personae first changed it.
-- **Library:** plain files in `~/.local/share/personae/` (location configurable). Holds designs, versions, imports, assets, Personas and the history.
+- **History entry:** one apply (or restore) of the system state, restorable. **Original** is a pinned entry: each stage's state right before Ekpo first changed it.
+- **Library:** plain files in `~/.local/share/ekpo/` (location configurable). Holds designs, versions, imports, assets, Personas and the history.
 
 ## 4. Functional requirements
 
 ### 4.1 Main window and navigation
 
 - Sidebar: Overview · Boot Menu · Boot Splash · Plasma Splash · Personas · Assets · History; Settings and About at the bottom.
-- **Overview** (start page): three stage cards in boot order with thumbnail, current theme, status ("as applied", "changed outside Personae", "N of 5 kernels outdated"), the GRUB timeout, the detected toolchain and whether `splash` is on the kernel command line.
+- **Overview** (start page): three stage cards in boot order with thumbnail, current theme, status ("as applied", "changed outside Ekpo", "N of 5 kernels outdated"), the GRUB timeout, the detected toolchain and whether `splash` is on the kernel command line.
 - **Stage pages:** grid of designs and imports with Edit (designs only), Preview, Apply, Duplicate, Delete; New design and Import.
 - Apply, restore and first run take over the window. Wireframes: `notes/wireframes-round8.md`.
 - One instance at a time. Notifications only when the window isn't focused. Full keyboard access. English UI, text prepared for translation. Follows the Plasma colour scheme.
@@ -44,29 +44,29 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ### 4.2 First start
 
 - System check: toolchain, `splash` on the command line, installed themes, free space. Offers to import the installed themes.
-- **Intro dialog**: what the three stages are; how to back up first (Timeshift snapshot, live USB, library export); how to get back to a working system (in-app restore, `personae restore original`, an older kernel from GRUB's Advanced options, Timeshift from a live USB). "Don't show again" checkbox, off by default; reachable from Help.
+- **Intro dialog**: what the three stages are; how to back up first (Timeshift snapshot, live USB, library export); how to get back to a working system (in-app restore, `ekpo restore original`, an older kernel from GRUB's Advanced options, Timeshift from a live USB). "Don't show again" checkbox, off by default; reachable from Help.
 - After a reinstall (library present, system state unknown), a "welcome back" view offers to re-apply or adopt the current state.
 
 ### 4.3 Import
 
 - Sources: theme folders and archives. Finds the real theme root (e.g. themes nested one folder deep next to an install script); never runs bundled scripts.
 - Copies the theme into the library verbatim, remembers the source path, writes an import report with a verdict (works / repaired / broken and why).
-- Installed, unchanged themes (fallout, mint-galaxy, Overload, hollow-grub, crossgrub) are applied in place; broken or nested ones get a cleaned-up installed copy under a Personae ID.
-- Imported Plasma splashes are QML that runs at every login; Personae doesn't sandbox them, and the report says so.
+- Installed, unchanged themes (fallout, mint-galaxy, Overload, hollow-grub, crossgrub) are applied in place; broken or nested ones get a cleaned-up installed copy under a Ekpo ID.
+- Imported Plasma splashes are QML that runs at every login; Ekpo doesn't sandbox them, and the report says so.
 
 ### 4.4 Editors (all stages)
 
 - Layout: element list · canvas · properties panel; resolution switch 1440p / 1080p / 720p; warnings bar.
 - Drag on the canvas with snapping (centre, edges, other elements); number fields and arrow-key nudging. Positions and sizes are stored as % of the screen.
 - Explicit save (Ctrl+S); each save is a version (all kept); undo/redo per open design for the session; one crash-recovery draft.
-- New designs start from a few starters tinted with the Plasma accent colour, from blank, or by duplicating a Personae design.
+- New designs start from a few starters tinted with the Plasma accent colour, from blank, or by duplicating a Ekpo design.
 - Validation at all three resolutions; problems that would break or clip the result warn, invalid output blocks the build.
 - Fonts picked from the system are copied into the library with their licence file where one exists.
 
 ### 4.5 Boot Menu designer (GRUB)
 
 - Elements: background, title or logo image, the entry list (font, colours, selected-entry style: flat colour, rounded box or glow, baked into 9-slice images), per-entry icons (small built-in monochrome set: Linux, Kubuntu-style, Windows, firmware settings, memtest; plus imports), countdown as text and/or progress bar, help line. No scrollbar.
-- One high-resolution master per asset; Personae derives what each resolution needs at build time. The background and `image` components scale at boot; `.pf2` fonts don't.
+- One high-resolution master per asset; Ekpo derives what each resolution needs at build time. The background and `image` components scale at boot; `.pf2` fonts don't.
 - **Entry text is never cut off.** GRUB draws each entry on one line and clips it, so the menu width adapts: the build measures the longest expected entry (real `.pf2` glyph widths, icon and padding, headroom for longer kernel versions) and widens the menu box up to full width; if it still doesn't fit, the build warns and offers a smaller font. Expected entries come from the kernels in `/boot`, `GRUB_DISTRIBUTOR` and the menu scripts present (kernels, Advanced options, memtest, os-prober, UEFI Firmware Settings, fwupd); the helper re-checks against the real `grub.cfg` after `update-grub`.
 - Terminal font stays GRUB's built-in Unifont.
 - Preview: drawn by the app with the real `.pf2` text over that sample menu.
@@ -95,7 +95,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 - **Review screen** before every apply: per stage, from → to, what is written and run, time estimate (~40 s for 5 initrds), extra Timeshift cost; checks (files valid, free space, no apt/dpkg running, fallback kept); file diffs and commands collapsed by default (Settings can expand them).
 - **Order:** Plasma splash first (no root), then GRUB and Plymouth in one privileged helper run. All-or-nothing: any failure rolls the whole Persona back and shows the log.
-- **GRUB:** install the theme into a versioned folder `/boot/grub/themes/personae-<slug>-<ver>`; write only `/etc/default/grub.d/zz-personae.cfg` (`GRUB_THEME`, `GRUB_GFXMODE=2560x1440,1920x1080,1280x720,auto`, timeout keys); run `update-grub`; verify `grub.cfg`. Warn when `zz-personae.cfg` overrides a value set in `/etc/default/grub`.
+- **GRUB:** install the theme into a versioned folder `/boot/grub/themes/ekpo-<slug>-<ver>`; write only `/etc/default/grub.d/zz-ekpo.cfg` (`GRUB_THEME`, `GRUB_GFXMODE=2560x1440,1920x1080,1280x720,auto`, timeout keys); run `update-grub`; verify `grub.cfg`. Warn when `zz-ekpo.cfg` overrides a value set in `/etc/default/grub`.
 - **Plymouth:** install into a versioned folder; register and select the `default.plymouth` alternative; set `plymouthd.conf` `Theme=` to match; rebuild **all** initrds with the detected generator; run `update-grub` too (the alternative's `default.grub` slave ends up in `grub.cfg`); verify.
 - **Plasma splash:** copy the package, set `ksplashrc` `[KSplash] Theme=`/`Engine=KSplashQML`.
 - Re-applying an edited design installs a new versioned folder, so every history entry stays restorable; folders no kept entry uses are removed after the next successful apply.
@@ -103,12 +103,12 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 ### 4.10 Boot options
 
-- GRUB menu timeout: one machine-wide setting on the Overview's Boot Menu card, applied through review and history. Personae manages `GRUB_TIMEOUT`, `GRUB_RECORDFAIL_TIMEOUT` and `GRUB_TIMEOUT_STYLE`. 0 s (instant boot, no way into the menu here) requires ticking "I can recover with a live USB".
+- GRUB menu timeout: one machine-wide setting on the Overview's Boot Menu card, applied through review and history. Ekpo manages `GRUB_TIMEOUT`, `GRUB_RECORDFAIL_TIMEOUT` and `GRUB_TIMEOUT_STYLE`. 0 s (instant boot, no way into the menu here) requires ticking "I can recover with a live USB".
 
 ### 4.11 History and restore
 
 - Every apply and restore is an entry; keep the last 10 plus Original. Stored in the library under `/home`, so it survives a reinstall.
-- Backups cover the config files Personae touches; initrds are rebuilt, not copied; installed theme folders stay while an entry references them. The helper re-validates every restore like an apply.
+- Backups cover the config files Ekpo touches; initrds are rebuilt, not copied; installed theme folders stay while an entry references them. The helper re-validates every restore like an apply.
 - A short crash journal on the system during an apply lets the helper finish or roll back after a crash or power loss.
 - Each entry carries a plain-text `RESTORE.txt` with console commands for recovery without the app.
 
@@ -126,12 +126,12 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 ### 4.14 Command line
 
-`personae status | apply <persona> | restore <entry|original>`, with the same review and a y/N prompt. Designing stays GUI-only.
+`ekpo status | apply <persona> | restore <entry|original>`, with the same review and a y/N prompt. Designing stays GUI-only.
 
 ## 5. Privileges and installation
 
 - The GUI never runs as root. A small fixed-operation helper runs via `pkexec` with an installed polkit policy (clear prompt text, authorization kept for a few minutes). It accepts only validated requests, never reads the home directory directly, and logs every action.
-- Installed as a locally built `.deb` (app, helper, polkit policy). Removing it leaves applied looks working; an in-app "Restore Original and remove Personae files" cleans the system first.
+- Installed as a locally built `.deb` (app, helper, polkit policy). Removing it leaves applied looks working; an in-app "Restore Original and remove Ekpo files" cleans the system first.
 - No daemon, tray icon, autostart or apt hook.
 
 ## 6. Stack (decided in round 7)
@@ -163,7 +163,7 @@ Editing GRUB menu entries or kernel parameters; editing third-party themes in th
 
 ## 10. Open questions
 
-1. **Final name** (owner asks a Nigerian contact; replaces "Personae" in IDs, paths and the polkit action before release).
+1. ~~**Final name**~~ Resolved 2026-11-06: Ekpo.
 2. **Spikes before M2:** can two-step hide status messages (else `script`)? Does two-step play animations at a fixed frame rate? Real per-frame sizes for the 15 MB cap. MP4 start latency in KSplash. Does two-step's live text render under dracut?
 3. Should a look-and-feel package that holds only a splash stay out of System Settings' Global Themes list, and how?
 4. Round 8 Q1 promised per-resolution GRUB font sizes with an override; that isn't possible without an `/etc/grub.d` script (§9). Accept one font size set for all resolutions?

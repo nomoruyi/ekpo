@@ -163,5 +163,5 @@ void TestImporter::removeMovesToTrash()
     QVERIFY(m_library->imports(errors).isEmpty());
 }
 
-PERSONAE_TEST_MAIN(TestImporter)
+EKPO_TEST_MAIN(TestImporter)
 #include "tst_importer.moc"

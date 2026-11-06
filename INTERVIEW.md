@@ -193,3 +193,7 @@ Changes from the owner:
 ## SPEC.md drafted (2026-11-05)
 
 Correction *(Claude)*: round 8 Q1's per-resolution GRUB font sizes aren't possible. One `theme.txt` serves every video mode, and choosing fonts per mode would need an `/etc/grub.d` script, which round 2 ruled out. Listed as open question 4 in `SPEC.md`.
+
+## Name decided (2026-11-06)
+
+**Ekpo.** The owner's Nigerian colleague confirmed "Ekpo" is used for "mask". *(Claude: Melzian (1937) lists Ekpo as a Bini masquerade society; no Ubuntu package or command is named ekpo.)* Renamed everywhere except this log and `notes/`: app and binary `ekpo`, QML module `Ekpo`, library `~/.local/share/ekpo/`, IDs `io.github.nomoruyi.ekpo.*`, installed folders `ekpo-<slug>`, GRUB drop-in `zz-ekpo.cfg`, journal `/var/lib/ekpo/`, env vars `EKPO_*`. Bundles stay "Personas" in the UI (round 7).

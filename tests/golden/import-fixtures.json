@@ -66,7 +66,7 @@
                 "installedId": "",
                 "name": "Example Splash",
                 "report": [
-                    "Splash.qml is code that runs at every login; Personae doesn't sandbox it."
+                    "Splash.qml is code that runs at every login; Ekpo doesn't sandbox it."
                 ],
                 "stage": "plasmaSplash",
                 "verdict": "works"
@@ -99,7 +99,7 @@
                 "name": "Nested Fixture",
                 "report": [
                     "Its script runs at every boot (Plymouth's script language can't read files or run programs).",
-                    "Not imported: install.sh (Personae never runs bundled scripts)."
+                    "Not imported: install.sh (Ekpo never runs bundled scripts)."
                 ],
                 "stage": "bootSplash",
                 "verdict": "works"

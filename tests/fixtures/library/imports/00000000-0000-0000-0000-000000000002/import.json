@@ -8,6 +8,6 @@
     "report": [
         "Its script runs at every boot (Plymouth's script language can't read files or run programs).",
         "It's installed one folder deeper than Plymouth looks; it installs as a cleaned-up copy.",
-        "Not imported: Install.Plymouth.Theme.sh (Personae never runs bundled scripts)."
+        "Not imported: Install.Plymouth.Theme.sh (Ekpo never runs bundled scripts)."
     ]
 }

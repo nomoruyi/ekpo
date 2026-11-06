@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
-import Personae
+import Ekpo
 
 // Start page: the current look of each stage, in boot order (SPEC.md §4.1).
 Kirigami.ScrollablePage {
@@ -30,7 +30,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: Backend.system.leftoverJournal
             type: Kirigami.MessageType.Error
-            text: qsTr("An earlier apply was cut off. Personae will offer to roll it back.")
+            text: qsTr("An earlier apply was cut off. Ekpo will offer to roll it back.")
         }
         Repeater {
             model: Backend.system.errors

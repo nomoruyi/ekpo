@@ -143,7 +143,7 @@ SystemState probeSystem(const QString &rootDir, const QString &homeDir)
     s.initramfsGenerator = initramfsGenerator(root);
 
     s.grub = effectiveGrub(root, s.errors);
-    s.personaeGrubDropIn = QFileInfo::exists(root + QStringLiteral("/etc/default/grub.d/zz-personae.cfg"));
+    s.ekpoGrubDropIn = QFileInfo::exists(root + QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg"));
     for (const QString &id : subdirs(root + QStringLiteral("/boot/grub/themes"))) {
         if (QFileInfo::exists(root + QStringLiteral("/boot/grub/themes/") + id + QStringLiteral("/theme.txt")))
             s.grubThemes << id;
@@ -198,7 +198,7 @@ SystemState probeSystem(const QString &rootDir, const QString &homeDir)
     });
 
     s.cmdlineSplash = readFile(root + QStringLiteral("/proc/cmdline")).split(QLatin1Char(' '), Qt::SkipEmptyParts).contains(QLatin1String("splash"));
-    s.leftoverJournal = QFileInfo::exists(root + QStringLiteral("/var/lib/personae/txn"));
+    s.leftoverJournal = QFileInfo::exists(root + QStringLiteral("/var/lib/ekpo/txn"));
     return s;
 }
 
@@ -227,7 +227,7 @@ QJsonObject SystemState::toJson() const
         {QStringLiteral("initramfsGenerator"), initramfsGenerator},
         {QStringLiteral("grub"), QJsonObject{
                                      {QStringLiteral("values"), grubValues},
-                                     {QStringLiteral("personaeDropIn"), personaeGrubDropIn},
+                                     {QStringLiteral("ekpoDropIn"), ekpoGrubDropIn},
                                      {QStringLiteral("themes"), QJsonArray::fromStringList(grubThemes)},
                                  }},
         {QStringLiteral("plymouth"), QJsonObject{

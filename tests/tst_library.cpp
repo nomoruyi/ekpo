@@ -61,7 +61,7 @@ void TestLibrary::refusesForeignFolder()
     writeFile(tmp.filePath(QStringLiteral("notes.txt")), "not a library");
     QString error;
     QVERIFY(!Library::open(tmp.path(), error));
-    QVERIFY(error.contains(QLatin1String("not a Personae library")));
+    QVERIFY(error.contains(QLatin1String("not a Ekpo library")));
 }
 
 void TestLibrary::refusesNewerFormat()
@@ -167,5 +167,5 @@ void TestLibrary::removedPersonaGoesToTrash()
     QFile::remove(trash + QStringLiteral("/info/") + QFileInfo(trashed).fileName() + QStringLiteral(".trashinfo"));
 }
 
-PERSONAE_TEST_MAIN(TestLibrary)
+EKPO_TEST_MAIN(TestLibrary)
 #include "tst_library.moc"

@@ -18,7 +18,7 @@ This limits what Claude executes, not what the app may do. The app's privileged 
 
 ## Project
 
-**Personae** (placeholder name; a final one may replace it everywhere before release): a GUI app to design, store, build, apply and switch the look of three boot stages on the owner's Kubuntu machine. It replaces a hand-installed GitHub GRUB theme and mostly broken "Get New" splashes.
+**Ekpo** (Edo/Bini for "mask", chosen 2026-11-06; called Personae until then): a GUI app to design, store, build, apply and switch the look of three boot stages on the owner's Kubuntu machine. It replaces a hand-installed GitHub GRUB theme and mostly broken "Get New" splashes.
 
 1. **GRUB menu theme**: `theme.txt` + assets in `/boot/grub/themes/<name>`, fonts converted to `.pf2` with `grub-mkfont`.
 2. **Plymouth boot splash**: `two-step` or `script` module theme in `/usr/share/plymouth/themes/<name>`. The boot splash only changes once the theme is packed into the initramfs.
@@ -38,16 +38,16 @@ Then build in small, reviewable steps.
 
 ## Commands
 
-Always `source dev/env.sh` first, in the same shell command: it points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` and sets `PERSONAE_DEV`, which turns off core dumps (a crash would otherwise make systemd-coredump and DrKonqi write outside the repo).
+Always `source dev/env.sh` first, in the same shell command: it points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` and sets `EKPO_DEV`, which turns off core dumps (a crash would otherwise make systemd-coredump and DrKonqi write outside the repo).
 
 - Configure: `source dev/env.sh && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug`
 - Build: `source dev/env.sh && cmake --build build`
 - All tests: `source dev/env.sh && ctest --test-dir build --output-on-failure`
 - One test: `source dev/env.sh && ctest --test-dir build -R <name> --output-on-failure`
 - Lint QML: `/usr/lib/qt6/bin/qmllint -I build/src/app src/app/qml/*.qml` (plain `qmllint` resolves to Qt 5 here)
-- Screenshot: `source dev/env.sh && QT_QPA_PLATFORM=offscreen PERSONAE_SCREENSHOT=build/screenshots/main.png build/src/app/personae`. `PERSONAE_SECTION=bootSplash` opens another page; `PERSONAE_SYSTEM_ROOT`/`PERSONAE_SYSTEM_HOME` (honoured only with `PERSONAE_DEV`) read a fake system root instead of `/`. The smoke tests write `build/screenshots/{main,bootMenu,bootSplash,plasmaSplash}.png` from the reference fixture and `tests/fixtures/library`.
+- Screenshot: `source dev/env.sh && QT_QPA_PLATFORM=offscreen EKPO_SCREENSHOT=build/screenshots/main.png build/src/app/ekpo`. `EKPO_SECTION=bootSplash` opens another page; `EKPO_SYSTEM_ROOT`/`EKPO_SYSTEM_HOME` (honoured only with `EKPO_DEV`) read a fake system root instead of `/`. The smoke tests write `build/screenshots/{main,bootMenu,bootSplash,plasmaSplash}.png` from the reference fixture and `tests/fixtures/library`.
 
-- Update golden files: `source dev/env.sh && PERSONAE_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
+- Update golden files: `source dev/env.sh && EKPO_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
 
 Any Qt or QML warning fails a test (`QT_FATAL_WARNINGS` for the app, `QTest::failOnWarning()` via `tests/testmain.h` for unit tests); test binaries never write core dumps. `tests/fixtures/roots/reference/` mirrors this machine's boot-look files on 2026-11-05 (read-only copies; third-party theme contents replaced by placeholders); refresh it after system changes that the probe should see.
 

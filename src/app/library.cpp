@@ -84,7 +84,7 @@ QString manifestPath(const QString &library)
 
 QString Library::defaultPath()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/personae");
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/ekpo");
 }
 
 std::optional<Library> Library::open(const QString &path, QString &error)
@@ -94,7 +94,7 @@ std::optional<Library> Library::open(const QString &path, QString &error)
 
     if (!QFile::exists(manifestPath(library.m_path))) {
         if (dir.exists() && !dir.isEmpty()) {
-            error = QStringLiteral("%1 is not empty and not a Personae library").arg(library.m_path);
+            error = QStringLiteral("%1 is not empty and not a Ekpo library").arg(library.m_path);
             return std::nullopt;
         }
         if (!dir.mkpath(QStringLiteral(".")) || !library.saveManifest({}, error))
@@ -106,7 +106,7 @@ std::optional<Library> Library::open(const QString &path, QString &error)
         return std::nullopt;
     const int format = manifest->value(QStringLiteral("format")).toInt();
     if (format > currentFormat) {
-        error = QStringLiteral("The library was written by a newer Personae (format %1).").arg(format);
+        error = QStringLiteral("The library was written by a newer Ekpo (format %1).").arg(format);
         return std::nullopt;
     }
     // ponytail: no migrations yet; add a step per format here once format 2 exists.

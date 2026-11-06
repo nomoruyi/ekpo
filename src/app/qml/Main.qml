@@ -28,7 +28,7 @@ Kirigami.ApplicationWindow {
         { name: "about", title: qsTr("About"), icon: "help-about" }
     ]
     readonly property var allSections: mainSections.concat(bottomSections)
-    property string startSection: "overview" // PERSONAE_SECTION, for screenshots
+    property string startSection: "overview" // EKPO_SECTION, for screenshots
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
 
     function showSection(name) {

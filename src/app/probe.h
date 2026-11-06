@@ -32,7 +32,7 @@ struct SystemState {
 
     QString initramfsGenerator; // "initramfs-tools", "dracut", or empty if none is installed
     QMap<QString, QString> grub; // effective GRUB_* values, as grub-mkconfig sees them
-    bool personaeGrubDropIn = false;
+    bool ekpoGrubDropIn = false;
     QStringList grubThemes;
 
     QString plymouthAlternative; // selected default.plymouth

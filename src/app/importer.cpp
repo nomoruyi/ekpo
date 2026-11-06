@@ -203,7 +203,7 @@ void checkPlasmaSplash(Finding &f)
     QFile splash(root.filePath(QStringLiteral("contents/splash/Splash.qml")));
     if (splash.open(QIODevice::ReadOnly) && splash.readAll().contains("import org.kde.plasma"))
         f.add(Verdict::Warnings, QStringLiteral("Splash.qml uses Plasma modules, which can break after a Plasma upgrade."));
-    f.note(QStringLiteral("Splash.qml is code that runs at every login; Personae doesn't sandbox it."));
+    f.note(QStringLiteral("Splash.qml is code that runs at every login; Ekpo doesn't sandbox it."));
 }
 
 QString installedId(Stage stage, const QString &root, const QString &rootDir, const QString &homeDir)
@@ -278,7 +278,7 @@ ImportResult importThemes(Library &library, const QString &sourcePath, const QSt
         // Files next to a nested theme (install scripts, READMEs) stay behind.
         if (themeRoot != searchDir) {
             for (const QString &left : QDir(QFileInfo(themeRoot).path()).entryList(QDir::Files | QDir::Hidden, QDir::Name))
-                f.note(QStringLiteral("Not imported: %1 (Personae never runs bundled scripts).").arg(left));
+                f.note(QStringLiteral("Not imported: %1 (Ekpo never runs bundled scripts).").arg(left));
         }
 
         for (const ImportedTheme &old : existing) {

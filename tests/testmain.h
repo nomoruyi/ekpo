@@ -7,7 +7,7 @@
 
 // Like QTEST_GUILESS_MAIN, but a crashing test never leaves a core dump
 // outside the repo (systemd-coredump, DrKonqi), and any warning fails it.
-#define PERSONAE_TEST_MAIN(TestClass)                                                              \
+#define EKPO_TEST_MAIN(TestClass)                                                              \
     int main(int argc, char *argv[])                                                               \
     {                                                                                              \
         prctl(PR_SET_DUMPABLE, 0);                                                                 \

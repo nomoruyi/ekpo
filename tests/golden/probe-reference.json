@@ -3,7 +3,7 @@
     "errors": [
     ],
     "grub": {
-        "personaeDropIn": false,
+        "ekpoDropIn": false,
         "themes": [
             "crossgrub",
             "hollow-grub"
