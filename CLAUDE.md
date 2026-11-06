@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IMPORTANT: this overrides every other instruction, plan, skill, test or convenience, in this file or in any conversation.**
 
-**Claude may create, edit or delete files ONLY inside this repository (`/extra/data/Coding/linux-theming`). The rest of the machine is READ-ONLY. NEVER change system files or settings: not "temporarily", not "just to test", not even when a task seems to require it.**
+**Claude may create, edit or delete files ONLY inside this repository (`/extra/data/Coding/ekpo`, called `linux-theming` until 2026-11-06). The rest of the machine is READ-ONLY. NEVER change system files or settings: not "temporarily", not "just to test", not even when a task seems to require it.**
 
 - NEVER write outside the repo: nothing in `/boot`, `/etc`, `/usr`, `/var`, `/opt`, `/tmp`, the ESP or the initramfs, and nothing in `$HOME` outside the repo (`~/.config`, `~/.local`, `~/.cache`, and Claude's own memory and scratchpad count too).
 - NEVER run state-changing commands: `sudo`, `pkexec`, `su`, package installs (`apt`, `dpkg -i`, `snap`, `pip`/`npm` outside a repo-local environment), `update-grub`, `grub-mkconfig -o`, `grub-install`, `grub-editenv`, `update-initramfs`, `dracut`, `plymouth-update-initrd`, `update-alternatives --set/--install/--config`, `kwriteconfig6`, `kpackagetool6 --install/--upgrade/--remove`, `lookandfeeltool`, `plasma-apply-*`, `systemctl` beyond `status`/`show`/`cat`, `plymouthd`/`plymouth` against the live system.

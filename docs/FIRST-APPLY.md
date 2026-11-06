@@ -22,13 +22,13 @@ What hasn't been tested yet and is tested by these steps: the password prompt
 ## 1. Install
 
 ```bash
-sha256sum /extra/data/Coding/linux-theming/build-release/ekpo_0.2.0_amd64.deb
+sha256sum /extra/data/Coding/ekpo/build-release/ekpo_0.2.0_amd64.deb
 ```
 
 The sum must be `aab345884f6a59f101988f5d90963ed2b8383a89e79f61b580c1dbac456e7a97`.
 
 ```bash
-sudo apt install /extra/data/Coding/linux-theming/build-release/ekpo_0.2.0_amd64.deb
+sudo apt install /extra/data/Coding/ekpo/build-release/ekpo_0.2.0_amd64.deb
 ```
 
 If an older version is installed, the same command upgrades it. Changes: installs `/usr/bin/ekpo`, `/usr/libexec/ekpo/ekpo-helper`, the polkit
