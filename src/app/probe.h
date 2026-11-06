@@ -26,6 +26,7 @@ struct SystemState {
     };
     struct SplashPackage {
         QString id;
+        QString name; // metadata.json KPlugin Name
         bool user = false; // in the user's home rather than /usr
     };
 
@@ -38,6 +39,7 @@ struct SystemState {
     QString plymouthAlternativeMode; // "auto" or "manual"
     QList<AlternativeChoice> plymouthChoices;
     QString plymouthDaemonTheme; // plymouthd.conf [Daemon] Theme=
+    QDateTime plymouthSelectedAt; // last change of either input; initrds older than this show an older splash
     QList<PlymouthTheme> plymouthThemes;
 
     QString splashTheme; // ksplashrc [KSplash] Theme=

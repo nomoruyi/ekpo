@@ -1,0 +1,9 @@
+{
+    "stage": "bootSplash",
+    "name": "Odd Fixture",
+    "sourcePath": "/home/nosa/Downloads/Odd",
+    "installedId": "",
+    "importedAt": "2026-11-06T09:00:00Z",
+    "verdict": "broken",
+    "report": ["It needs the Plymouth module \"fancy\", which isn't installed."]
+}

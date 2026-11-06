@@ -27,7 +27,25 @@ Kirigami.ApplicationWindow {
         { name: "settings", title: qsTr("Settings"), icon: "settings-configure" },
         { name: "about", title: qsTr("About"), icon: "help-about" }
     ]
-    property var currentSection: mainSections[0]
+    readonly property var allSections: mainSections.concat(bottomSections)
+    property string startSection: "overview" // PERSONAE_SECTION, for screenshots
+    property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
+
+    function showSection(name) {
+        currentSection = allSections.find(s => s.name === name);
+    }
+    function pageFor(name) {
+        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage })[name] ?? placeholderPage;
+    }
+
+    onCurrentSectionChanged: {
+        const page = pageFor(currentSection.name);
+        if (pageStack.depth > 0 && pageStack.currentItem !== page)
+            pageStack.replace(page);
+    }
+    // Pages are kept as items: pushing components makes Kirigami warn, and the
+    // pages keep their state (e.g. the last import message) between visits.
+    pageStack.initialPage: pageFor(currentSection.name)
 
     globalDrawer: Kirigami.OverlayDrawer {
         edge: Qt.LeftEdge
@@ -70,8 +88,34 @@ Kirigami.ApplicationWindow {
         onClicked: root.currentSection = modelData
     }
 
-    // ponytail: one placeholder page for every section until real pages exist.
-    pageStack.initialPage: Kirigami.Page {
+    OverviewPage {
+        id: overviewPage
+        visible: false
+        onOpenStage: stage => root.showSection(stage)
+    }
+    StagePage {
+        id: bootMenuPage
+        visible: false
+        stage: "bootMenu"
+        title: qsTr("Boot Menu")
+    }
+    StagePage {
+        id: bootSplashPage
+        visible: false
+        stage: "bootSplash"
+        title: qsTr("Boot Splash")
+    }
+    StagePage {
+        id: plasmaSplashPage
+        visible: false
+        stage: "plasmaSplash"
+        title: qsTr("Plasma Splash")
+    }
+
+    // ponytail: one placeholder for the sections later steps build.
+    Kirigami.Page {
+        id: placeholderPage
+        visible: false
         title: root.currentSection.title
 
         Kirigami.PlaceholderMessage {

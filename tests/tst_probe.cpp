@@ -37,6 +37,11 @@ void TestProbe::referenceSystem()
         QVERIFY(initrd.setFileTime(QDateTime::fromString(QLatin1String(time), Qt::ISODate), QFileDevice::FileModificationTime));
     }
 
+    // The Plymouth selection changed on 2026-09-25 (the switch to fallout).
+    QCOMPARE(QProcess::execute(QStringLiteral("touch"), {QStringLiteral("-h"), QStringLiteral("-d"), QStringLiteral("2026-09-25T04:09:00Z"),
+                                                         root + QStringLiteral("/etc/alternatives/default.plymouth"),
+                                                         root + QStringLiteral("/etc/plymouth/plymouthd.conf")}), 0);
+
     const SystemState state = probeSystem(root, root + QStringLiteral("/home"));
     QVERIFY(matchesGolden(QStringLiteral("probe-reference.json"), QJsonDocument(state.toJson()).toJson()));
 }

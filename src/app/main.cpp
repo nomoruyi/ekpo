@@ -23,6 +23,8 @@ int main(int argc, char *argv[])
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     QQmlApplicationEngine engine;
+    if (const QString section = qEnvironmentVariable("PERSONAE_SECTION"); !section.isEmpty())
+        engine.setInitialProperties({{QStringLiteral("startSection"), section}});
     engine.loadFromModule("Personae", "Main");
     if (engine.rootObjects().isEmpty())
         return 1;

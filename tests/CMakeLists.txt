@@ -24,7 +24,19 @@ endfunction()
 # Smoke test: the main window loads without any QML warning and can be rendered.
 add_test(NAME smoke_main_window COMMAND personae)
 set_tests_properties(smoke_main_window PROPERTIES ENVIRONMENT
-    "${DEV_ENV};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;PERSONAE_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/main.png")
+    "${DEV_ENV};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;PERSONAE_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;PERSONAE_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;PERSONAE_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/main.png")
+
+# Sandbox screenshots of the stage pages: the reference fixture as the system and a
+# copy of tests/fixtures/library (three Boot Splash imports) as the library.
+set(SAMPLE_DATA ${CMAKE_BINARY_DIR}/sample-data)
+add_test(NAME prepare_sample_library COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/library ${SAMPLE_DATA}/personae)
+set_tests_properties(prepare_sample_library PROPERTIES FIXTURES_SETUP sample_library)
+foreach(section bootMenu bootSplash plasmaSplash)
+    add_test(NAME smoke_${section} COMMAND personae)
+    set_tests_properties(smoke_${section} PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+        "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;PERSONAE_SECTION=${section};PERSONAE_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;PERSONAE_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;PERSONAE_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/${section}.png")
+endforeach()
 
 personae_test(tst_probe)
 personae_test(tst_library)

@@ -7,10 +7,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QProcess>
 #include <QVersionNumber>
 
 #include <algorithm>
+
+#include <sys/stat.h>
 
 namespace {
 
@@ -117,7 +120,12 @@ void readPlymouthAlternative(const QString &root, SystemState &s)
     for (++i; i + 1 < lines.size() && !lines[i].isEmpty(); i += 2 + slaves)
         s.plymouthChoices.append({lines[i], lines[i + 1].toInt()});
 
-    s.plymouthAlternative = QFileInfo(root + QStringLiteral("/etc/alternatives/default.plymouth")).readSymLink();
+    const QFileInfo link(root + QStringLiteral("/etc/alternatives/default.plymouth"));
+    s.plymouthAlternative = link.readSymLink();
+    // lastModified() follows the link; lstat gives the time the selection changed.
+    struct stat st;
+    if (::lstat(QFile::encodeName(link.filePath()).constData(), &st) == 0)
+        s.plymouthSelectedAt = QDateTime::fromSecsSinceEpoch(st.st_mtim.tv_sec, QTimeZone::UTC);
 }
 
 QVersionNumber kernelVersion(QString version)
@@ -142,7 +150,10 @@ SystemState probeSystem(const QString &rootDir, const QString &homeDir)
     }
 
     readPlymouthAlternative(root, s);
-    s.plymouthDaemonTheme = iniValue(root + QStringLiteral("/etc/plymouth/plymouthd.conf"), QStringLiteral("Daemon"), QStringLiteral("Theme"));
+    const QString daemonConf = root + QStringLiteral("/etc/plymouth/plymouthd.conf");
+    s.plymouthDaemonTheme = iniValue(daemonConf, QStringLiteral("Daemon"), QStringLiteral("Theme"));
+    if (const QFileInfo conf(daemonConf); conf.exists())
+        s.plymouthSelectedAt = std::max(s.plymouthSelectedAt, conf.lastModified(QTimeZone::UTC));
     const QString plymouthDir = root + QStringLiteral("/usr/share/plymouth/themes/");
     for (const QString &id : subdirs(plymouthDir)) {
         const QString file = plymouthDir + id + QLatin1Char('/') + id + QStringLiteral(".plymouth");
@@ -162,8 +173,13 @@ SystemState probeSystem(const QString &rootDir, const QString &homeDir)
     };
     for (const auto &[dir, user] : lnfDirs) {
         for (const QString &id : subdirs(dir)) {
-            if (QFileInfo::exists(dir + id + QStringLiteral("/contents/splash/Splash.qml")))
-                s.splashPackages.append({id, user});
+            if (QFileInfo::exists(dir + id + QStringLiteral("/contents/splash/Splash.qml"))) {
+                QFile metadata(dir + id + QStringLiteral("/metadata.json"));
+                const QString name = metadata.open(QIODevice::ReadOnly)
+                    ? QJsonDocument::fromJson(metadata.readAll()).object().value(QStringLiteral("KPlugin")).toObject().value(QStringLiteral("Name")).toString()
+                    : QString();
+                s.splashPackages.append({id, name.isEmpty() ? id : name, user});
+            }
         }
     }
 
@@ -200,7 +216,7 @@ QJsonObject SystemState::toJson() const
         themes.append(QJsonObject{{QStringLiteral("id"), t.id}, {QStringLiteral("name"), t.name}, {QStringLiteral("module"), t.module}});
     QJsonArray splashes;
     for (const SplashPackage &p : splashPackages)
-        splashes.append(QJsonObject{{QStringLiteral("id"), p.id}, {QStringLiteral("user"), p.user}});
+        splashes.append(QJsonObject{{QStringLiteral("id"), p.id}, {QStringLiteral("name"), p.name}, {QStringLiteral("user"), p.user}});
     QJsonArray kernelList;
     for (const Kernel &k : kernels) {
         kernelList.append(QJsonObject{{QStringLiteral("version"), k.version},
@@ -219,6 +235,7 @@ QJsonObject SystemState::toJson() const
                                          {QStringLiteral("alternativeMode"), plymouthAlternativeMode},
                                          {QStringLiteral("choices"), choices},
                                          {QStringLiteral("daemonTheme"), plymouthDaemonTheme},
+                                         {QStringLiteral("selectedAt"), plymouthSelectedAt.toString(Qt::ISODate)},
                                          {QStringLiteral("themes"), themes},
                                      }},
         {QStringLiteral("plasmaSplash"), QJsonObject{

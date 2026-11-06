@@ -45,7 +45,7 @@ Always `source dev/env.sh` first, in the same shell command: it points `HOME`, `
 - All tests: `source dev/env.sh && ctest --test-dir build --output-on-failure`
 - One test: `source dev/env.sh && ctest --test-dir build -R <name> --output-on-failure`
 - Lint QML: `/usr/lib/qt6/bin/qmllint -I build/src/app src/app/qml/*.qml` (plain `qmllint` resolves to Qt 5 here)
-- Screenshot: `source dev/env.sh && QT_QPA_PLATFORM=offscreen PERSONAE_SCREENSHOT=build/screenshots/main.png build/src/app/personae` (the smoke test also writes it)
+- Screenshot: `source dev/env.sh && QT_QPA_PLATFORM=offscreen PERSONAE_SCREENSHOT=build/screenshots/main.png build/src/app/personae`. `PERSONAE_SECTION=bootSplash` opens another page; `PERSONAE_SYSTEM_ROOT`/`PERSONAE_SYSTEM_HOME` (honoured only with `PERSONAE_DEV`) read a fake system root instead of `/`. The smoke tests write `build/screenshots/{main,bootMenu,bootSplash,plasmaSplash}.png` from the reference fixture and `tests/fixtures/library`.
 
 - Update golden files: `source dev/env.sh && PERSONAE_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
 

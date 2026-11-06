@@ -47,18 +47,22 @@
         "packages": [
             {
                 "id": "Overload",
+                "name": "Overload",
                 "user": true
             },
             {
                 "id": "Penrose",
+                "name": "Penrose",
                 "user": true
             },
             {
                 "id": "org.kde.breeze.desktop",
+                "name": "Breeze",
                 "user": false
             },
             {
                 "id": "org.kde.oxygen",
+                "name": "Oxygen",
                 "user": false
             }
         ],
@@ -86,6 +90,7 @@
             }
         ],
         "daemonTheme": "fallout",
+        "selectedAt": "2026-09-25T04:09:00Z",
         "themes": [
             {
                 "id": "bgrt",
