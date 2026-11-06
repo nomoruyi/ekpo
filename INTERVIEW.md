@@ -203,3 +203,9 @@ Correction *(Claude)*: round 8 Q1's per-resolution GRUB font sizes aren't possib
 ## Initrd scope (2026-11-06)
 
 Supersedes round 6 Q2 ("rebuild all installed kernels"). Boot splash applies rebuild either every initrd or only the newest kernel's, chosen with a switch on the review page; the default is a setting, **off = newest kernel only**. Restores (History, Original, Revert, Roll Back) always rebuild all kernels. *(Claude: the splash is loaded from each kernel's own initrd (`init-premount/plymouth`), so older initrds simply keep the previous splash; that keeps them usable as a fallback from "Advanced options", takes ~8 s instead of ~40 s, and leaves ~128 MB instead of ~640 MB in Timeshift. Caveats: older kernels show the new splash at shutdown, and after the newest kernel is removed the default kernel shows the previous splash until the next apply. The CLI has `--all-kernels` / `--newest-kernel`.)*
+
+## Milestone 1 verified (2026-11-06)
+
+The owner installed 0.1.1 and applied, on the real system: a GRUB theme (crossgrub, through Ekpo's drop-in), a Plymouth copy (WindozeXP, newest kernel only), a Plasma splash (Penrose) and a Mask; all worked as intended. WindozeXP doesn't fill the screen: it's an XP-era script theme with fixed-size 4:3 images, which only an editor could scale. `ekpo status` listed the deliberately older initrds under "needs attention"; fixed in 0.2.0 (shown as a note).
+
+0.2.0 closes the remaining M1 gaps: cleanup of unused theme copies and builds, "Restore Original and remove Ekpo's files" (Settings, `ekpo remove-files`), library location and history size, "welcome back" after a reinstall, the About page with a system report, one window at a time, and notifications.

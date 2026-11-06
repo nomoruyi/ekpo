@@ -22,16 +22,16 @@ What hasn't been tested yet and is tested by these steps: the password prompt
 ## 1. Install
 
 ```bash
-sha256sum /extra/data/Coding/linux-theming/build-release/ekpo_0.1.1_amd64.deb
+sha256sum /extra/data/Coding/linux-theming/build-release/ekpo_0.2.0_amd64.deb
 ```
 
-The sum must be `3f63027c2abbed8d44e497145ad059d556765c656bc0e8d96337988b9371892e`.
+The sum must be `aab345884f6a59f101988f5d90963ed2b8383a89e79f61b580c1dbac456e7a97`.
 
 ```bash
-sudo apt install /extra/data/Coding/linux-theming/build-release/ekpo_0.1.1_amd64.deb
+sudo apt install /extra/data/Coding/linux-theming/build-release/ekpo_0.2.0_amd64.deb
 ```
 
-If you installed 0.1.0 already, the same command upgrades it. Changes: installs `/usr/bin/ekpo`, `/usr/libexec/ekpo/ekpo-helper`, the polkit
+If an older version is installed, the same command upgrades it. Changes: installs `/usr/bin/ekpo`, `/usr/libexec/ekpo/ekpo-helper`, the polkit
 action `io.github.nomoruyi.ekpo.apply`, a menu entry and the icon. Every dependency
 is already installed, so nothing else is added. Nothing about the boot look changes.
 Undo: `sudo apt remove ekpo`.

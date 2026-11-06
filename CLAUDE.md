@@ -28,7 +28,7 @@ Each design is a named profile per target. A bundle groups one profile per targe
 
 ## Status and gates
 
-All three gates passed (SPEC.md and ARCHITECTURE.md approved 2026-11-05); building M1 per `ARCHITECTURE.md` §9. The gates were:
+All three gates passed (SPEC.md and ARCHITECTURE.md approved 2026-11-05). M1 is complete (0.2.0) and was verified on the real system on 2026-11-06: the owner installed the package and applied boot menu, boot splash, Plasma splash and a whole Mask (`docs/FIRST-APPLY.md`). Next: the spikes in SPEC.md §10, then M2. The gates were:
 
 1. Interview the owner in rounds of at most 5–7 focused questions. Don't move on while answers are vague or contradictory; point out technical limits. Record each round's answers and open points in `INTERVIEW.md`.
 2. Write `SPEC.md` (scope, MVP, later phases, non-goals, open questions) and wait for approval.
@@ -51,6 +51,8 @@ Always `source dev/env.sh` first, in the same shell command (but not for git: it
 - CLI in the sandbox: `source dev/env.sh && EKPO_SYSTEM_ROOT=$PWD/.dev/sandbox/root EKPO_SYSTEM_HOME=$PWD/.dev/sandbox/root/home build/src/app/ekpo status` (also `apply <mask>`, `restore <n|original>`, `recover`).
 - Package (no sandbox hook, no tests): `source dev/env.sh && cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DEKPO_SANDBOX=OFF && cmake --build build-release && (cd build-release && cpack)` → `build-release/ekpo_<version>_amd64.deb`. Never run tests against a non-sandbox build: they would reach the real helper through pkexec (CMake refuses to add them). Installing it and the first real applies are the owner's: `docs/FIRST-APPLY.md`.
 - Update golden files: `source dev/env.sh && EKPO_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
+
+Run ctest without `-j`: the app's single-instance socket and the shared sample libraries assume one app at a time.
 
 Any Qt or QML warning fails a test (`QT_FATAL_WARNINGS` for the app, `QTest::failOnWarning()` via `tests/testmain.h` for unit tests); test binaries never write core dumps. `tests/fixtures/roots/reference/` mirrors this machine's boot-look files on 2026-11-05 (read-only copies; third-party theme contents replaced by placeholders); refresh it after system changes that the probe should see.
 
