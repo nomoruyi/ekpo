@@ -35,13 +35,13 @@ The caller is untrusted: any process of the owner can start the helper once the 
 - `plymouth`: `{theme: <installed id> | <payload id> | "original"}`
 - "original" values are captured by the app and sent back verbatim (e.g. alternative path + manual/auto mode, `Theme=` value), then validated like any other value.
 
-**Payload:** length-prefixed file records `{path, mode, size}` + bytes, one tree per theme. Own framing (~60 lines) instead of tar, so there is no symlink, device, owner or `..` handling to get wrong.
+**Payload** (`src/common/payload.h`): after the request's JSON line, `EKPO-PAYLOAD 1`, then `F <size> <id>/<path>` + bytes per file, then `E`. No modes: the helper writes 0644 files only. Own framing (~100 lines) instead of tar, so there is no symlink, device, owner or `..` handling to get wrong.
 
 **Validation, all before the first write:**
 - IDs `^ekpo-[a-z0-9-]{1,48}-v[0-9]+$`; paths relative, no `..`, regular files only, size caps (Plymouth 15 MB, GRUB 64 MB), allowed extensions.
 - Image headers checked (PNG/JPEG/TGA), `.pf2` magic checked.
-- `theme.txt`: own parser with a whitelist of GRUB 2.14 global properties and components; every referenced file must exist inside the theme.
-- `.plymouth`: whitelist of keys per module; `ImageDir`/`ScriptFile` must point inside the theme dir. Imported `script` themes are code run by plymouthd at boot (its script language has no file or process access); the import report says so.
+- `theme.txt`: own parser of GRUB's grammar with the global properties and component types from GRUB 2.14's `gfxmenu.mod` (an unknown global makes GRUB reject the theme). Unknown component properties pass, since GRUB ignores them (hollow-grub uses one). Image references must be relative paths inside the theme; a missing image isn't an error.
+- `.plymouth`: `ModuleName` must be `two-step` or `script`; `ImageDir`/`ScriptFile` must point into the theme's own folder. Other keys are inert to plymouthd and pass. Imported `script` themes are code run by plymouthd at boot (its script language has no file or process access); the import report says so.
 - Config values: gfxmode from a fixed pattern, timeout 0–600, style `menu|countdown|hidden`; an installed theme ID must exist under the fixed theme roots.
 
 **Writes** use fixed absolute paths, `O_NOFOLLOW`, write-to-temp + `rename`. Commands run with absolute paths and a clean environment.

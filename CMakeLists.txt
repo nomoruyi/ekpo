@@ -10,5 +10,6 @@ find_package(KF6Config 6.0 REQUIRED)
 qt_standard_project_setup(REQUIRES 6.8)
 
 enable_testing()
+add_subdirectory(src/common)
 add_subdirectory(src/app)
 add_subdirectory(tests)

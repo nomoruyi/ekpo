@@ -12,7 +12,7 @@ file(MAKE_DIRECTORY ${DEV_DIR}/tmp ${DEV_HOME}/.config ${DEV_HOME}/.local/share 
 
 function(ekpo_test name)
     qt_add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE ekpo_core Qt6::Test)
+    target_link_libraries(${name} PRIVATE ekpo_core ekpo_common Qt6::Test)
     target_compile_definitions(${name} PRIVATE
         FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
         GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
@@ -41,3 +41,4 @@ endforeach()
 ekpo_test(tst_probe)
 ekpo_test(tst_library)
 ekpo_test(tst_importer)
+ekpo_test(tst_common)
