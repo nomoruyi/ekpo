@@ -16,6 +16,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This limits what Claude executes, not what the app may do. The app's privileged apply path is built and tested against fake system roots inside the repo; only the owner runs it for real.
 
+## Git: read-only for Claude
+
+**You may read from git, but every executive git action is forbidden.**
+
+- **Allowed without asking:** read-only commands such as `git status`, `log`, `diff`, `show`, `blame`, `ls-files`, `grep`.
+- **Forbidden unless the owner approves that one action in the conversation:** anything that changes the repository, its refs or its remotes, e.g. `commit`, `checkout`/`switch`, `branch`, `merge`, `rebase`, `reset`, `revert`, `restore`, `stash`, `tag`, `cherry-pick`, `pull`, `fetch`, `remote`, `config`. If one is really needed, ask first; an approval covers only that action, not later ones.
+- **Never `git push`** (no branch, no tag, no force), whatever else was approved. The owner pushes.
+- **Commits:** when work is ready, propose the commit (files and message) and ask. The owner's answer says whether to commit and with which release flag (`[major]`, `[minor]`, `[patch]`, see CI below) or none. Never add a release flag on your own.
+
 ## Project
 
 **Ekpo** (Edo/Bini for "mask", chosen 2026-11-06; called Personae until then): a GUI app to design, store, build, apply and switch the look of three boot stages on the owner's Kubuntu machine. It replaces a hand-installed GitHub GRUB theme and mostly broken "Get New" splashes.
@@ -50,7 +59,7 @@ Always `source dev/env.sh` first, in the same shell command (but not for git: it
 - Sandbox: `dev/sandbox.sh [--reset]` runs the app on a writable copy of the reference system in `.dev/sandbox`; applies go through `ekpo-helper-test` and `tests/stubs/`, so they can be clicked through without touching the real system. `EKPO_REVIEW_IMPORT=<import id>` (dev only) opens that import's review at start, for screenshots.
 - CLI in the sandbox: `source dev/env.sh && EKPO_SYSTEM_ROOT=$PWD/.dev/sandbox/root EKPO_SYSTEM_HOME=$PWD/.dev/sandbox/root/home build/src/app/ekpo status` (also `apply <mask>`, `restore <n|original>`, `recover`).
 - Package (no sandbox hook, no tests): `source dev/env.sh && cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DEKPO_SANDBOX=OFF && cmake --build build-release && (cd build-release && cpack)` → `build-release/ekpo_<version>_amd64.deb`. Never run tests against a non-sandbox build: they would reach the real helper through pkexec (CMake refuses to add them). Installing it and the first real applies are the owner's: `docs/FIRST-APPLY.md`.
-- CI and releases (`.github/workflows/ci.yml`, repo `nomoruyi/ekpo`, private; push over SSH to `git@github-nomoruyi:nomoruyi/ekpo.git`): every push and PR builds and runs all tests in an `ubuntu:26.04` container and builds the .deb. A push to `main` whose head commit message contains `[major]`, `[minor]` or `[patch]` bumps the newest `vX.Y.Z` tag (before the first release: the fallback version in `CMakeLists.txt`), and publishes the .deb and `SHA256SUMS` as release `vX.Y.Z`. Local builds take their version from the newest tag; `-DEKPO_VERSION=x.y.z` overrides it. Only commit or push when the owner asks; a release flag in a message publishes a release.
+- CI and releases (`.github/workflows/ci.yml`, repo `nomoruyi/ekpo`, private; push over SSH to `git@github-nomoruyi:nomoruyi/ekpo.git`): three jobs, each only after the previous one succeeded: test (build and all tests in an `ubuntu:26.04` container, every push and PR), package (version and .deb), release. A push to `main` whose head commit message contains `[major]`, `[minor]` or `[patch]` bumps the newest `vX.Y.Z` tag (before the first release: the fallback version in `CMakeLists.txt`), and publishes the .deb and `SHA256SUMS` as release `vX.Y.Z`. Local builds take their version from the newest tag; `-DEKPO_VERSION=x.y.z` overrides it. See "Git" below for who commits and pushes.
 - Update golden files: `source dev/env.sh && EKPO_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
 
 Run ctest without `-j`: the app's single-instance socket and the shared sample libraries assume one app at a time.

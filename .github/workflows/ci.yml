@@ -1,12 +1,16 @@
 name: CI
 
-# Every push and pull request builds Ekpo and runs all tests in an Ubuntu 26.04
-# container, the release Ekpo targets, then builds the .deb.
+# Three stages, each starting only when the one before succeeded:
 #
-# Releases: a push to main whose head commit message contains [major], [minor]
-# or [patch] bumps the newest vX.Y.Z tag (or the fallback version in
-# CMakeLists.txt before the first release), builds the .deb with that version
-# and publishes it as a GitHub release with that tag.
+# 1. test:    builds Ekpo and runs all tests in an Ubuntu 26.04 container, the
+#             release Ekpo targets. Every push and pull request.
+# 2. package: works out the version and builds the .deb.
+# 3. release: on a push to main whose head commit message contains [major],
+#             [minor] or [patch]: tags the commit vX.Y.Z (the newest tag bumped,
+#             or the fallback version in CMakeLists.txt before the first release)
+#             and publishes the .deb as a GitHub release.
+#
+# So failing tests never produce a version, a tag or a release.
 on:
   push:
     branches: [main]
@@ -25,29 +29,64 @@ defaults:
   run:
     shell: bash
 
+env:
+  DEBIAN_FRONTEND: noninteractive
+  LANG: C.UTF-8 # Qt warns about a non-UTF-8 locale, and app tests fail on any warning
+  BUILD_PACKAGES: >-
+    git ca-certificates cmake ninja-build g++
+    qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools
+    libkirigami-dev libkf6config-dev extra-cmake-modules
+  TEST_PACKAGES: >-
+    python3 qt6-svg-plugins fontconfig fonts-noto-core breeze-icon-theme
+    qml6-module-org-kde-kirigami qml6-module-org-kde-desktop
+    qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts
+    qml6-module-qtquick-templates qml6-module-qtquick-window
+    qml6-module-qtqml-models qml6-module-qtqml-workerscript
+  PACKAGING_PACKAGES: dpkg-dev fakeroot file
+
 jobs:
-  build:
+  test:
+    name: Build and test
     runs-on: ubuntu-latest
     container: ubuntu:26.04
-    env:
-      DEBIAN_FRONTEND: noninteractive
-      LANG: C.UTF-8 # Qt warns about a non-UTF-8 locale, and app tests fail on any warning
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      release: ${{ steps.version.outputs.release }}
     steps:
       - name: Install build and test dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends \
-            git ca-certificates cmake ninja-build g++ dpkg-dev fakeroot file \
-            qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools \
-            libkirigami-dev libkf6config-dev extra-cmake-modules \
-            python3 qt6-svg-plugins fontconfig fonts-noto-core breeze-icon-theme \
-            qml6-module-org-kde-kirigami qml6-module-org-kde-desktop \
-            qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
-            qml6-module-qtquick-templates qml6-module-qtquick-window \
-            qml6-module-qtqml-models qml6-module-qtqml-workerscript
+          apt-get install -y --no-install-recommends $BUILD_PACKAGES $TEST_PACKAGES
+
+      - uses: actions/checkout@v7
+
+      - name: Build and run the tests
+        run: |
+          mkdir -p -m 0700 /tmp/runtime
+          export XDG_RUNTIME_DIR=/tmp/runtime
+          source dev/env.sh
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+      - name: Keep screenshots of failed smoke tests
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: build/screenshots/
+          if-no-files-found: ignore
+
+  package:
+    name: Version and package
+    needs: test
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends $BUILD_PACKAGES $PACKAGING_PACKAGES
 
       - uses: actions/checkout@v7
         with:
@@ -86,17 +125,6 @@ jobs:
           echo "release=$([ -n "$bump" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Version $version (newest tag: ${latest:-none}, bump: ${bump:-none})"
 
-      - name: Build and test
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          mkdir -p -m 0700 /tmp/runtime
-          export XDG_RUNTIME_DIR=/tmp/runtime
-          source dev/env.sh
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DEKPO_VERSION="$VERSION"
-          cmake --build build
-          ctest --test-dir build --output-on-failure
-
       - name: Build the package
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -115,17 +143,10 @@ jobs:
             build-release/SHA256SUMS
           if-no-files-found: error
 
-      - name: Keep screenshots of failed smoke tests
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: screenshots
-          path: build/screenshots/
-          if-no-files-found: ignore
-
   release:
-    needs: build
-    if: needs.build.outputs.release == 'true'
+    name: Release
+    needs: package
+    if: needs.package.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -138,7 +159,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          VERSION: ${{ needs.build.outputs.version }}
+          VERSION: ${{ needs.package.outputs.version }}
         run: |
           set -euo pipefail
           if gh release view "v$VERSION" >/dev/null 2>&1; then
