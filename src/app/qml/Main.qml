@@ -169,6 +169,7 @@ Kirigami.ApplicationWindow {
     SettingsPage {
         id: settingsPage
         visible: false
+        onReview: root.showReview()
     }
     MasksPage {
         id: masksPage

@@ -430,3 +430,17 @@ QStringList keptThemes(const Library &library, const Target &newTarget)
     }
     return kept;
 }
+
+QStringList installedEkpoCopies(const QString &rootDir)
+{
+    const QString root = rootDir == QLatin1String("/") ? QString() : rootDir;
+    QStringList copies;
+    for (const QString &dir : {grubThemesDir, plymouthThemesDir})
+        copies += QDir(root + dir).entryList({QStringLiteral("ekpo-*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+    return copies;
+}
+
+bool isAtOriginal(const PlanContext &context)
+{
+    return !context.state.ekpoGrubDropIn && planTarget(context, originalTarget(context.library), QString()).stages.isEmpty();
+}

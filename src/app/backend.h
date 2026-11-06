@@ -37,6 +37,8 @@ class Backend : public QObject
     Q_PROPERTY(QVariantList masks READ masks NOTIFY changed)
     Q_PROPERTY(bool showIntro READ showIntro NOTIFY changed)
     Q_PROPERTY(bool rebuildAllKernels READ rebuildAllKernels NOTIFY changed)
+    Q_PROPERTY(bool atOriginal READ atOriginal NOTIFY changed)
+    Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -59,6 +61,11 @@ public:
     Q_INVOKABLE void setTechnicalDetailsExpanded(bool expanded);
     // The review's switch: re-plans the current review for all kernels or the newest only.
     Q_INVOKABLE void setPlanAllKernels(bool all);
+
+    // Removing Ekpo from the system (SPEC.md §5): Restore Original first, then this.
+    bool atOriginal() const { return m_atOriginal; }
+    int ekpoCopies() const { return m_ekpoCopies; }
+    Q_INVOKABLE void removeEkpoFiles();
 
     // Masks (SPEC.md §4.8). Empty refs leave a stage as it is.
     Q_INVOKABLE QString saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash);
@@ -107,6 +114,9 @@ private:
     QVariantList m_history;
     QVariantMap m_pendingCheck;
     QVariantList m_masks;
+    bool m_atOriginal = true;
+    int m_ekpoCopies = 0;
+    bool m_removingFiles = false;
 
     void setPlan(const Plan &plan);
     void preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels);

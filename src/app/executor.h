@@ -32,6 +32,10 @@ struct AppEnvironment {
 };
 AppEnvironment detectEnvironment();
 
+// Moves the Plasma splash packages Ekpo copied (history entries with a build) to
+// the trash, except activeTheme. Returns their ids.
+QStringList removePlasmaCopies(const Library &library, const QString &homeDir, const QString &activeTheme);
+
 // Carries out a Plan (SPEC.md §4.9): stores new builds, captures Original, applies
 // the Plasma splash, runs the helper for the boot stages, and records history. If
 // the helper fails, the Plasma splash change is undone too.
@@ -47,6 +51,9 @@ public:
     void apply(const Plan &plan);
     // Rolls back an apply the helper didn't finish (its journal is still there).
     void recover();
+    // Removes Ekpo's theme copies and alternatives (helper "uninstall"); the
+    // helper refuses while anything of Ekpo's is still selected.
+    void removeEkpoFiles();
 
 Q_SIGNALS:
     void progress(const QString &text);
@@ -61,6 +68,7 @@ private:
     };
 
     void startHelper(const QByteArray &input);
+    void runPlainOperation(Request::Operation operation, const QString &message);
     bool applyPlasma(const PlasmaSplashTarget &target, QString &error);
     void undoPlasma();
     void readHelperOutput();
@@ -77,5 +85,5 @@ private:
     QByteArray m_buffer;
     QJsonObject m_result;
     bool m_running = false;
-    bool m_recovering = false;
+    bool m_plainOperation = false;
 };

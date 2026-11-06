@@ -145,6 +145,17 @@ void Executor::apply(const Plan &plan)
 
 void Executor::recover()
 {
+    runPlainOperation(Request::Operation::Recover, tr("Asking for permission to roll back the interrupted apply"));
+}
+
+void Executor::removeEkpoFiles()
+{
+    runPlainOperation(Request::Operation::Uninstall, tr("Asking for permission to remove Ekpo's themes"));
+}
+
+// A helper operation without plan or history: recover or uninstall.
+void Executor::runPlainOperation(Request::Operation operation, const QString &message)
+{
     if (m_running)
         return;
     m_plan = {};
@@ -152,10 +163,10 @@ void Executor::recover()
     m_buffer.clear();
     m_result = {};
     m_running = true;
-    m_recovering = true;
-    Q_EMIT progress(tr("Asking for permission to roll back the interrupted apply"));
+    m_plainOperation = true;
+    Q_EMIT progress(message);
     Request request;
-    request.operation = Request::Operation::Recover;
+    request.operation = operation;
     startHelper(serializeRequest(request) + '\n');
 }
 
@@ -265,8 +276,8 @@ void Executor::helperFinished()
     const int outcome = m_result.value(QStringLiteral("outcome")).toInt(-1);
     QString error = m_result.value(QStringLiteral("error")).toString();
     m_process.release()->deleteLater();
-    if (m_recovering) {
-        m_recovering = false;
+    if (m_plainOperation) {
+        m_plainOperation = false;
         m_running = false;
         Q_EMIT finished(outcome == 0, outcome == -1 ? tr("The helper didn't run (the password prompt may have been cancelled).") : error, 0);
         return;
@@ -303,4 +314,19 @@ void Executor::fail(const QString &error)
 {
     m_running = false;
     Q_EMIT finished(false, error, 0);
+}
+
+QStringList removePlasmaCopies(const Library &library, const QString &homeDir, const QString &activeTheme)
+{
+    QStringList errors;
+    QStringList removed;
+    for (const HistoryEntry &e : library.history(errors)) {
+        const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
+        if (!target.plasmaSplash || target.plasmaSplash->build.isEmpty() || target.plasmaSplash->theme == activeTheme)
+            continue;
+        const QString dir = homeDir + userLookAndFeel + target.plasmaSplash->theme;
+        if (!target.plasmaSplash->theme.isEmpty() && QFileInfo::exists(dir) && QFile::moveToTrash(dir))
+            removed << target.plasmaSplash->theme;
+    }
+    return removed;
 }

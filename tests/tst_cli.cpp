@@ -119,6 +119,9 @@ void TestCli::appliesAndRestoresOriginal()
     QVERIFY(afterApply.out.contains(QLatin1String("Last apply:    #1 Night")));
     QVERIFY2(afterApply.out.contains(QLatin1String("keep the previous splash as a fallback")), qPrintable(afterApply.out));
     QCOMPARE(afterApply.exitCode, 0);
+    const CliRun tooEarly = ekpo({QStringLiteral("remove-files")});
+    QCOMPARE(tooEarly.exitCode, 1);
+    QVERIFY(tooEarly.err.contains(QLatin1String("Restore Original first")));
 
     const CliRun restored = ekpo({QStringLiteral("restore"), QStringLiteral("original")}, "yes\n");
     QVERIFY2(restored.exitCode == 0, qPrintable(restored.err));
@@ -126,6 +129,13 @@ void TestCli::appliesAndRestoresOriginal()
     QVERIFY(restored.out.contains(QLatin1String("# update-initramfs -u -k all"))); // restores rebuild every kernel
     QCOMPARE(plymouth(), QStringLiteral("/usr/share/plymouth/themes/fallout/fallout.plymouth"));
     QVERIFY(!QFile::exists(at(QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg"))));
+
+    // Removing Ekpo's files needs Original first, then deletes the copies.
+    const CliRun removed = ekpo({QStringLiteral("remove-files")}, "y\n");
+    QVERIFY2(removed.exitCode == 0, qPrintable(removed.err + removed.out));
+    QVERIFY(removed.out.contains(QLatin1String("ekpo-windozexp-v1")));
+    QVERIFY(!QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-windozexp-v1"))));
+    QCOMPARE(ekpo({QStringLiteral("remove-files")}).out, QStringLiteral("Ekpo has no theme copies installed.\n"));
 
     const CliRun again = ekpo({QStringLiteral("restore"), QStringLiteral("#1"), QStringLiteral("--newest-kernel")}, "y\n");
     QVERIFY(again.out.contains(QLatin1String("# update-initramfs -u -k 7.0.0-42-generic")));

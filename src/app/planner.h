@@ -63,5 +63,10 @@ Target lastApplied(const Library &library);
 // Ekpo theme copies (ekpo-*) that history still needs once newTarget is applied: the
 // helper removes the others (SPEC.md §4.9).
 QStringList keptThemes(const Library &library, const Target &newTarget);
+// Ekpo's theme copies installed in the system theme folders (folder names).
+QStringList installedEkpoCopies(const QString &rootDir);
+// True when every stage Ekpo ever changed is back at Original and Ekpo's GRUB
+// drop-in is gone: the precondition for removing Ekpo's files (SPEC.md §5).
+bool isAtOriginal(const PlanContext &context);
 // Stages whose current state differs from what Ekpo last applied (SPEC.md §4.12).
 QList<Stage> driftedStages(const Library &library, const Target &current);

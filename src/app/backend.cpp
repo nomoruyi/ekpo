@@ -7,6 +7,8 @@
 #include <QRegularExpression>
 #include <QStorageInfo>
 
+#include <utility>
+
 namespace {
 
 QVariantMap line(const QString &level, const QString &text) // level: ok, info, warning
@@ -147,6 +149,8 @@ Backend::Backend(QObject *parent)
         m_executor = std::make_unique<Executor>(*m_library, m_homeDir, m_launcher);
         connect(m_executor.get(), &Executor::progress, this, &Backend::applyProgress);
         connect(m_executor.get(), &Executor::finished, this, [this](bool ok, const QString &error, int number) {
+            if (std::exchange(m_removingFiles, false) && ok)
+                removePlasmaCopies(*m_library, m_homeDir, currentTarget(probeSystem(m_rootDir, m_homeDir), m_rootDir).plasmaSplash->theme);
             Q_EMIT applyingChanged();
             refresh();
             Q_EMIT applyFinished(ok, error, number);
@@ -178,6 +182,9 @@ void Backend::refresh()
             }
             v = c;
         }
+
+        m_atOriginal = isAtOriginal(PlanContext{*m_library, m_state, m_rootDir, m_homeDir});
+        m_ekpoCopies = int(installedEkpoCopies(m_rootDir).size());
 
         // Ask after a reboot whether the last boot-stage apply worked.
         m_pendingCheck.clear();
@@ -543,4 +550,13 @@ void Backend::setTechnicalDetailsExpanded(bool expanded)
     QString error;
     m_library->saveSettings(settings, error);
     Q_EMIT changed();
+}
+
+void Backend::removeEkpoFiles()
+{
+    if (!m_executor || m_executor->isRunning() || !m_atOriginal)
+        return;
+    m_removingFiles = true;
+    m_executor->removeEkpoFiles();
+    Q_EMIT applyingChanged();
 }

@@ -11,7 +11,7 @@
 
 namespace {
 
-const QStringList commands = {QStringLiteral("status"), QStringLiteral("apply"), QStringLiteral("restore"), QStringLiteral("recover"),
+const QStringList commands = {QStringLiteral("status"), QStringLiteral("apply"), QStringLiteral("restore"), QStringLiteral("recover"), QStringLiteral("remove-files"),
                               QStringLiteral("help"), QStringLiteral("--help"), QStringLiteral("-h")};
 
 const QMap<Stage, QString> stageNames = {
@@ -43,6 +43,7 @@ int usage(int code)
                                    "      --newest-kernel         with apply/restore: rebuild only the newest kernel's\n"
                                    "                              (default: Settings for apply, all kernels for restore)\n"
                                    "  recover                     roll back an apply that was cut off\n"
+                                   "  remove-files                remove Ekpo's theme copies (after \"restore original\")\n"
                                    "Applies show what will change and ask before doing anything.\n"
                                 << Qt::flush;
     return code;
@@ -215,6 +216,30 @@ int runCli(const QStringList &rawArgs)
 
     if (command == QLatin1String("status"))
         return status(*library, env);
+    if (command == QLatin1String("remove-files")) {
+        const SystemState state = probeSystem(env.rootDir, env.homeDir);
+        if (!isAtOriginal(PlanContext{*library, state, env.rootDir, env.homeDir})) {
+            err() << "Ekpo's look is still active. Restore Original first: ekpo restore original\n";
+            return 1;
+        }
+        const QStringList copies = installedEkpoCopies(env.rootDir);
+        if (copies.isEmpty()) {
+            out() << "Ekpo has no theme copies installed.\n";
+            return 0;
+        }
+        out() << "Ekpo's theme copies: " << copies.join(QStringLiteral(", ")) << "\n";
+        if (!confirm(QStringLiteral("Remove them and their Plymouth registrations? This asks for your password."))) {
+            out() << "Nothing was changed.\n";
+            return 1;
+        }
+        Executor executor(*library, env.homeDir, env.launcher);
+        const int code = run(executor, [&] { executor.removeEkpoFiles(); });
+        if (code == 0) {
+            removePlasmaCopies(*library, env.homeDir, currentTarget(probeSystem(env.rootDir, env.homeDir), env.rootDir).plasmaSplash->theme);
+            out() << "Remove the app itself with: sudo apt remove ekpo\nYour library stays in " << library->path() << ".\n";
+        }
+        return code;
+    }
     if (command == QLatin1String("recover")) {
         if (!probeSystem(env.rootDir, env.homeDir).leftoverJournal) {
             out() << "Nothing to recover.\n";
