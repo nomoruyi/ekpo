@@ -1,3 +1,5 @@
+#include "cli.h"
+
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -13,6 +15,13 @@ int main(int argc, char *argv[])
     // systemd-coredump and DrKonqi write outside the repo.
     if (qEnvironmentVariableIsSet("EKPO_DEV"))
         prctl(PR_SET_DUMPABLE, 0);
+
+    // A command runs the command line without any GUI (SPEC.md §4.14).
+    if (argc > 1) {
+        QCoreApplication app(argc, argv);
+        app.setApplicationName(QStringLiteral("ekpo"));
+        return runCli(app.arguments().mid(1));
+    }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ekpo"));

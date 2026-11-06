@@ -135,22 +135,12 @@ QVariantMap resultToMap(const ImportResult &result)
 
 Backend::Backend(QObject *parent)
     : QObject(parent)
-    , m_homeDir(QDir::homePath())
 {
-    // Sandbox mode for dev runs and screenshots (ARCHITECTURE.md §8): read a fake system root.
-    if (qEnvironmentVariableIsSet("EKPO_DEV") && qEnvironmentVariableIsSet("EKPO_SYSTEM_ROOT")) {
-        m_rootDir = qEnvironmentVariable("EKPO_SYSTEM_ROOT");
-        m_homeDir = qEnvironmentVariable("EKPO_SYSTEM_HOME", m_homeDir);
-    }
+    const AppEnvironment env = detectEnvironment();
+    m_rootDir = env.rootDir;
+    m_homeDir = env.homeDir;
+    m_launcher = env.launcher;
     m_library = Library::open(Library::defaultPath(), m_libraryError);
-
-    // In the sandbox the test helper changes the fake root; otherwise pkexec runs the real one.
-    m_launcher = systemHelperLauncher();
-    if (m_rootDir != QLatin1String("/")) {
-        m_launcher = HelperLauncher{QStringLiteral(EKPO_HELPER_TEST_PATH), {}};
-        m_launcher.environment.insert(QStringLiteral("EKPO_HELPER_ROOT"), m_rootDir);
-        m_launcher.environment.insert(QStringLiteral("EKPO_HELPER_BIN"), QStringLiteral(EKPO_STUBS_DIR));
-    }
     if (m_library) {
         m_executor = std::make_unique<Executor>(*m_library, m_homeDir, m_launcher);
         connect(m_executor.get(), &Executor::progress, this, &Backend::applyProgress);

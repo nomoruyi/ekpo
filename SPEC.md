@@ -126,7 +126,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 ### 4.14 Command line
 
-`ekpo status | apply <mask> | restore <entry|original>`, with the same review and a y/N prompt. Designing stays GUI-only.
+`ekpo status | apply <mask> | restore <entry|original> | recover`, with the same review and a y/N prompt (`recover` rolls back an interrupted apply). Designing stays GUI-only.
 
 ## 5. Privileges and installation
 

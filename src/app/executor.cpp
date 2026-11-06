@@ -74,6 +74,19 @@ HelperLauncher systemHelperLauncher()
              QStringLiteral("/usr/bin/pkexec"), QStringLiteral(EKPO_HELPER_PATH)}};
 }
 
+AppEnvironment detectEnvironment()
+{
+    AppEnvironment env{QStringLiteral("/"), QDir::homePath(), systemHelperLauncher()};
+    if (qEnvironmentVariableIsSet("EKPO_DEV") && qEnvironmentVariableIsSet("EKPO_SYSTEM_ROOT")) {
+        env.rootDir = qEnvironmentVariable("EKPO_SYSTEM_ROOT");
+        env.homeDir = qEnvironmentVariable("EKPO_SYSTEM_HOME", env.homeDir);
+        env.launcher = HelperLauncher{QStringLiteral(EKPO_HELPER_TEST_PATH), {}};
+        env.launcher.environment.insert(QStringLiteral("EKPO_HELPER_ROOT"), env.rootDir);
+        env.launcher.environment.insert(QStringLiteral("EKPO_HELPER_BIN"), QStringLiteral(EKPO_STUBS_DIR));
+    }
+    return env;
+}
+
 Executor::Executor(Library &library, const QString &homeDir, const HelperLauncher &launcher, QObject *parent)
     : QObject(parent)
     , m_library(library)

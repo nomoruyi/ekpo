@@ -22,6 +22,16 @@ HelperLauncher systemHelperLauncher();
 // Identifies the current boot; it changes with every reboot.
 QString currentBootId();
 
+// Where the app looks and how it reaches the helper. Normally "/", the user's home
+// and pkexec; in sandbox mode (EKPO_DEV + EKPO_SYSTEM_ROOT, ARCHITECTURE.md §8) a
+// fake root, its home and the test helper with stub commands.
+struct AppEnvironment {
+    QString rootDir = QStringLiteral("/");
+    QString homeDir;
+    HelperLauncher launcher;
+};
+AppEnvironment detectEnvironment();
+
 // Carries out a Plan (SPEC.md §4.9): stores new builds, captures Original, applies
 // the Plasma splash, runs the helper for the boot stages, and records history. If
 // the helper fails, the Plasma splash change is undone too.
