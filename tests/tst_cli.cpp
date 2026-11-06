@@ -84,6 +84,7 @@ void TestCli::usageErrors()
     QCOMPARE(ekpo({QStringLiteral("bogus")}).exitCode, 2);
     QCOMPARE(ekpo({QStringLiteral("apply")}).exitCode, 2);
     QCOMPARE(ekpo({QStringLiteral("status"), QStringLiteral("extra")}).exitCode, 2);
+    QVERIFY(ekpo({QStringLiteral("apply"), QStringLiteral("Night"), QStringLiteral("--all-kernels")}, "n\n").out.contains(QLatin1String("# update-initramfs -u -k all")));
 }
 
 void TestCli::status()
@@ -111,6 +112,7 @@ void TestCli::appliesAndRestoresOriginal()
 {
     const CliRun applied = ekpo({QStringLiteral("apply"), QStringLiteral("night")}, "y\n");
     QVERIFY2(applied.exitCode == 0, qPrintable(applied.err));
+    QVERIFY(applied.out.contains(QLatin1String("# update-initramfs -u -k 7.0.0-42-generic"))); // the default: newest kernel only
     QVERIFY(applied.out.contains(QLatin1String("Done. Saved as history entry #1.")));
     QCOMPARE(plymouth(), QStringLiteral("/usr/share/plymouth/themes/ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth"));
     QVERIFY(ekpo({QStringLiteral("status")}).out.contains(QLatin1String("Last apply:    #1 Night")));
@@ -118,10 +120,12 @@ void TestCli::appliesAndRestoresOriginal()
     const CliRun restored = ekpo({QStringLiteral("restore"), QStringLiteral("original")}, "yes\n");
     QVERIFY2(restored.exitCode == 0, qPrintable(restored.err));
     QVERIFY(restored.out.contains(QLatin1String("Restore Original")));
+    QVERIFY(restored.out.contains(QLatin1String("# update-initramfs -u -k all"))); // restores rebuild every kernel
     QCOMPARE(plymouth(), QStringLiteral("/usr/share/plymouth/themes/fallout/fallout.plymouth"));
     QVERIFY(!QFile::exists(at(QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg"))));
 
-    const CliRun again = ekpo({QStringLiteral("restore"), QStringLiteral("#1")}, "y\n");
+    const CliRun again = ekpo({QStringLiteral("restore"), QStringLiteral("#1"), QStringLiteral("--newest-kernel")}, "y\n");
+    QVERIFY(again.out.contains(QLatin1String("# update-initramfs -u -k 7.0.0-42-generic")));
     QVERIFY2(again.exitCode == 0, qPrintable(again.err));
     QCOMPARE(plymouth(), QStringLiteral("/usr/share/plymouth/themes/ekpo-windozexp-v1/ekpo-windozexp-v1.plymouth"));
 }

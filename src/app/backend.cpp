@@ -56,7 +56,7 @@ QVariantMap bootMenuCard(const SystemState &s, const QString &root)
     return c;
 }
 
-QVariantMap bootSplashCard(const SystemState &s)
+QVariantMap bootSplashCard(const SystemState &s, bool lastApplyNewestOnly)
 {
     QVariantList lines;
     const QString id = QFileInfo(s.plymouthAlternative).dir().dirName();
@@ -81,7 +81,9 @@ QVariantMap bootSplashCard(const SystemState &s)
             ++outdated;
     }
     if (outdated > 0)
-        lines << line(QStringLiteral("warning"), Backend::tr("%1 of %2 kernels still boot with an older splash (initrd built before the last change).").arg(outdated).arg(withInitrd));
+        lines << (lastApplyNewestOnly
+                      ? line(QStringLiteral("info"), Backend::tr("The other %1 kernels keep the previous splash as a fallback (the last apply rebuilt only the newest kernel).").arg(outdated))
+                      : line(QStringLiteral("warning"), Backend::tr("%1 of %2 kernels still boot with an older splash (initrd built before the last change).").arg(outdated).arg(withInitrd)));
     else if (withInitrd > 0)
         lines << line(QStringLiteral("ok"), Backend::tr("All %1 initrds carry this splash.").arg(withInitrd));
 
@@ -157,7 +159,8 @@ void Backend::refresh()
 {
     const QString root = m_rootDir == QLatin1String("/") ? QString() : m_rootDir;
     m_state = probeSystem(m_rootDir, m_homeDir);
-    m_stageCards = {bootMenuCard(m_state, root), bootSplashCard(m_state), plasmaSplashCard(m_state)};
+    const auto lastSplash = m_library ? lastApplied(*m_library).bootSplash : std::nullopt;
+    m_stageCards = {bootMenuCard(m_state, root), bootSplashCard(m_state, lastSplash && !lastSplash->allKernels), plasmaSplashCard(m_state)};
     if (m_library) {
         const Target current = currentTarget(m_state, m_rootDir);
         const Target last = lastApplied(*m_library);
@@ -320,6 +323,10 @@ void Backend::setPlan(const Plan &plan)
         {QStringLiteral("notes"), plan.notes},
         {QStringLiteral("problems"), plan.stages.isEmpty() && plan.problems.isEmpty() ? QStringList{tr("This is already the current look.")} : plan.problems},
         {QStringLiteral("estimatedSeconds"), plan.estimatedSeconds},
+        {QStringLiteral("touchesSplash"), plan.touchesSplash},
+        {QStringLiteral("allKernels"), plan.allKernels},
+        {QStringLiteral("newestKernel"), plan.newestKernel},
+        {QStringLiteral("kernelCount"), plan.kernelCount},
     };
     Q_EMIT planChanged();
 }
@@ -332,7 +339,8 @@ void Backend::planApplyImport(const QString &id)
     QStringList errors;
     for (const ImportedTheme &t : m_library->imports(errors)) {
         if (t.id == id)
-            return setPlan(planMask(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Mask{{}, t.name, {{t.stage, Slot{Slot::Kind::Import, t.id}}}}));
+            return preparePlan([mask = Mask{{}, t.name, {{t.stage, Slot{Slot::Kind::Import, t.id}}}}](const PlanContext &c) { return planMask(c, mask); },
+                               m_library->settings().rebuildAllKernels);
     }
 }
 
@@ -345,7 +353,8 @@ void Backend::planRestoreEntry(int number)
     for (const HistoryEntry &e : m_library->history(errors)) {
         if (e.number == number) {
             const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
-            return setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, target, tr("Restore #%1: %2").arg(number).arg(e.title)));
+            const QString title = tr("Restore #%1: %2").arg(number).arg(e.title);
+            return preparePlan([target, title](const PlanContext &c) { return planTarget(c, target, title); }, true);
         }
     }
 }
@@ -355,7 +364,7 @@ void Backend::planRestoreOriginal()
     if (!m_library)
         return;
     refresh();
-    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, originalTarget(*m_library), tr("Restore Original")));
+    preparePlan([target = originalTarget(*m_library), title = tr("Restore Original")](const PlanContext &c) { return planTarget(c, target, title); }, true);
 }
 
 void Backend::applyPlan()
@@ -387,8 +396,9 @@ void Backend::planReapplyStage(const QString &stage)
         return;
     refresh();
     const QJsonObject last = lastApplied(*m_library).stageJson(*s);
-    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Target::fromJson({{stage, last}}),
-                       tr("Re-apply \u201c%1\u201d").arg(last.value(QStringLiteral("label")).toString())));
+    preparePlan([target = Target::fromJson({{stage, last}}), title = tr("Re-apply \u201c%1\u201d").arg(last.value(QStringLiteral("label")).toString())](
+                    const PlanContext &c) { return planTarget(c, target, title); },
+                m_library->settings().rebuildAllKernels);
 }
 
 void Backend::planTimeout(int seconds)
@@ -407,7 +417,7 @@ void Backend::planTimeout(int seconds)
     menu.label = tr("%1, %2 s menu").arg(menu.label).arg(seconds);
     Target target;
     target.bootMenu = menu;
-    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, target, tr("Menu timeout: %1 s").arg(seconds)));
+    preparePlan([target, title = tr("Menu timeout: %1 s").arg(seconds)](const PlanContext &c) { return planTarget(c, target, title); }, true);
 }
 
 void Backend::recover()
@@ -443,7 +453,8 @@ void Backend::planRevertCheck()
             revert.insert(it.key(), before.value(it.key()));
         keepCheck();
         refresh();
-        setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Target::fromJson(revert), tr("Undo \u201c%1\u201d").arg(e.title)));
+        preparePlan([target = Target::fromJson(revert), title = tr("Undo \u201c%1\u201d").arg(e.title)](const PlanContext &c) { return planTarget(c, target, title); },
+                    true);
         return;
     }
     keepCheck();
@@ -494,6 +505,42 @@ void Backend::planApplyMask(const QString &id)
     QStringList errors;
     for (const Mask &mask : m_library->masks(errors)) {
         if (mask.id == id)
-            return setPlan(planMask(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, mask));
+            return preparePlan([mask](const PlanContext &c) { return planMask(c, mask); }, m_library->settings().rebuildAllKernels);
     }
+}
+
+void Backend::preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels)
+{
+    m_makePlan = make;
+    PlanContext context{*m_library, m_state, m_rootDir, m_homeDir};
+    context.allKernels = allKernels;
+    setPlan(make(context));
+}
+
+void Backend::setPlanAllKernels(bool all)
+{
+    if (m_library && m_makePlan && !applying())
+        preparePlan(m_makePlan, all);
+}
+
+void Backend::setRebuildAllKernels(bool all)
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.rebuildAllKernels = all;
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
+}
+
+void Backend::setTechnicalDetailsExpanded(bool expanded)
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.technicalDetailsExpanded = expanded;
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
 }

@@ -172,7 +172,7 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         const QJsonObject p = o.value(QStringLiteral("plymouth")).toObject();
         Request::Plymouth plymouth;
         if (!o.value(QStringLiteral("plymouth")).isObject()
-            || !onlyKeys(p, {QStringLiteral("alternativeMode"), QStringLiteral("theme"), QStringLiteral("daemonTheme")}, QStringLiteral("plymouth"), error)
+            || !onlyKeys(p, {QStringLiteral("alternativeMode"), QStringLiteral("theme"), QStringLiteral("daemonTheme"), QStringLiteral("initrds")}, QStringLiteral("plymouth"), error)
             || !readString(p, QStringLiteral("alternativeMode"), plymouth.alternativeMode, error) || !readString(p, QStringLiteral("theme"), plymouth.theme, error)
             || !readString(p, QStringLiteral("daemonTheme"), plymouth.daemonTheme, error))
             return fail(QStringLiteral("request: \"plymouth\" must be an object"));
@@ -185,6 +185,14 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
             error = QStringLiteral("request: manual mode needs a valid theme, auto mode none");
             return std::nullopt;
         }
+        QString initrds = QStringLiteral("all");
+        if (!readString(p, QStringLiteral("initrds"), initrds, error))
+            return std::nullopt;
+        if (initrds != QLatin1String("all") && initrds != QLatin1String("newest")) {
+            error = QStringLiteral("request: initrds must be all or newest");
+            return std::nullopt;
+        }
+        plymouth.allKernels = initrds == QLatin1String("all");
         if (!validThemeRef(plymouth.daemonTheme, ThemeTarget::Plymouth, r.themes)) {
             error = QStringLiteral("request: invalid daemonTheme \"%1\"").arg(plymouth.daemonTheme);
             return std::nullopt;
@@ -240,6 +248,8 @@ QByteArray serializeRequest(const Request &r)
         QJsonObject p{{QStringLiteral("alternativeMode"), r.plymouth->alternativeMode}, {QStringLiteral("daemonTheme"), r.plymouth->daemonTheme}};
         if (!r.plymouth->theme.isEmpty())
             p.insert(QStringLiteral("theme"), r.plymouth->theme);
+        if (!r.plymouth->allKernels)
+            p.insert(QStringLiteral("initrds"), QStringLiteral("newest"));
         o.insert(QStringLiteral("plymouth"), p);
     }
     return QJsonDocument(o).toJson(QJsonDocument::Compact);

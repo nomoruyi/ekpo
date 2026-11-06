@@ -77,6 +77,7 @@ struct Settings {
     int historySize = 10;
     bool technicalDetailsExpanded = false;
     bool showIntro = true; // the intro dialog at start (SPEC.md §4.2)
+    bool rebuildAllKernels = false; // default of the review's switch for boot splash applies
 
     QJsonObject toJson() const;
     static Settings fromJson(const QJsonObject &json);

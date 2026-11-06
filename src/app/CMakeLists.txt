@@ -16,7 +16,7 @@ target_compile_definitions(ekpo PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
 qt_add_qml_module(ekpo
     URI Ekpo
     SOURCES backend.cpp backend.h
-    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml
+    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml qml/SettingsPage.qml
 )
 target_link_libraries(ekpo PRIVATE ekpo_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 # The import scan only matters for static Qt builds; with the distro's shared Qt it

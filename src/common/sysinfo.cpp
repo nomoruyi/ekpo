@@ -1,8 +1,12 @@
 #include "sysinfo.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
+#include <QVersionNumber>
+
+#include <algorithm>
 
 #include <sys/stat.h>
 
@@ -91,4 +95,15 @@ std::optional<Alternative> readAlternative(const QString &root, const QString &n
     if (::lstat(QFile::encodeName(link.filePath()).constData(), &st) == 0)
         a.selectedAt = QDateTime::fromSecsSinceEpoch(st.st_mtim.tv_sec, QTimeZone::UTC);
     return a;
+}
+
+QStringList installedKernels(const QString &root)
+{
+    QStringList versions;
+    for (const QString &name : QDir(root + QStringLiteral("/boot")).entryList({QStringLiteral("vmlinuz-*")}, QDir::Files | QDir::NoSymLinks))
+        versions << name.mid(8);
+    // 7.0.0-42-generic sorts as 7.0.0.42, so -42 comes after -9.
+    const auto key = [](QString v) { return QVersionNumber::fromString(v.replace(QLatin1Char('-'), QLatin1Char('.'))); };
+    std::sort(versions.begin(), versions.end(), [&](const QString &a, const QString &b) { return key(a) < key(b); });
+    return versions;
 }

@@ -228,13 +228,26 @@ void Helper::installTheme(const QString &dir, const QString &id, const QList<Pay
         throw StepError{QStringLiteral("can't move %1 into place").arg(id)};
 }
 
+// Rebuilds every initrd, or only the one of the kernel recorded in the journal, so a
+// rollback touches exactly what the apply touched.
 void Helper::rebuildInitrds() const
 {
-    progress(QStringLiteral("Rebuilding the initrds of all kernels (about 40 s)"));
-    if (m_plan.value(QStringLiteral("generator")).toString() == QLatin1String("dracut"))
-        run(QStringLiteral("dracut"), {QStringLiteral("--regenerate-all"), QStringLiteral("--force")}, 900000);
+    const bool dracut = m_plan.value(QStringLiteral("generator")).toString() == QLatin1String("dracut");
+    const QString kernel = m_plan.value(QStringLiteral("kernel")).toString();
+    if (kernel.isEmpty()) {
+        progress(QStringLiteral("Rebuilding the initrds of all kernels (about 40 s)"));
+        if (dracut)
+            run(QStringLiteral("dracut"), {QStringLiteral("--regenerate-all"), QStringLiteral("--force")}, 900000);
+        else
+            run(QStringLiteral("update-initramfs"), {QStringLiteral("-u"), QStringLiteral("-k"), QStringLiteral("all")}, 900000);
+        return;
+    }
+    progress(QStringLiteral("Rebuilding the initrd of %1 (about 8 s)").arg(kernel));
+    // Plain "dracut --force" would build the running kernel's, which needn't be the newest.
+    if (dracut)
+        run(QStringLiteral("dracut"), {QStringLiteral("--force"), QStringLiteral("/boot/initrd.img-") + kernel, kernel}, 900000);
     else
-        run(QStringLiteral("update-initramfs"), {QStringLiteral("-u"), QStringLiteral("-k"), QStringLiteral("all")}, 900000);
+        run(QStringLiteral("update-initramfs"), {QStringLiteral("-u"), QStringLiteral("-k"), kernel}, 900000);
 }
 
 void Helper::setDaemonTheme(const QString &theme) const
@@ -266,7 +279,10 @@ QJsonObject Helper::verify() const
         const bool dracut = m_plan.value(QStringLiteral("generator")).toString() == QLatin1String("dracut");
         QStringList missing;
         const QDir boot(at(QStringLiteral("/boot")));
-        for (const QString &initrd : boot.entryList({QStringLiteral("initrd.img-*")}, QDir::Files | QDir::NoSymLinks)) {
+        const QString kernel = m_plan.value(QStringLiteral("kernel")).toString();
+        const QStringList initrds = kernel.isEmpty() ? boot.entryList({QStringLiteral("initrd.img-*")}, QDir::Files | QDir::NoSymLinks)
+                                                     : QStringList{QStringLiteral("initrd.img-") + kernel};
+        for (const QString &initrd : initrds) {
             if (!run(dracut ? QStringLiteral("lsinitrd") : QStringLiteral("lsinitramfs"), {QStringLiteral("/boot/") + initrd}).contains(needle))
                 missing << initrd;
         }
@@ -300,6 +316,11 @@ HelperResult Helper::apply(const Request &request, const QMap<QString, QList<Pay
     const QString generator = initramfsGenerator(m_env.root);
     if (request.plymouth && generator.isEmpty())
         return {Outcome::Rejected, QStringLiteral("no initramfs generator found"), {}};
+    // "Newest only" is pinned to a version now, so rebuild, verify and rollback agree.
+    const QStringList kernels = installedKernels(m_env.root);
+    const QString newestKernel = kernels.isEmpty() ? QString() : kernels.last();
+    if (request.plymouth && !request.plymouth->allKernels && newestKernel.isEmpty())
+        return {Outcome::Rejected, QStringLiteral("no kernel found in /boot"), {}};
 
     qint64 payloadBytes = 0;
     for (const auto &files : themes) {
@@ -317,6 +338,7 @@ HelperResult Helper::apply(const Request &request, const QMap<QString, QList<Pay
     m_plan = {
         {QStringLiteral("request"), QJsonDocument::fromJson(serializeRequest(request)).object()},
         {QStringLiteral("generator"), generator},
+        {QStringLiteral("kernel"), request.plymouth && !request.plymouth->allKernels ? newestKernel : QString()},
         {QStringLiteral("grub"), bool(request.grub)},
         {QStringLiteral("plymouth"), bool(request.plymouth)},
         {QStringLiteral("installed"), QJsonArray()},

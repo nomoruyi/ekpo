@@ -21,7 +21,8 @@ QJsonObject bootMenuJson(const BootMenuTarget &t)
 QJsonObject bootSplashJson(const BootSplashTarget &t)
 {
     return {{QStringLiteral("mode"), t.mode}, {QStringLiteral("theme"), t.theme}, {QStringLiteral("daemonTheme"), t.daemonTheme},
-            {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label}};
+            {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label},
+            {QStringLiteral("initrds"), t.allKernels ? QStringLiteral("all") : QStringLiteral("newest")}};
 }
 
 QJsonObject plasmaSplashJson(const PlasmaSplashTarget &t)
@@ -71,7 +72,8 @@ Target Target::fromJson(const QJsonObject &json)
     }
     if (const QJsonValue v = json.value(stageKey(Stage::BootSplash)); v.isObject()) {
         const QJsonObject o = v.toObject();
-        t.bootSplash = BootSplashTarget{str(o, "mode"), str(o, "theme"), str(o, "daemonTheme"), str(o, "build"), str(o, "label")};
+        t.bootSplash = BootSplashTarget{str(o, "mode"), str(o, "theme"), str(o, "daemonTheme"), str(o, "build"), str(o, "label"),
+                                        str(o, "initrds") != QLatin1String("newest")};
     }
     if (const QJsonValue v = json.value(stageKey(Stage::PlasmaSplash)); v.isObject()) {
         const QJsonObject o = v.toObject();

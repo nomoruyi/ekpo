@@ -39,6 +39,9 @@ int usage(int code)
                                    "  status                      show the current look and anything that needs attention\n"
                                    "  apply <mask>                apply a Mask (by name or id)\n"
                                    "  restore <number|original>   restore a history entry, or the look from before Ekpo\n"
+                                   "      --all-kernels           with apply/restore: rebuild every kernel's initrd\n"
+                                   "      --newest-kernel         with apply/restore: rebuild only the newest kernel's\n"
+                                   "                              (default: Settings for apply, all kernels for restore)\n"
                                    "  recover                     roll back an apply that was cut off\n"
                                    "Applies show what will change and ask before doing anything.\n"
                                 << Qt::flush;
@@ -175,8 +178,19 @@ bool isCliCommand(const QString &arg)
 
 } // namespace
 
-int runCli(const QStringList &args)
+int runCli(const QStringList &rawArgs)
 {
+    // Boot splash changes: which initrds to rebuild (as the review's switch).
+    std::optional<bool> allKernels;
+    QStringList args;
+    for (const QString &a : rawArgs) {
+        if (a == QLatin1String("--all-kernels"))
+            allKernels = true;
+        else if (a == QLatin1String("--newest-kernel"))
+            allKernels = false;
+        else
+            args << a;
+    }
     const QString command = args.value(0);
     if (command == QLatin1String("help") || command == QLatin1String("--help") || command == QLatin1String("-h"))
         return usage(0);
@@ -204,7 +218,8 @@ int runCli(const QStringList &args)
     }
 
     const SystemState state = probeSystem(env.rootDir, env.homeDir);
-    const PlanContext context{*library, state, env.rootDir, env.homeDir};
+    PlanContext context{*library, state, env.rootDir, env.homeDir};
+    context.allKernels = allKernels.value_or(command == QLatin1String("apply") ? library->settings().rebuildAllKernels : true);
     const QString arg = args.at(1);
     QStringList errors;
     if (command == QLatin1String("apply")) {

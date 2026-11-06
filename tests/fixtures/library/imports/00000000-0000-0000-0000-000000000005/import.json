@@ -1,0 +1,11 @@
+{
+    "stage": "bootSplash",
+    "name": "mint-galaxy",
+    "sourcePath": "/usr/share/plymouth/themes/mint-galaxy",
+    "installedId": "mint-galaxy",
+    "importedAt": "2026-11-06T09:00:00Z",
+    "verdict": "works",
+    "report": [
+        "Its script runs at every boot (Plymouth's script language can't read files or run programs)."
+    ]
+}

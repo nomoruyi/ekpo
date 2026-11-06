@@ -11,6 +11,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -35,6 +36,7 @@ class Backend : public QObject
     Q_PROPERTY(QVariantMap pendingCheck READ pendingCheck NOTIFY changed)
     Q_PROPERTY(QVariantList masks READ masks NOTIFY changed)
     Q_PROPERTY(bool showIntro READ showIntro NOTIFY changed)
+    Q_PROPERTY(bool rebuildAllKernels READ rebuildAllKernels NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -52,6 +54,11 @@ public:
     QVariantList masks() const { return m_masks; }
     bool showIntro() const { return m_library && m_library->settings().showIntro; }
     Q_INVOKABLE void setShowIntro(bool show);
+    bool rebuildAllKernels() const { return m_library && m_library->settings().rebuildAllKernels; }
+    Q_INVOKABLE void setRebuildAllKernels(bool all);
+    Q_INVOKABLE void setTechnicalDetailsExpanded(bool expanded);
+    // The review's switch: re-plans the current review for all kernels or the newest only.
+    Q_INVOKABLE void setPlanAllKernels(bool all);
 
     // Masks (SPEC.md §4.8). Empty refs leave a stage as it is.
     Q_INVOKABLE QString saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash);
@@ -102,6 +109,8 @@ private:
     QVariantList m_masks;
 
     void setPlan(const Plan &plan);
+    void preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels);
+    std::function<Plan(const PlanContext &)> m_makePlan;
     Plan m_plan;
     QVariantMap m_planMap;
     HelperLauncher m_launcher;

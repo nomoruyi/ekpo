@@ -22,16 +22,16 @@ What hasn't been tested yet and is tested by these steps: the password prompt
 ## 1. Install
 
 ```bash
-sha256sum /extra/data/Coding/linux-theming/build-release/ekpo_0.1.0_amd64.deb
+sha256sum /extra/data/Coding/linux-theming/build-release/ekpo_0.1.1_amd64.deb
 ```
 
-The sum must be `4901ff5709280bba8c8fa5fc4d1c81a6788759d5fe5d07568736a05f0a8805ce`.
+The sum must be `3f63027c2abbed8d44e497145ad059d556765c656bc0e8d96337988b9371892e`.
 
 ```bash
-sudo apt install /extra/data/Coding/linux-theming/build-release/ekpo_0.1.0_amd64.deb
+sudo apt install /extra/data/Coding/linux-theming/build-release/ekpo_0.1.1_amd64.deb
 ```
 
-Changes: installs `/usr/bin/ekpo`, `/usr/libexec/ekpo/ekpo-helper`, the polkit
+If you installed 0.1.0 already, the same command upgrades it. Changes: installs `/usr/bin/ekpo`, `/usr/libexec/ekpo/ekpo-helper`, the polkit
 action `io.github.nomoruyi.ekpo.apply`, a menu entry and the icon. Every dependency
 is already installed, so nothing else is added. Nothing about the boot look changes.
 Undo: `sudo apt remove ekpo`.
@@ -71,11 +71,15 @@ To try a different look, apply `crossgrub` the same way.
 
 1. **Boot Splash** page → **Import** next to `mint-galaxy`.
 2. **Apply…** → the review shows the alternative switch, `plymouthd.conf`, and the
-   rebuild of all 5 initrds (about 40 s) → **Apply**.
+   initrd rebuild. Leave **Rebuild the initrds of all 5 kernels** off for this first
+   try: only the newest kernel (7.0.0-42) gets the new splash (about 8 s), and the
+   four older ones keep fallout, so they boot with a known-good splash from
+   "Advanced options" if mint-galaxy misbehaves. → **Apply**.
 
 Changes: `update-alternatives --set default.plymouth …/mint-galaxy.plymouth`,
-`Theme=mint-galaxy` in `/etc/plymouth/plymouthd.conf`, `update-initramfs -u -k all`,
-`update-grub`. Reboot: the splash is mint-galaxy.
+`Theme=mint-galaxy` in `/etc/plymouth/plymouthd.conf`, `update-initramfs -u -k 7.0.0-42-generic`,
+`update-grub`. Reboot (default entry): the splash is mint-galaxy. The Overview notes that
+the other kernels keep the previous splash; that's expected.
 
 Undo: History → **Restore Original…** (back to fallout, initrds rebuilt again), or by hand:
 
@@ -95,7 +99,8 @@ The Plasma splash needs no password and is undone with the rest.
 
 ## If something goes wrong
 
-- **Splash broken or hanging:** in the GRUB menu press `e` on the first entry,
+- **Splash broken or hanging:** if only the newest kernel was rebuilt, pick an older
+  kernel under "Advanced options"; it still has the previous splash. Otherwise, in the GRUB menu press `e` on the first entry,
   delete the word `splash` from the `linux` line, boot with Ctrl+X (text boot),
   then run `ekpo restore original`.
 - **An apply was cut off** (power loss, crash): Ekpo shows **Roll Back Now**, or run

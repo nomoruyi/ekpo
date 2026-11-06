@@ -69,15 +69,18 @@ def selected_plymouth_theme():
     return os.path.basename(os.path.dirname(path))
 
 
-def build_initrds():
-    """An initrd here is a text file listing the Plymouth theme files it holds."""
+def build_initrds(only=None):
+    """An initrd here is a text file listing the Plymouth theme files it holds.
+    only: rebuild just this kernel version's initrd."""
     theme = selected_plymouth_theme()
     theme_dir = at(f"/usr/share/plymouth/themes/{theme}")
     listing = []
     for dirpath, _, files in os.walk(theme_dir):
         for f in files:
             listing.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
-    for version in kernels():
+    for version in [only] if only else kernels():
+        if version not in kernels():
+            sys.exit(f"no kernel {version}")
         with open(at(f"/boot/initrd.img-{version}"), "w") as f:
             f.write("\n".join(sorted(listing)) + "\n")
 

@@ -30,6 +30,7 @@ struct BootSplashTarget {
     QString daemonTheme; // plymouthd.conf Theme=
     QString build;
     QString label;
+    bool allKernels = true; // how it was applied: every initrd, or only the newest kernel's
 
     bool sameState(const BootSplashTarget &o) const { return mode == o.mode && theme == o.theme && daemonTheme == o.daemonTheme; }
 };

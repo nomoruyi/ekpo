@@ -29,6 +29,7 @@ private Q_SLOTS:
     void asksAfterRebootAndSeesOutsideChanges();
     void recoversAnInterruptedApply();
     void timeoutOnlyChange();
+    void newestKernelOnlyThenRestoreAll();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -289,6 +290,35 @@ void TestExecutor::timeoutOnlyChange()
     QFile cfg(at(QStringLiteral("/boot/grub/grub.cfg")));
     QVERIFY(cfg.open(QIODevice::ReadOnly));
     QVERIFY(cfg.readAll().contains("themes/hollow-grub/theme.txt"));
+}
+
+void TestExecutor::newestKernelOnlyThenRestoreAll()
+{
+    const SystemState state = probe();
+    PlanContext context{*m_library, state, m_root, m_home};
+    context.allKernels = false;
+    const Plan p = planMask(context, Mask{{}, QStringLiteral("XP"), {{Stage::BootSplash, Slot{Slot::Kind::Import, m_windoze}}}});
+    QVERIFY2(p.canApply(), qPrintable(p.problems.join(QLatin1Char('\n'))));
+    QVERIFY(p.touchesSplash);
+    QVERIFY(!p.allKernels);
+    QCOMPARE(p.newestKernel, QStringLiteral("7.0.0-42-generic"));
+    QCOMPARE(p.kernelCount, 5);
+    QCOMPARE(p.estimatedSeconds, 8 + 5);
+    QVERIFY(!p.request->plymouth->allKernels);
+    QVERIFY(p.commands.contains(QStringLiteral("update-initramfs -u -k 7.0.0-42-generic")));
+    QVERIFY(p.stages.first().actions.last().contains(QLatin1String("The other 4 keep the current splash")));
+    QString error;
+    QVERIFY2(execute(p, &error), qPrintable(error));
+    QFile older(at(QStringLiteral("/boot/initrd.img-7.0.0-27-generic")));
+    QVERIFY(older.open(QIODevice::ReadOnly));
+    QVERIFY(older.readAll().contains("fallout"));
+    QVERIFY(!lastApplied(*m_library).bootSplash->allKernels);
+
+    // Restores rebuild every kernel.
+    const SystemState now = probe();
+    const Plan restore = planTarget(PlanContext{*m_library, now, m_root, m_home}, originalTarget(*m_library), QStringLiteral("Restore Original"));
+    QVERIFY(restore.allKernels);
+    QVERIFY(restore.commands.contains(QStringLiteral("update-initramfs -u -k all")));
 }
 
 EKPO_TEST_MAIN(TestExecutor)

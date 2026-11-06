@@ -101,6 +101,8 @@ private Q_SLOTS:
     void appliesPlymouthTheme();
     void registersInstalledTheme();
     void usesDracutWhenItBuildsInitrds();
+    void rebuildsOnlyTheNewestKernel();
+    void newestOnlyRollbackTouchesOnlyThatKernel();
     void reappliesSameVersion();
     void failedRebuildRollsBack();
     void sameIdDifferentContentRollsBack();
@@ -280,6 +282,42 @@ void TestHelper::usesDracutWhenItBuildsInitrds()
     QVERIFY2(r.exitCode == 0, qPrintable(r.result.value(QStringLiteral("error")).toString()));
     QVERIFY(readAll(at(QStringLiteral("/var/log/ekpo-helper.log"))).contains("dracut --regenerate-all --force"));
     QVERIFY(readAll(at(QStringLiteral("/boot/initrd.img-7.0.0-42-generic"))).contains("ekpo-dots-v1/ekpo-dots-v1.plymouth"));
+}
+
+void TestHelper::rebuildsOnlyTheNewestKernel()
+{
+    Request r = plymouthRequest();
+    r.plymouth->allKernels = false;
+    const Run run1 = run(input(r, plymouthFiles()));
+    QVERIFY2(run1.exitCode == 0, qPrintable(run1.result.value(QStringLiteral("error")).toString()));
+    QVERIFY(readAll(at(QStringLiteral("/var/log/ekpo-helper.log"))).contains("update-initramfs -u -k 7.0.0-42-generic"));
+    QVERIFY(readAll(at(QStringLiteral("/boot/initrd.img-7.0.0-42-generic"))).contains("ekpo-dots-v1/ekpo-dots-v1.plymouth"));
+    // Older kernels keep the previous splash, as a working fallback.
+    QVERIFY(readAll(at(QStringLiteral("/boot/initrd.img-7.0.0-27-generic"))).contains("themes/fallout/fallout.plymouth"));
+    QVERIFY(!readAll(at(QStringLiteral("/boot/initrd.img-7.0.0-27-generic"))).contains("ekpo-dots-v1"));
+
+    // Under dracut "newest" names the image and version explicitly.
+    QFile status(at(QStringLiteral("/var/lib/dpkg/status")));
+    QVERIFY(status.open(QIODevice::WriteOnly));
+    status.write("Package: dracut\nStatus: install ok installed\nProvides: linux-initramfs-tool\n");
+    status.close();
+    Request back;
+    back.plymouth = Request::Plymouth{QStringLiteral("manual"), QStringLiteral("fallout"), QStringLiteral("fallout"), false};
+    QCOMPARE(run(input(back)).exitCode, 0);
+    QVERIFY(readAll(at(QStringLiteral("/var/log/ekpo-helper.log"))).contains("dracut --force /boot/initrd.img-7.0.0-42-generic 7.0.0-42-generic"));
+}
+
+void TestHelper::newestOnlyRollbackTouchesOnlyThatKernel()
+{
+    const auto before = snapshot();
+    failNext(QStringLiteral("update-initramfs"));
+    Request r = plymouthRequest();
+    r.plymouth->allKernels = false;
+    QCOMPARE(run(input(r, plymouthFiles())).exitCode, 1);
+    QVERIFY2(changedPaths(before, snapshot()).isEmpty(), qPrintable(changedPaths(before, snapshot()).join(QStringLiteral(", "))));
+    const QByteArray log = readAll(at(QStringLiteral("/var/log/ekpo-helper.log")));
+    QVERIFY(log.contains("update-initramfs -u -k 7.0.0-42-generic"));
+    QVERIFY(!log.contains("update-initramfs -u -k all"));
 }
 
 void TestHelper::reappliesSameVersion()

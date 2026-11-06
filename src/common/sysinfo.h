@@ -27,3 +27,6 @@ struct Alternative {
     QDateTime selectedAt; // when the link last changed
 };
 std::optional<Alternative> readAlternative(const QString &root, const QString &name);
+
+// Kernel versions with a /boot/vmlinuz-<version>, oldest first.
+QStringList installedKernels(const QString &root);

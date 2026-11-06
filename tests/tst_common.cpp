@@ -296,6 +296,11 @@ void TestCommon::requestRoundTrip()
     QVERIFY(parseRequest(R"({"format":1,"operation":"apply","grub":{"original":true}})", error));
     QVERIFY(parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","daemonTheme":"fallout"}})", error));
     QVERIFY(parseRequest(R"({"format":1,"operation":"recover"})", error));
+    const auto newest = parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout","initrds":"newest"}})", error);
+    QVERIFY2(newest, qPrintable(error));
+    QVERIFY(!newest->plymouth->allKernels);
+    QVERIFY(serializeRequest(*newest).contains("\"initrds\":\"newest\""));
+    QVERIFY(parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout"}})", error)->plymouth->allKernels);
 }
 
 void TestCommon::requestRejects_data()
@@ -323,6 +328,7 @@ void TestCommon::requestRejects_data()
     QTest::newRow("manual without theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","daemonTheme":"fallout"}})");
     QTest::newRow("auto with theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","theme":"fallout","daemonTheme":"fallout"}})");
     QTest::newRow("bad daemon theme") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"auto","daemonTheme":"x\nThemeDir=/tmp"}})");
+    QTest::newRow("bad initrd scope") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout","initrds":"oldest"}})");
     QTest::newRow("oversized") << QByteArray(maxRequestBytes + 1, ' ');
 }
 

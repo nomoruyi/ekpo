@@ -120,6 +120,29 @@ Kirigami.ScrollablePage {
             text: qsTr("Takes about %1 s. Shutdown and sleep are blocked meanwhile; closing Ekpo doesn't stop it.").arg(page.plan.estimatedSeconds)
         }
 
+        // Only for boot splash changes: rebuild every kernel's initrd or the newest one's.
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: page.plan.touchesSplash === true && (page.plan.kernelCount ?? 0) > 1 && page.outcome === null
+            spacing: 0
+
+            QQC2.Switch {
+                text: qsTr("Rebuild the initrds of all %1 kernels").arg(page.plan.kernelCount)
+                checked: page.plan.allKernels === true
+                enabled: !Backend.applying
+                onToggled: Backend.setPlanAllKernels(checked)
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.gridUnit * 2
+                wrapMode: Text.Wrap
+                opacity: 0.7
+                text: page.plan.allKernels
+                    ? qsTr("Every kernel gets the new splash.")
+                    : qsTr("Off: only %1 gets the new splash. The older kernels keep the current one, so you can boot one of them from \u201cAdvanced options\u201d if the new splash misbehaves.").arg(page.plan.newestKernel)
+            }
+        }
+
         QQC2.CheckBox {
             id: details
             text: qsTr("Show file changes and commands")

@@ -32,6 +32,11 @@ struct Plan {
     QStringList notes;
     QStringList problems; // any problem blocks the apply
     int estimatedSeconds = 0;
+    // For the review's "all kernels" switch; set when the boot splash changes.
+    bool touchesSplash = false;
+    bool allKernels = true;
+    QString newestKernel;
+    int kernelCount = 0;
 
     bool canApply() const { return !stages.isEmpty() && problems.isEmpty(); }
 };
@@ -41,6 +46,9 @@ struct PlanContext {
     const SystemState &state;
     QString rootDir = QStringLiteral("/");
     QString homeDir;
+    // Boot splash changes: rebuild every kernel's initrd, or only the newest one's.
+    // Applies default to the setting, restores to all (INTERVIEW.md, 2026-11-06).
+    bool allKernels = true;
 };
 
 inline const QString defaultGfxmode = QStringLiteral("2560x1440,1920x1080,1280x720,auto");

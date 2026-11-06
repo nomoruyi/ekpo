@@ -93,10 +93,10 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 ### 4.9 Apply
 
-- **Review screen** before every apply: per stage, from → to, what is written and run, time estimate (~40 s for 5 initrds), extra Timeshift cost; checks (files valid, free space, no apt/dpkg running, fallback kept); file diffs and commands collapsed by default (Settings can expand them).
+- **Review screen** before every apply: per stage, from → to, what is written and run, time estimate (~8 s per rebuilt initrd), extra Timeshift cost; checks (files valid, free space, no apt/dpkg running, fallback kept); file diffs and commands collapsed by default (Settings can expand them).
 - **Order:** Plasma splash first (no root), then GRUB and Plymouth in one privileged helper run. All-or-nothing: any failure rolls the whole Mask back and shows the log.
 - **GRUB:** install the theme into a versioned folder `/boot/grub/themes/ekpo-<slug>-<ver>`; write only `/etc/default/grub.d/zz-ekpo.cfg` (`GRUB_THEME`, `GRUB_GFXMODE=2560x1440,1920x1080,1280x720,auto`, timeout keys); run `update-grub`; verify `grub.cfg`. Warn when `zz-ekpo.cfg` overrides a value set in `/etc/default/grub`.
-- **Plymouth:** install into a versioned folder; register and select the `default.plymouth` alternative; set `plymouthd.conf` `Theme=` to match; rebuild **all** initrds with the detected generator; run `update-grub` too (the alternative's `default.grub` slave ends up in `grub.cfg`); verify.
+- **Plymouth:** install into a versioned folder; register and select the `default.plymouth` alternative; set `plymouthd.conf` `Theme=` to match; rebuild the initrds with the detected generator: only the newest kernel's or all, chosen per review with a switch (default from Settings, off = newest only; restores always all, so a restore never leaves an unwanted splash on older kernels; older kernels keep the previous splash as a fallback); run `update-grub` too (the alternative's `default.grub` slave ends up in `grub.cfg`); verify.
 - **Plasma splash:** copy the package, set `ksplashrc` `[KSplash] Theme=`/`Engine=KSplashQML`.
 - Re-applying an edited design installs a new versioned folder, so every history entry stays restorable; folders no kept entry uses are removed after the next successful apply.
 - **After reboot:** the next time the app opens after a boot-stage apply, it asks "Did the new look work?" — *Keep* or *Revert to previous*.

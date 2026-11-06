@@ -277,7 +277,7 @@ Plan planTarget(const PlanContext &context, const Target &wanted, const QString 
     if (wanted.bootSplash && !wanted.bootSplash->sameState(*plan.before.bootSplash)) {
         const BootSplashTarget &splash = *wanted.bootSplash;
         PlannedStage stage{Stage::BootSplash, plan.before.bootSplash->label, splash.label, {}, {}};
-        request.plymouth = Request::Plymouth{splash.mode, splash.theme, splash.daemonTheme};
+        request.plymouth = Request::Plymouth{splash.mode, splash.theme, splash.daemonTheme, context.allKernels};
         if (!splash.build.isEmpty()) {
             addPayload(splash.theme, splash.build, ThemeTarget::Plymouth);
             stage.actions << QStringLiteral("Install a copy as %1%2.").arg(plymouthThemesDir, splash.theme);
@@ -307,15 +307,31 @@ Plan planTarget(const PlanContext &context, const Target &wanted, const QString 
                 initrdBytes += QFileInfo(root + QStringLiteral("/boot/initrd.img-") + k.version).size();
             }
         }
+        const QString newest = context.state.kernels.isEmpty() ? QString() : context.state.kernels.last().version;
+        const bool all = context.allKernels || initrds <= 1;
         const bool dracut = context.state.initramfsGenerator == QLatin1String("dracut");
         if (context.state.initramfsGenerator.isEmpty())
             plan.problems << QStringLiteral("No initramfs generator is installed, so the boot splash can't change.");
-        plan.commands << (dracut ? QStringLiteral("dracut --regenerate-all --force") : QStringLiteral("update-initramfs -u -k all"));
-        stage.actions << QStringLiteral("Rebuild the initrds of all %1 kernels (about %2 s).").arg(initrds).arg(initrds * secondsPerInitrd);
-        plan.estimatedSeconds += int(initrds) * secondsPerInitrd;
+        if (all) {
+            plan.commands << (dracut ? QStringLiteral("dracut --regenerate-all --force") : QStringLiteral("update-initramfs -u -k all"));
+            stage.actions << QStringLiteral("Rebuild the initrds of all %1 kernels (about %2 s).").arg(initrds).arg(initrds * secondsPerInitrd);
+            plan.estimatedSeconds += int(initrds) * secondsPerInitrd;
+        } else {
+            plan.commands << (dracut ? QStringLiteral("dracut --force /boot/initrd.img-%1 %1").arg(newest) : QStringLiteral("update-initramfs -u -k %1").arg(newest));
+            stage.actions << QStringLiteral("Rebuild the initrd of the newest kernel, %1 (about %2 s). The other %3 keep the current splash as a fallback.")
+                                 .arg(newest).arg(secondsPerInitrd).arg(initrds - 1);
+            plan.estimatedSeconds += secondsPerInitrd;
+            initrdBytes = QFileInfo(root + QStringLiteral("/boot/initrd.img-") + newest).size();
+        }
         if (QFileInfo::exists(root + QStringLiteral("/etc/timeshift/timeshift.json")))
-            plan.notes << QStringLiteral("Timeshift snapshots keep the old initrds (about %1 MB) until they rotate.").arg(initrdBytes >> 20);
+            plan.notes << QStringLiteral("Timeshift snapshots keep the replaced initrd%1 (about %2 MB) until they rotate.").arg(all ? QStringLiteral("s") : QString()).arg(initrdBytes >> 20);
+        plan.touchesSplash = true;
+        plan.allKernels = all;
+        plan.newestKernel = newest;
+        plan.kernelCount = int(initrds);
+        request.plymouth->allKernels = all;
         plan.target.bootSplash = splash;
+        plan.target.bootSplash->allKernels = all;
         plan.stages << stage;
     }
 

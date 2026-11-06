@@ -28,6 +28,7 @@ struct Request {
         QString alternativeMode; // "manual" selects theme; "auto" lets priorities decide
         QString theme; // installed or payload id; required for manual, empty for auto
         QString daemonTheme; // plymouthd.conf [Daemon] Theme=
+        bool allKernels = true; // rebuild every initrd, or only the newest kernel's ("initrds": "newest")
     };
 
     Operation operation = Operation::Apply;

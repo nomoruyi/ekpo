@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Fake dracut --regenerate-all --force."""
+"""Fake dracut --regenerate-all --force, or dracut --force <image> <version>."""
 import sys
 
 from _stub import build_initrds, maybe_fail
 
 maybe_fail("dracut")
-if sys.argv[1:] != ["--regenerate-all", "--force"]:
-    sys.exit("dracut: expected --regenerate-all --force")
-build_initrds()
+args = sys.argv[1:]
+if args == ["--regenerate-all", "--force"]:
+    build_initrds()
+elif len(args) == 3 and args[0] == "--force" and args[1] == f"/boot/initrd.img-{args[2]}":
+    build_initrds(args[2])
+else:
+    sys.exit("dracut: expected --regenerate-all --force or --force /boot/initrd.img-<v> <v>")

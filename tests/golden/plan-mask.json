@@ -94,6 +94,7 @@
         "bootSplash": {
             "build": "ad5bc0fd24c0aee93515fc60",
             "daemonTheme": "ekpo-windozexp-v1",
+            "initrds": "all",
             "label": "WindozeXP",
             "mode": "manual",
             "theme": "ekpo-windozexp-v1"
