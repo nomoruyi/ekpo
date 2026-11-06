@@ -1,0 +1,9 @@
+{
+    "stage": "bootMenu",
+    "name": "crossgrub",
+    "sourcePath": "/boot/grub/themes/crossgrub",
+    "installedId": "crossgrub",
+    "importedAt": "2026-11-06T09:00:00Z",
+    "verdict": "works",
+    "report": ["No fonts of its own that GRUB loads; the menu uses GRUB's built-in font."]
+}

@@ -47,6 +47,7 @@ Always `source dev/env.sh` first, in the same shell command (but not for git: it
 - Lint QML: `/usr/lib/qt6/bin/qmllint -I build/src/app src/app/qml/*.qml` (plain `qmllint` resolves to Qt 5 here)
 - Screenshot: `source dev/env.sh && QT_QPA_PLATFORM=offscreen EKPO_SCREENSHOT=build/screenshots/main.png build/src/app/ekpo`. `EKPO_SECTION=bootSplash` opens another page; `EKPO_SYSTEM_ROOT`/`EKPO_SYSTEM_HOME` (honoured only with `EKPO_DEV`) read a fake system root instead of `/`. The smoke tests write `build/screenshots/{main,bootMenu,bootSplash,plasmaSplash}.png` from the reference fixture and `tests/fixtures/library`.
 
+- Sandbox: `dev/sandbox.sh [--reset]` runs the app on a writable copy of the reference system in `.dev/sandbox`; applies go through `ekpo-helper-test` and `tests/stubs/`, so they can be clicked through without touching the real system. `EKPO_REVIEW_IMPORT=<import id>` (dev only) opens that import's review at start, for screenshots.
 - Update golden files: `source dev/env.sh && EKPO_UPDATE_GOLDEN=1 ctest --test-dir build -R <name>`, then review `git diff tests/golden`
 
 Any Qt or QML warning fails a test (`QT_FATAL_WARNINGS` for the app, `QTest::failOnWarning()` via `tests/testmain.h` for unit tests); test binaries never write core dumps. `tests/fixtures/roots/reference/` mirrors this machine's boot-look files on 2026-11-05 (read-only copies; third-party theme contents replaced by placeholders); refresh it after system changes that the probe should see.

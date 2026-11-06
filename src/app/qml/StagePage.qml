@@ -13,6 +13,8 @@ Kirigami.ScrollablePage {
 
     required property string stage
 
+    signal review
+
     readonly property var imports: Backend.imports.filter(t => t.stage === stage)
     readonly property var installed: Backend.installed.filter(t => t.stage === stage)
     readonly property var verdicts: ({
@@ -106,6 +108,15 @@ Kirigami.ScrollablePage {
                             level: page.verdicts[themeCard.modelData.verdict].level
                             text: page.verdicts[themeCard.modelData.verdict].text
                                 + " · " + (themeCard.modelData.installedId ? qsTr("uses the installed copy") : qsTr("installs as a copy"))
+                        }
+                    }
+                    QQC2.Button {
+                        enabled: themeCard.modelData.verdict !== "broken" && !Backend.applying
+                        icon.name: "dialog-ok-apply"
+                        text: qsTr("Apply…")
+                        onClicked: {
+                            Backend.planApplyImport(themeCard.modelData.id);
+                            page.review();
                         }
                     }
                     QQC2.Button {

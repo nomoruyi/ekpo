@@ -25,8 +25,13 @@ int main(int argc, char *argv[])
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
 
     QQmlApplicationEngine engine;
+    // Dev-only start options for screenshots.
+    QVariantMap start;
     if (const QString section = qEnvironmentVariable("EKPO_SECTION"); !section.isEmpty())
-        engine.setInitialProperties({{QStringLiteral("startSection"), section}});
+        start.insert(QStringLiteral("startSection"), section);
+    if (qEnvironmentVariableIsSet("EKPO_DEV"))
+        start.insert(QStringLiteral("startReview"), qEnvironmentVariable("EKPO_REVIEW_IMPORT"));
+    engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");
     if (engine.rootObjects().isEmpty())
         return 1;

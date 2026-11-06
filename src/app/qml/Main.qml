@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import Ekpo
 
 Kirigami.ApplicationWindow {
     id: root
@@ -29,28 +30,45 @@ Kirigami.ApplicationWindow {
     ]
     readonly property var allSections: mainSections.concat(bottomSections)
     property string startSection: "overview" // EKPO_SECTION, for screenshots
+    property string startReview: "" // EKPO_REVIEW_IMPORT (dev only): open the review of this import
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
 
     function showSection(name) {
         currentSection = allSections.find(s => s.name === name);
     }
     function pageFor(name) {
-        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage })[name] ?? placeholderPage;
+        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, history: historyPage })[name] ?? placeholderPage;
+    }
+    // The review takes over the window until it is closed (SPEC.md §4.1).
+    // (Not a Kirigami layer: pushing any page onto layers warns in Kirigami 6.24.)
+    function showReview() {
+        reviewPage.reset();
+        if (pageStack.currentItem !== reviewPage)
+            pageStack.replace(reviewPage);
     }
 
     onCurrentSectionChanged: {
         const page = pageFor(currentSection.name);
-        if (pageStack.depth > 0 && pageStack.currentItem !== page)
+        if (pageStack.depth > 0 && pageStack.currentItem !== page && !Backend.applying)
             pageStack.replace(page);
     }
     // Pages are kept as items: pushing components makes Kirigami warn, and the
     // pages keep their state (e.g. the last import message) between visits.
     pageStack.initialPage: pageFor(currentSection.name)
+    Timer {
+        running: root.startReview !== ""
+        interval: 300
+        onTriggered: {
+            Backend.planApplyImport(root.startReview);
+            root.showReview();
+        }
+    }
 
     globalDrawer: Kirigami.OverlayDrawer {
         edge: Qt.LeftEdge
         modal: false
         handleVisible: false
+        enabled: !Backend.applying
         width: Kirigami.Units.gridUnit * 12
 
         leftPadding: 0
@@ -93,20 +111,33 @@ Kirigami.ApplicationWindow {
         visible: false
         onOpenStage: stage => root.showSection(stage)
     }
+    HistoryPage {
+        id: historyPage
+        visible: false
+        onReview: root.showReview()
+    }
+    ReviewPage {
+        id: reviewPage
+        visible: false
+        onDone: root.pageStack.replace(root.pageFor(root.currentSection.name))
+    }
     StagePage {
         id: bootMenuPage
+        onReview: root.showReview()
         visible: false
         stage: "bootMenu"
         title: qsTr("Boot Menu")
     }
     StagePage {
         id: bootSplashPage
+        onReview: root.showReview()
         visible: false
         stage: "bootSplash"
         title: qsTr("Boot Splash")
     }
     StagePage {
         id: plasmaSplashPage
+        onReview: root.showReview()
         visible: false
         stage: "plasmaSplash"
         title: qsTr("Plasma Splash")

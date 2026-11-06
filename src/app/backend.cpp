@@ -125,6 +125,23 @@ Backend::Backend(QObject *parent)
         m_homeDir = qEnvironmentVariable("EKPO_SYSTEM_HOME", m_homeDir);
     }
     m_library = Library::open(Library::defaultPath(), m_libraryError);
+
+    // In the sandbox the test helper changes the fake root; otherwise pkexec runs the real one.
+    m_launcher = systemHelperLauncher();
+    if (m_rootDir != QLatin1String("/")) {
+        m_launcher = HelperLauncher{QStringLiteral(EKPO_HELPER_TEST_PATH), {}};
+        m_launcher.environment.insert(QStringLiteral("EKPO_HELPER_ROOT"), m_rootDir);
+        m_launcher.environment.insert(QStringLiteral("EKPO_HELPER_BIN"), QStringLiteral(EKPO_STUBS_DIR));
+    }
+    if (m_library) {
+        m_executor = std::make_unique<Executor>(*m_library, m_homeDir, m_launcher);
+        connect(m_executor.get(), &Executor::progress, this, &Backend::applyProgress);
+        connect(m_executor.get(), &Executor::finished, this, [this](bool ok, const QString &error, int number) {
+            Q_EMIT applyingChanged();
+            refresh();
+            Q_EMIT applyFinished(ok, error, number);
+        });
+    }
     refresh();
 }
 
@@ -151,6 +168,26 @@ void Backend::refresh()
         for (const ImportedTheme &t : imported)
             m_imports << importToMap(t);
         m_system[QStringLiteral("errors")] = errors + loadErrors;
+    }
+
+    m_history.clear();
+    if (m_library) {
+        QStringList historyErrors;
+        for (const HistoryEntry &e : m_library->history(historyErrors)) {
+            const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
+            QVariantList stages;
+            if (target.plasmaSplash)
+                stages << QVariantMap{{QStringLiteral("stage"), stageKey(Stage::PlasmaSplash)}, {QStringLiteral("label"), target.plasmaSplash->label}};
+            if (target.bootMenu)
+                stages << QVariantMap{{QStringLiteral("stage"), stageKey(Stage::BootMenu)}, {QStringLiteral("label"), target.bootMenu->original ? tr("Original") : target.bootMenu->label}};
+            if (target.bootSplash)
+                stages << QVariantMap{{QStringLiteral("stage"), stageKey(Stage::BootSplash)}, {QStringLiteral("label"), target.bootSplash->label}};
+            m_history << QVariantMap{{QStringLiteral("number"), e.number},
+                                     {QStringLiteral("title"), e.title},
+                                     {QStringLiteral("createdAt"), e.createdAt.toLocalTime()},
+                                     {QStringLiteral("stages"), stages},
+                                     {QStringLiteral("restoreFile"), QStringLiteral("%1/history/%2/RESTORE.txt").arg(m_library->path()).arg(e.number)}};
+        }
     }
 
     // Installed folders whose themes aren't in the library yet.
@@ -195,4 +232,78 @@ QString Backend::removeImport(const QString &id)
         return error.isEmpty() ? m_libraryError : error;
     refresh();
     return {};
+}
+
+bool Backend::originalAvailable() const
+{
+    return m_library && !originalTarget(*m_library).isEmpty();
+}
+
+void Backend::setPlan(const Plan &plan)
+{
+    m_plan = plan;
+    QVariantList stages;
+    for (const PlannedStage &stage : plan.stages) {
+        QVariantList diffs;
+        for (const FileDiff &d : stage.diffs)
+            diffs << QVariantMap{{QStringLiteral("path"), d.path}, {QStringLiteral("before"), d.before}, {QStringLiteral("after"), d.after}};
+        stages << QVariantMap{{QStringLiteral("stage"), stageKey(stage.stage)},
+                              {QStringLiteral("from"), stage.from},
+                              {QStringLiteral("to"), stage.to},
+                              {QStringLiteral("actions"), stage.actions},
+                              {QStringLiteral("diffs"), diffs}};
+    }
+    m_planMap = {
+        {QStringLiteral("title"), plan.title},
+        {QStringLiteral("canApply"), plan.canApply()},
+        {QStringLiteral("needsPassword"), bool(plan.request)},
+        {QStringLiteral("stages"), stages},
+        {QStringLiteral("commands"), plan.commands},
+        {QStringLiteral("notes"), plan.notes},
+        {QStringLiteral("problems"), plan.stages.isEmpty() && plan.problems.isEmpty() ? QStringList{tr("This is already the current look.")} : plan.problems},
+        {QStringLiteral("estimatedSeconds"), plan.estimatedSeconds},
+    };
+    Q_EMIT planChanged();
+}
+
+void Backend::planApplyImport(const QString &id)
+{
+    if (!m_library)
+        return;
+    refresh();
+    QStringList errors;
+    for (const ImportedTheme &t : m_library->imports(errors)) {
+        if (t.id == id)
+            return setPlan(planMask(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, Mask{{}, t.name, {{t.stage, Slot{Slot::Kind::Import, t.id}}}}));
+    }
+}
+
+void Backend::planRestoreEntry(int number)
+{
+    if (!m_library)
+        return;
+    refresh();
+    QStringList errors;
+    for (const HistoryEntry &e : m_library->history(errors)) {
+        if (e.number == number) {
+            const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
+            return setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, target, tr("Restore #%1: %2").arg(number).arg(e.title)));
+        }
+    }
+}
+
+void Backend::planRestoreOriginal()
+{
+    if (!m_library)
+        return;
+    refresh();
+    setPlan(planTarget(PlanContext{*m_library, m_state, m_rootDir, m_homeDir}, originalTarget(*m_library), tr("Restore Original")));
+}
+
+void Backend::applyPlan()
+{
+    if (!m_executor || m_executor->isRunning())
+        return;
+    m_executor->apply(m_plan);
+    Q_EMIT applyingChanged();
 }
