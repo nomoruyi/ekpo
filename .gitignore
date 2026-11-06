@@ -1,4 +1,48 @@
+# Build output (build/, build-release/, ...) and packages
 /build/
+/build-*/
+*.deb
+CMakeUserPresets.json
+compile_commands.json
+# from an accidental in-source configure or ctest run
+/CMakeCache.txt
+/CMakeFiles/
+/Testing/
+
+# Dev sandbox, test homes and scratch files (dev/env.sh)
 /.dev/
+
+# Python (tests/stubs)
 __pycache__/
-/build-release/
+*.py[cod]
+
+# Qt and Qt Creator
+.qmlls.ini
+*.qmlc
+*.jsc
+CMakeLists.txt.user*
+.qtc_clangd/
+
+# Editors and IDEs
+.idea/
+*.iml
+.vscode/
+.cache/
+*.swp
+*.swo
+*~
+*.kate-swp
+.kateproject.d/
+
+# Desktop and OS files
+.directory
+.Trash-*/
+.DS_Store
+
+# Crash dumps
+/core
+core.[0-9]*
+vgcore.*
+
+# Claude Code's per-user settings
+.claude/settings.local.json
