@@ -198,3 +198,4 @@ Correction *(Claude)*: round 8 Q1's per-resolution GRUB font sizes aren't possib
 
 **Ekpo.** The owner's Nigerian colleague confirmed "Ekpo" is used for "mask". *(Claude: Melzian (1937) lists Ekpo as a Bini masquerade society; no Ubuntu package or command is named ekpo.)* Renamed everywhere except this log and `notes/`: app and binary `ekpo`, QML module `Ekpo`, library `~/.local/share/ekpo/`, IDs `io.github.nomoruyi.ekpo.*`, installed folders `ekpo-<slug>`, GRUB drop-in `zz-ekpo.cfg`, journal `/var/lib/ekpo/`, env vars `EKPO_*`. Bundles stay "Personas" in the UI (round 7).
 - 2026-11-06: bundles are called **Masks** (was "Personas"); library folder `masks/`.
+- 2026-11-06: **logo** is design B (Ankara print) of five drafts in `design/logo/`: an ivory drawing of the Queen Idia pendant mask on a red and yellow wax-print pattern. `make_logos.py` regenerates all drafts and writes the chosen one to `packaging/io.github.nomoruyi.ekpo.svg`, which is also the window icon.

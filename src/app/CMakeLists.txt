@@ -13,4 +13,6 @@ target_link_libraries(ekpo PRIVATE ekpo_core Qt6::Gui Qt6::Quick Qt6::QuickContr
 # The import scan only matters for static Qt builds; with the distro's shared Qt it
 # just warns about plugin targets the -dev packages don't ship.
 set_target_properties(ekpo PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
+qt_add_resources(ekpo "icon" PREFIX "/" BASE ${CMAKE_SOURCE_DIR}/packaging
+    FILES ${CMAKE_SOURCE_DIR}/packaging/io.github.nomoruyi.ekpo.svg)
 install(TARGETS ekpo)

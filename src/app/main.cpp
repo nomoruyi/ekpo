@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -18,6 +19,7 @@ int main(int argc, char *argv[])
     app.setApplicationDisplayName(QStringLiteral("Ekpo"));
     app.setApplicationVersion(QStringLiteral(PROJECT_VERSION));
     app.setDesktopFileName(QStringLiteral("io.github.nomoruyi.ekpo"));
+    app.setWindowIcon(QIcon(QStringLiteral(":/io.github.nomoruyi.ekpo.svg")));
 
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
