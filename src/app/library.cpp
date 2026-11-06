@@ -116,7 +116,7 @@ std::optional<Library> Library::open(const QString &path, QString &error)
     }
     library.m_settings = Settings::fromJson(manifest->value(QStringLiteral("settings")).toObject());
 
-    for (const QString &sub : {QStringLiteral("imports"), QStringLiteral("personas"), QStringLiteral("history")}) {
+    for (const QString &sub : {QStringLiteral("imports"), QStringLiteral("masks"), QStringLiteral("history")}) {
         if (!dir.mkpath(sub)) {
             error = QStringLiteral("Can't create %1").arg(dir.filePath(sub));
             return std::nullopt;
@@ -205,43 +205,43 @@ bool Library::removeImport(const QString &id, QString &error, QString *trashedPa
     return true;
 }
 
-QList<Persona> Library::personas(QStringList &errors) const
+QList<Mask> Library::masks(QStringList &errors) const
 {
-    QList<Persona> result;
-    const QDir dir(m_path + QStringLiteral("/personas"));
+    QList<Mask> result;
+    const QDir dir(m_path + QStringLiteral("/masks"));
     for (const QString &file : dir.entryList({QStringLiteral("*.json")}, QDir::Files)) {
         QString error;
         const auto json = readJson(dir.filePath(file), error);
-        const auto persona = json ? Persona::fromJson(file.chopped(5), *json) : std::nullopt;
-        if (persona)
-            result.append(*persona);
+        const auto mask = json ? Mask::fromJson(file.chopped(5), *json) : std::nullopt;
+        if (mask)
+            result.append(*mask);
         else
-            errors << (error.isEmpty() ? QStringLiteral("%1: not a valid Persona").arg(dir.filePath(file)) : error);
+            errors << (error.isEmpty() ? QStringLiteral("%1: not a valid Mask").arg(dir.filePath(file)) : error);
     }
-    std::sort(result.begin(), result.end(), [](const Persona &a, const Persona &b) {
+    std::sort(result.begin(), result.end(), [](const Mask &a, const Mask &b) {
         return QString::localeAwareCompare(a.name, b.name) < 0;
     });
     return result;
 }
 
-bool Library::savePersona(Persona &persona, QString &error)
+bool Library::saveMask(Mask &mask, QString &error)
 {
-    if (persona.name.trimmed().isEmpty()) {
-        error = QStringLiteral("A Persona needs a name.");
+    if (mask.name.trimmed().isEmpty()) {
+        error = QStringLiteral("A Mask needs a name.");
         return false;
     }
-    const QString id = persona.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : persona.id;
-    if (!writeJson(m_path + QStringLiteral("/personas/") + id + QStringLiteral(".json"), persona.toJson(), error))
+    const QString id = mask.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : mask.id;
+    if (!writeJson(m_path + QStringLiteral("/masks/") + id + QStringLiteral(".json"), mask.toJson(), error))
         return false;
-    persona.id = id;
+    mask.id = id;
     return true;
 }
 
-bool Library::removePersona(const QString &id, QString &error, QString *trashedPath)
+bool Library::removeMask(const QString &id, QString &error, QString *trashedPath)
 {
     QString inTrash;
-    if (!QFile::moveToTrash(m_path + QStringLiteral("/personas/") + id + QStringLiteral(".json"), &inTrash)) {
-        error = QStringLiteral("Can't move Persona %1 to the trash.").arg(id);
+    if (!QFile::moveToTrash(m_path + QStringLiteral("/masks/") + id + QStringLiteral(".json"), &inTrash)) {
+        error = QStringLiteral("Can't move Mask %1 to the trash.").arg(id);
         return false;
     }
     if (trashedPath)

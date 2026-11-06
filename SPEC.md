@@ -25,17 +25,17 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ## 3. Concepts
 
 - **Design:** a named profile for one stage, made in Ekpo's editor. Editable; every save is a restorable version.
-- **Imported theme:** a third-party theme copied into the library read-only. It can be previewed, applied and put into Personas, not edited (hand edits happen outside the app; *Re-import* pulls them in).
-- **Persona** (a bundle): one slot per stage, each holding a design, an imported theme, or *Leave as is*. Slots reference items; nothing is copied. A single design applied on its own is a one-slot Persona.
+- **Imported theme:** a third-party theme copied into the library read-only. It can be previewed, applied and put into Masks, not edited (hand edits happen outside the app; *Re-import* pulls them in).
+- **Mask** (a bundle): one slot per stage, each holding a design, an imported theme, or *Leave as is*. Slots reference items; nothing is copied. A single design applied on its own is a one-slot Mask.
 - **Asset:** an image, video, spinner or font stored once in the library and referenced by designs. Shared elements (e.g. a logo or palette) are *linked*: editing them updates every design that uses them; applied looks change only when re-applied ("update available"). A design can unlink an element.
 - **History entry:** one apply (or restore) of the system state, restorable. **Original** is a pinned entry: each stage's state right before Ekpo first changed it.
-- **Library:** plain files in `~/.local/share/ekpo/` (location configurable). Holds designs, versions, imports, assets, Personas and the history.
+- **Library:** plain files in `~/.local/share/ekpo/` (location configurable). Holds designs, versions, imports, assets, Masks and the history.
 
 ## 4. Functional requirements
 
 ### 4.1 Main window and navigation
 
-- Sidebar: Overview · Boot Menu · Boot Splash · Plasma Splash · Personas · Assets · History; Settings and About at the bottom.
+- Sidebar: Overview · Boot Menu · Boot Splash · Plasma Splash · Masks · Assets · History; Settings and About at the bottom.
 - **Overview** (start page): three stage cards in boot order with thumbnail, current theme, status ("as applied", "changed outside Ekpo", "N of 5 kernels outdated"), the GRUB timeout, the detected toolchain and whether `splash` is on the kernel command line.
 - **Stage pages:** grid of designs and imports with Edit (designs only), Preview, Apply, Duplicate, Delete; New design and Import.
 - Apply, restore and first run take over the window. Wireframes: `notes/wireframes-round8.md`.
@@ -86,15 +86,15 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 - `Splash.qml` imports only QtQuick (and QtMultimedia for video); no Kirigami or Plasma modules. Fonts are bundled.
 - Preview in the editor, plus **Run real splash** (`ksplashqml --test --window <package>`).
 
-### 4.8 Personas
+### 4.8 Masks
 
 - One slot per stage: design, imported theme, or *Leave as is*.
-- Missing references are shown; items used by a Persona, history entry or saved version can't be deleted.
+- Missing references are shown; items used by a Mask, history entry or saved version can't be deleted.
 
 ### 4.9 Apply
 
 - **Review screen** before every apply: per stage, from → to, what is written and run, time estimate (~40 s for 5 initrds), extra Timeshift cost; checks (files valid, free space, no apt/dpkg running, fallback kept); file diffs and commands collapsed by default (Settings can expand them).
-- **Order:** Plasma splash first (no root), then GRUB and Plymouth in one privileged helper run. All-or-nothing: any failure rolls the whole Persona back and shows the log.
+- **Order:** Plasma splash first (no root), then GRUB and Plymouth in one privileged helper run. All-or-nothing: any failure rolls the whole Mask back and shows the log.
 - **GRUB:** install the theme into a versioned folder `/boot/grub/themes/ekpo-<slug>-<ver>`; write only `/etc/default/grub.d/zz-ekpo.cfg` (`GRUB_THEME`, `GRUB_GFXMODE=2560x1440,1920x1080,1280x720,auto`, timeout keys); run `update-grub`; verify `grub.cfg`. Warn when `zz-ekpo.cfg` overrides a value set in `/etc/default/grub`.
 - **Plymouth:** install into a versioned folder; register and select the `default.plymouth` alternative; set `plymouthd.conf` `Theme=` to match; rebuild **all** initrds with the detected generator; run `update-grub` too (the alternative's `default.grub` slave ends up in `grub.cfg`); verify.
 - **Plasma splash:** copy the package, set `ksplashrc` `[KSplash] Theme=`/`Engine=KSplashQML`.
@@ -119,14 +119,14 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ### 4.13 Library, export, settings
 
 - Deleting moves items to the desktop trash with an inline Undo.
-- Export a design or Persona as plain theme packages (GRUB/Plymouth `.tar.gz`, look-and-feel package). Export the whole library as one archive. Exports warn when an asset's licence forbids sharing.
+- Export a design or Mask as plain theme packages (GRUB/Plymouth `.tar.gz`, look-and-feel package). Export the whole library as one archive. Exports warn when an asset's licence forbids sharing.
 - Generated packages carry author "nomoruyi" and licence MIT, editable per design; fonts and imported art keep their own licences.
 - Library files carry a format version; newer versions migrate older ones.
 - **Settings:** library location, history size, technical details expanded or collapsed, default preview resolution. Nothing else until a real need appears.
 
 ### 4.14 Command line
 
-`ekpo status | apply <persona> | restore <entry|original>`, with the same review and a y/N prompt. Designing stays GUI-only.
+`ekpo status | apply <mask> | restore <entry|original>`, with the same review and a y/N prompt. Designing stays GUI-only.
 
 ## 5. Privileges and installation
 
@@ -142,10 +142,10 @@ C++ with Qt 6 Quick + Kirigami, CMake, QtTest; a small C++ root helper. Generato
 
 | Milestone | Content |
 |---|---|
-| **M1: manage** | Library, import with report, Personas, apply with review, history and restore (incl. Original), after-reboot check, outside-change detection, timeout setting, first start and intro dialog, CLI, `.deb` with helper and polkit policy. No designers. |
+| **M1: manage** | Library, import with report, Masks, apply with review, history and restore (incl. Original), after-reboot check, outside-change detection, timeout setting, first start and intro dialog, CLI, `.deb` with helper and polkit policy. No designers. |
 | **M2: splash designers** | Asset library (fonts, provenance), editor shell, Plymouth two-step designer (incl. video → frames, size meter, hide messages), Plasma splash designer (MP4 video, Run real splash), starters, linked shared elements. |
 | **M3: GRUB designer** | Boot Menu designer incl. `.pf2` build, adaptive entry width, icon set, countdown. |
-| **v1.0** | M1–M3 plus design/Persona/library export. |
+| **v1.0** | M1–M3 plus design/Mask/library export. |
 
 Later, not scheduled: SDDM login screen; pixel-exact GRUB preview from a rescue ISO in QEMU; real Plymouth preview via `plymouth-x11`.
 

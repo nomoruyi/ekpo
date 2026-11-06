@@ -38,7 +38,7 @@ Then build in small, reviewable steps.
 
 ## Commands
 
-Always `source dev/env.sh` first, in the same shell command: it points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` and sets `EKPO_DEV`, which turns off core dumps (a crash would otherwise make systemd-coredump and DrKonqi write outside the repo).
+Always `source dev/env.sh` first, in the same shell command (but not for git: it hides `~/.gitconfig`): it points `HOME`, `XDG_*_HOME` and `TMPDIR` into `.dev/` and sets `EKPO_DEV`, which turns off core dumps (a crash would otherwise make systemd-coredump and DrKonqi write outside the repo).
 
 - Configure: `source dev/env.sh && cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug`
 - Build: `source dev/env.sh && cmake --build build`

@@ -6,7 +6,7 @@
 
 #include <optional>
 
-// The plain-file library (ARCHITECTURE.md §5): library.json, imports/, personas/,
+// The plain-file library (ARCHITECTURE.md §5): library.json, imports/, masks/,
 // history/. Assets, designs and builds join it in later steps.
 class Library
 {
@@ -30,9 +30,9 @@ public:
     bool removeImport(const QString &id, QString &error, QString *trashedPath = nullptr);
     QString importFilesPath(const QString &id) const;
 
-    QList<Persona> personas(QStringList &errors) const; // sorted by name; unreadable files go to errors
-    bool savePersona(Persona &persona, QString &error); // assigns the id on first save
-    bool removePersona(const QString &id, QString &error, QString *trashedPath = nullptr);
+    QList<Mask> masks(QStringList &errors) const; // sorted by name; unreadable files go to errors
+    bool saveMask(Mask &mask, QString &error); // assigns the id on first save
+    bool removeMask(const QString &id, QString &error, QString *trashedPath = nullptr);
 
     QList<HistoryEntry> history(QStringList &errors) const; // newest first
     bool addHistoryEntry(HistoryEntry &entry, QString &error); // numbers it, keeps the newest historySize

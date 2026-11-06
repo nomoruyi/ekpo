@@ -15,11 +15,11 @@ private Q_SLOTS:
     void createsAndReopens();
     void refusesForeignFolder();
     void refusesNewerFormat();
-    void personaRoundTrip();
-    void unreadablePersonaIsReported();
+    void maskRoundTrip();
+    void unreadableMaskIsReported();
     void historyKeepsNewest();
     void originalIsCapturedOnce();
-    void removedPersonaGoesToTrash();
+    void removedMaskGoesToTrash();
 
 private:
     static Library openFresh(const QTemporaryDir &tmp)
@@ -73,37 +73,37 @@ void TestLibrary::refusesNewerFormat()
     QVERIFY(error.contains(QLatin1String("newer")));
 }
 
-void TestLibrary::personaRoundTrip()
+void TestLibrary::maskRoundTrip()
 {
     QTemporaryDir tmp;
     Library library = openFresh(tmp);
-    Persona persona{{}, QStringLiteral("Night"), {{Stage::BootMenu, Slot{Slot::Kind::Import, QStringLiteral("abc")}}, {Stage::PlasmaSplash, Slot{}}}};
+    Mask mask{{}, QStringLiteral("Night"), {{Stage::BootMenu, Slot{Slot::Kind::Import, QStringLiteral("abc")}}, {Stage::PlasmaSplash, Slot{}}}};
     QString error;
-    QVERIFY(library.savePersona(persona, error));
-    QVERIFY(!persona.id.isEmpty());
+    QVERIFY(library.saveMask(mask, error));
+    QVERIFY(!mask.id.isEmpty());
 
     QStringList errors;
-    const QList<Persona> loaded = library.personas(errors);
+    const QList<Mask> loaded = library.masks(errors);
     QVERIFY(errors.isEmpty());
     QCOMPARE(loaded.size(), 1);
-    QCOMPARE(loaded[0].id, persona.id);
+    QCOMPARE(loaded[0].id, mask.id);
     QCOMPARE(loaded[0].name, QStringLiteral("Night"));
     QCOMPARE(loaded[0].stageSlots.value(Stage::BootMenu).ref, QStringLiteral("abc"));
     QVERIFY(loaded[0].stageSlots.value(Stage::PlasmaSplash).kind == Slot::Kind::LeaveAsIs);
     QVERIFY(!loaded[0].stageSlots.contains(Stage::BootSplash));
 
-    Persona unnamed;
-    QVERIFY(!library.savePersona(unnamed, error));
+    Mask unnamed;
+    QVERIFY(!library.saveMask(unnamed, error));
 }
 
-void TestLibrary::unreadablePersonaIsReported()
+void TestLibrary::unreadableMaskIsReported()
 {
     QTemporaryDir tmp;
     Library library = openFresh(tmp);
-    writeFile(library.path() + QStringLiteral("/personas/broken.json"), "{ not json");
-    writeFile(library.path() + QStringLiteral("/personas/badslot.json"), R"({"name": "X", "slots": {"bootMenu": {"kind": "import"}}})");
+    writeFile(library.path() + QStringLiteral("/masks/broken.json"), "{ not json");
+    writeFile(library.path() + QStringLiteral("/masks/badslot.json"), R"({"name": "X", "slots": {"bootMenu": {"kind": "import"}}})");
     QStringList errors;
-    QVERIFY(library.personas(errors).isEmpty());
+    QVERIFY(library.masks(errors).isEmpty());
     QCOMPARE(errors.size(), 2);
 }
 
@@ -146,7 +146,7 @@ void TestLibrary::originalIsCapturedOnce()
     QVERIFY(!library.original(Stage::PlasmaSplash));
 }
 
-void TestLibrary::removedPersonaGoesToTrash()
+void TestLibrary::removedMaskGoesToTrash()
 {
     // The trash must be the one inside the repo (dev/env.sh, tests/CMakeLists.txt).
     const QString trash = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/Trash");
@@ -154,15 +154,15 @@ void TestLibrary::removedPersonaGoesToTrash()
 
     QTemporaryDir tmp;
     Library library = openFresh(tmp);
-    Persona persona{{}, QStringLiteral("Gone"), {}};
+    Mask mask{{}, QStringLiteral("Gone"), {}};
     QString error;
-    QVERIFY(library.savePersona(persona, error));
+    QVERIFY(library.saveMask(mask, error));
     QString trashed;
-    QVERIFY2(library.removePersona(persona.id, error, &trashed), qPrintable(error));
+    QVERIFY2(library.removeMask(mask.id, error, &trashed), qPrintable(error));
     QVERIFY(trashed.startsWith(trash));
     QVERIFY(QFile::exists(trashed));
     QStringList errors;
-    QVERIFY(library.personas(errors).isEmpty());
+    QVERIFY(library.masks(errors).isEmpty());
     QFile::remove(trashed);
     QFile::remove(trash + QStringLiteral("/info/") + QFileInfo(trashed).fileName() + QStringLiteral(".trashinfo"));
 }

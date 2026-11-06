@@ -19,7 +19,7 @@ Kirigami.ApplicationWindow {
         { name: "bootMenu", title: qsTr("Boot Menu"), icon: "view-list-details" },
         { name: "bootSplash", title: qsTr("Boot Splash"), icon: "preferences-system-startup" },
         { name: "plasmaSplash", title: qsTr("Plasma Splash"), icon: "plasma" },
-        { name: "personas", title: qsTr("Personas"), icon: "user-identity" },
+        { name: "masks", title: qsTr("Masks"), icon: "user-identity" },
         { name: "assets", title: qsTr("Assets"), icon: "folder-pictures" },
         { name: "history", title: qsTr("History"), icon: "view-history" }
     ]

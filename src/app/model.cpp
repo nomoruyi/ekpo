@@ -89,7 +89,7 @@ std::optional<Slot> Slot::fromJson(const QJsonObject &json)
     return std::nullopt;
 }
 
-QJsonObject Persona::toJson() const
+QJsonObject Mask::toJson() const
 {
     QJsonObject slotsJson;
     for (auto it = stageSlots.cbegin(); it != stageSlots.cend(); ++it)
@@ -97,9 +97,9 @@ QJsonObject Persona::toJson() const
     return {{QStringLiteral("name"), name}, {QStringLiteral("slots"), slotsJson}};
 }
 
-std::optional<Persona> Persona::fromJson(const QString &id, const QJsonObject &json)
+std::optional<Mask> Mask::fromJson(const QString &id, const QJsonObject &json)
 {
-    Persona p{id, json.value(QStringLiteral("name")).toString(), {}};
+    Mask p{id, json.value(QStringLiteral("name")).toString(), {}};
     const QJsonObject slotsJson = json.value(QStringLiteral("slots")).toObject();
     for (auto it = slotsJson.constBegin(); it != slotsJson.constEnd(); ++it) {
         const auto stage = stageFromKey(it.key());

@@ -41,7 +41,7 @@ struct ImportedTheme {
 
 QString verdictKey(ImportedTheme::Verdict verdict); // "works", "warnings", "repaired", "broken"
 
-// One slot of a Persona (SPEC.md §4.8). M2 adds designs as a third kind.
+// One slot of a Mask (SPEC.md §4.8). M2 adds designs as a third kind.
 struct Slot {
     enum class Kind { LeaveAsIs, Import };
     Kind kind = Kind::LeaveAsIs;
@@ -51,13 +51,13 @@ struct Slot {
     static std::optional<Slot> fromJson(const QJsonObject &json);
 };
 
-struct Persona {
-    QString id; // file name in personas/, assigned on first save
+struct Mask {
+    QString id; // file name in masks/, assigned on first save
     QString name;
     QMap<Stage, Slot> stageSlots; // missing stage = leave as is
 
     QJsonObject toJson() const;
-    static std::optional<Persona> fromJson(const QString &id, const QJsonObject &json);
+    static std::optional<Mask> fromJson(const QString &id, const QJsonObject &json);
 };
 
 // One apply or restore (SPEC.md §4.11). The per-stage state is defined by the
@@ -65,7 +65,7 @@ struct Persona {
 struct HistoryEntry {
     int number = 0; // assigned by the library, increasing
     QDateTime createdAt;
-    QString title; // e.g. the Persona name, or "Restore Original"
+    QString title; // e.g. the Mask name, or "Restore Original"
     QJsonObject state;
 
     QJsonObject toJson() const;

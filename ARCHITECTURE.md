@@ -64,12 +64,12 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
 
 | Module | Responsibility |
 |---|---|
-| `library` | Plain-file store, format version + migrations, versions on save, crash draft, trash via `QFile::moveToTrash`, export (design/Persona packages, whole-library archive) |
-| `model` | `GrubDesign`, `PlymouthDesign`, `SplashDesign`, `Persona`, `Asset`, `HistoryEntry`; JSON in/out |
+| `library` | Plain-file store, format version + migrations, versions on save, crash draft, trash via `QFile::moveToTrash`, export (design/Mask packages, whole-library archive) |
+| `model` | `GrubDesign`, `PlymouthDesign`, `SplashDesign`, `Mask`, `Asset`, `HistoryEntry`; JSON in/out |
 | `gen` | `grub` (theme.txt, 9-slice images, `.pf2` via `grub-mkfont`, entry-width fit), `plymouth` (two-step/script files, frames, size meter), `ksplash` (`metadata.json`, `Splash.qml`), `pf2` reader (glyph widths and bitmaps for fit check and preview), `media` (ffmpeg via `QProcess`: video → palette PNG frames, video → silent MP4, first-frame still) |
 | `importer` | Find theme root, copy verbatim, report + verdict, normalized install copy when needed |
 | `probe` | Read-only state: toolchain, alternative (`update-alternatives --query`), `plymouthd.conf`, effective GRUB values (sources `/etc/default/grub` + `grub.d/*.cfg` as the user, like grub-mkconfig does), `ksplashrc` (KConfig), kernels and initrd dates, `/proc/cmdline`, installed themes, leftover journal, free space |
-| `planner` | Persona or restore → `Plan`: per-stage from/to, file diffs, commands, checks, estimates; Original capture on first change of a stage |
+| `planner` | Mask or restore → `Plan`: per-stage from/to, file diffs, commands, checks, estimates; Original capture on first change of a stage |
 | `executor` | Plasma step (copy package, write `ksplashrc` via KConfig), helper call with progress, Plasma rollback if the helper fails, history entry, after-reboot check (stores `/proc/sys/kernel/random/boot_id`) |
 | `ui` | QML + Kirigami pages per `notes/wireframes-round8.md`; C++ models exposed with `QML_ELEMENT` |
 | `cli` | `status`, `apply`, `restore` on the same planner and executor |
@@ -86,7 +86,7 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
   designs/<uuid>/design.json   current; versions/<n>.json; draft.json (crash recovery)
   imports/<uuid>/import.json   metadata + report; files/ (verbatim copy)
   assets/<sha256>.<ext>        content-addressed masters; assets.json (names, licences, sources)
-  personas/<uuid>.json
+  masks/<uuid>.json
   builds/<sha256>/             built packages, kept while a history entry needs them
   history/<n>/entry.json       desired + resulting state, backups from the helper; RESTORE.txt
   history/original.json
@@ -134,7 +134,7 @@ dev/            env.sh (HOME, XDG_*, TMPDIR → .dev/), sandbox root builder
 7. `planner` + review screen; `executor` + history + Original; restore.
 8. Drift detection, after-reboot check, timeout setting, first start and intro dialog.
 9. CLI.
-10. Polkit policy, `.deb` via CPack; owner's first real applies (GRUB only → Plymouth only → Persona), with a Timeshift snapshot and live USB ready.
+10. Polkit policy, `.deb` via CPack; owner's first real applies (GRUB only → Plymouth only → Mask), with a Timeshift snapshot and live USB ready.
 
 Spikes for SPEC §10 run before M2 (reading Plymouth 24 sources and measuring frame sizes need no system changes).
 
