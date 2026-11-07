@@ -218,6 +218,12 @@ std::optional<SharedElement> SharedElement::fromJson(const QString &id, const QJ
     const QJsonObject colours = json.value(QStringLiteral("colours")).toObject();
     for (auto it = colours.constBegin(); it != colours.constEnd(); ++it)
         e.colours.insert(it.key(), it->toString());
+    if (e.kind == Kind::Palette) { // saved with three colours, before gradient and accent2
+        if (!e.colours.contains(QStringLiteral("gradient")))
+            e.colours.insert(QStringLiteral("gradient"), e.colours.value(QStringLiteral("background")));
+        if (!e.colours.contains(QStringLiteral("accent2")))
+            e.colours.insert(QStringLiteral("accent2"), e.colours.value(QStringLiteral("accent")));
+    }
     return e;
 }
 

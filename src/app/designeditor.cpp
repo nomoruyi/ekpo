@@ -916,8 +916,9 @@ QString DesignEditor::newPalette(const QString &name)
 {
     if (!m_open || !m_library)
         return tr("No design is open.");
-    // The design's colours as they look now: background, the first spinner or
-    // progress bar (accent) and the first text.
+    // The design's colours as they look now: background and its gradient's second
+    // colour, the first spinner or progress bar (accent) and the next one in another
+    // colour (accent2), and the first text.
     QStringList problems;
     const Design now = m_library->resolved(currentDesign(), problems);
     const QJsonArray elements = elementsOf(now.content);
@@ -928,9 +929,23 @@ QString DesignEditor::newPalette(const QString &name)
         }
         return fallback;
     };
+    const QJsonObject backgroundNow = now.content.value(QStringLiteral("background")).toObject();
+    const QString backgroundColour = backgroundNow.value(QStringLiteral("color")).toString(QStringLiteral("#000000")).left(7).toLower();
+    const QString accent = first({QStringLiteral("spinner"), QStringLiteral("progress")}, QStringLiteral("#3daee9"));
+    QString accent2 = accent;
+    for (const QJsonValue &v : elements) {
+        const QString type = v.toObject().value(QStringLiteral("type")).toString();
+        const QString colour = v.toObject().value(QStringLiteral("color")).toString().left(7).toLower();
+        if ((type == QLatin1String("spinner") || type == QLatin1String("progress")) && !colour.isEmpty() && colour != accent) {
+            accent2 = colour;
+            break;
+        }
+    }
     SharedElement palette{{}, SharedElement::Kind::Palette, name.trimmed().isEmpty() ? tr("Palette of %1").arg(m_current.name) : name.trimmed(), {}, {}};
-    palette.colours = {{QStringLiteral("background"), now.content.value(QStringLiteral("background")).toObject().value(QStringLiteral("color")).toString(QStringLiteral("#000000")).left(7).toLower()},
-                       {QStringLiteral("accent"), first({QStringLiteral("spinner"), QStringLiteral("progress")}, QStringLiteral("#3daee9"))},
+    palette.colours = {{QStringLiteral("background"), backgroundColour},
+                       {QStringLiteral("gradient"), backgroundNow.value(QStringLiteral("color2")).toString(backgroundColour).left(7).toLower()},
+                       {QStringLiteral("accent"), accent},
+                       {QStringLiteral("accent2"), accent2},
                        {QStringLiteral("text"), first({QStringLiteral("text")}, QStringLiteral("#ffffff"))}};
     // The same colours again (e.g. a second click) link the palette made before instead
     // of a copy (issue #2); other colours get a name of their own.
@@ -956,6 +971,9 @@ QString DesignEditor::newPalette(const QString &name)
         QJsonObject background = s.content.value(QStringLiteral("background")).toObject();
         if (background.value(QStringLiteral("color")).toString().left(7).toLower() == palette.colours.value(QStringLiteral("background")))
             background.insert(QStringLiteral("color"), QStringLiteral("@background"));
+        if (background.contains(QStringLiteral("color2"))
+            && background.value(QStringLiteral("color2")).toString().left(7).toLower() == palette.colours.value(QStringLiteral("gradient")))
+            background.insert(QStringLiteral("color2"), QStringLiteral("@gradient"));
         s.content.insert(QStringLiteral("background"), background);
         QJsonArray updated;
         for (const QJsonValue &v : elementsOf(s.content)) {
@@ -966,6 +984,8 @@ QString DesignEditor::newPalette(const QString &name)
                 e.insert(QStringLiteral("color"), QStringLiteral("@text"));
             else if ((type == QLatin1String("spinner") || type == QLatin1String("progress")) && colour == palette.colours.value(QStringLiteral("accent")))
                 e.insert(QStringLiteral("color"), QStringLiteral("@accent"));
+            else if ((type == QLatin1String("spinner") || type == QLatin1String("progress")) && colour == palette.colours.value(QStringLiteral("accent2")))
+                e.insert(QStringLiteral("color"), QStringLiteral("@accent2"));
             updated.append(e);
         }
         s.content.insert(QStringLiteral("elements"), updated);

@@ -119,8 +119,10 @@ struct SharedElement {
     static std::optional<SharedElement> fromJson(const QString &id, const QJsonObject &json);
 };
 
-// A design's colour "@accent" is its palette's accent colour, and so on.
-inline const QStringList paletteKeys = {QStringLiteral("background"), QStringLiteral("accent"), QStringLiteral("text")};
+// A design's colour "@accent" is its palette's accent colour, and so on (SPEC.md §4.4):
+// gradient is a background gradient's second colour, accent2 a second accent.
+inline const QStringList paletteKeys = {QStringLiteral("background"), QStringLiteral("gradient"), QStringLiteral("accent"), QStringLiteral("accent2"),
+                                        QStringLiteral("text")};
 
 // App preferences (SPEC.md §4.13). Machine boot options live in history, not here.
 struct Settings {

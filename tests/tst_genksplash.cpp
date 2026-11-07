@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include <functional>
+#include <QQuickView>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -23,6 +25,7 @@ private Q_SLOTS:
     void loadsInQtQuick();
     void reportsProblems();
     void linksAssetsForPreview();
+    void gradientAngle();
 
 private:
     // A video, background image, logo, two texts (one with a bundled font), a spinner.
@@ -196,6 +199,54 @@ void TestGenKSplash::reportsProblems()
                            QStringLiteral("red is not a colour."),
                            QStringLiteral("The design uses an image that is no longer in the library."),
                        }));
+}
+
+
+// 90°: from left to right; 45°: the corners get exactly the end colours, as in CSS.
+static void checkAngles(const std::function<QImage(double)> &render)
+{
+    const auto red = [](const QColor &c) { return c.red() > 245 && c.blue() < 10; };
+    const auto blue = [](const QColor &c) { return c.blue() > 245 && c.red() < 10; };
+    QImage image = render(90);
+    QVERIFY(!image.isNull());
+    const int w = image.width(), h = image.height();
+    QVERIFY2(red(image.pixelColor(0, h / 2)), qPrintable(image.pixelColor(0, h / 2).name()));
+    QVERIFY2(blue(image.pixelColor(w - 1, h / 2)), qPrintable(image.pixelColor(w - 1, h / 2).name()));
+    QVERIFY(red(image.pixelColor(0, 0)) && red(image.pixelColor(0, h - 1))); // the same down a column
+    image = render(45);
+    QVERIFY2(red(image.pixelColor(0, h - 1)), qPrintable(image.pixelColor(0, h - 1).name()));
+    QVERIFY2(blue(image.pixelColor(w - 1, 0)), qPrintable(image.pixelColor(w - 1, 0).name()));
+    const QColor middle = image.pixelColor(w / 2, h / 2);
+    QVERIFY2(middle.red() > 100 && middle.blue() > 100, qPrintable(middle.name()));
+}
+
+// Plain QtQuick has no angled gradients: the generated QML turns a rectangle.
+void TestGenKSplash::gradientAngle()
+{
+    checkAngles([this](double angle) {
+        Design d;
+        d.name = QStringLiteral("Angle");
+        d.stage = Stage::PlasmaSplash;
+        d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#ff0000")},
+                                                                           {QStringLiteral("color2"), QStringLiteral("#0000ff")}, {QStringLiteral("angle"), angle}}},
+                                {QStringLiteral("elements"), QJsonArray()}};
+        QStringList problems;
+        const QString package = m_tmp->filePath(QStringLiteral("angle-%1").arg(angle));
+        for (const PayloadFile &f : buildPlasmaSplash(d, QStringLiteral("ekpo-angle-v1"), *m_library, problems)) {
+            QSaveFile out(package + QLatin1Char('/') + f.path);
+            QDir().mkpath(QFileInfo(out.fileName()).path());
+            if (!out.open(QIODevice::WriteOnly) || out.write(f.data) != f.data.size() || !out.commit())
+                return QImage();
+        }
+        QQuickView view;
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.resize(400, 200);
+        view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+        view.show();
+        if (!QTest::qWaitForWindowExposed(&view))
+            return QImage();
+        return view.grabWindow();
+    });
 }
 
 EKPO_GUI_TEST_MAIN(TestGenKSplash)

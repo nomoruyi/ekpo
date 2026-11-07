@@ -6,11 +6,13 @@
 
 #include <QGuiApplication>
 #include <QCryptographicHash>
+#include <QDeadlineTimer>
 #include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QProcess>
 #include <QQmlApplicationEngine>
+#include <QQmlIncubationController>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTimer>
@@ -107,11 +109,28 @@ int main(int argc, char *argv[])
     const QString shot = qEnvironmentVariable("EKPO_SCREENSHOT");
     if (!shot.isEmpty()) {
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
-        // (The page tour takes about 6.5 s.)
-        QTimer::singleShot(qEnvironmentVariableIsSet("EKPO_TOUR") ? 7500 : 1000, &app, [window, shot] {
+        const auto save = [window, shot] {
             const bool saved = window->grabWindow().save(shot);
+            // Let Kirigami finish what it creates in the background (toolbars): quitting
+            // mid-way warns "items in the process of being created", and tests fail on warnings.
+            const QDeadlineTimer deadline(3000);
+            while (window->incubationController() && window->incubationController()->incubatingObjectCount() > 0 && !deadline.hasExpired())
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
             QCoreApplication::exit(saved ? 0 : 2);
-        });
+        };
+        if (qEnvironmentVariableIsSet("EKPO_TOUR")) {
+            // The page tour goes at the machine's pace; the shot follows its end.
+            auto *wait = new QTimer(&app);
+            QObject::connect(wait, &QTimer::timeout, &app, [wait, window, save] {
+                if (window->property("tourDone").toBool()) {
+                    wait->stop();
+                    QTimer::singleShot(500, window, save);
+                }
+            });
+            wait->start(250);
+        } else {
+            QTimer::singleShot(1000, &app, save);
+        }
     }
     const int code = app.exec();
     // After an update (SPEC.md §4.14): the new Ekpo starts once this one has let go of

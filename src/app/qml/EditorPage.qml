@@ -44,6 +44,10 @@ Kirigami.Page {
     readonly property var palettes: Object.keys(editor.shared).filter(id => editor.shared[id].kind === "palette")
     readonly property var grubImports: Backend.imports.filter(t => t.stage === "bootMenu") // icons can come from them
 
+    // The palette's colours (SPEC.md §4.4), as "@key" in a design.
+    readonly property var paletteColours: [{ key: "background", name: qsTr("Background") }, { key: "gradient", name: qsTr("Gradient") },
+        { key: "accent", name: qsTr("Accent") }, { key: "accent2", name: qsTr("Second accent") }, { key: "text", name: qsTr("Text") }]
+
     // A colour as shown: "@accent" and so on come from the palette.
     function colour(raw) {
         if (typeof raw === "string" && raw.startsWith("@"))
@@ -647,10 +651,10 @@ Kirigami.Page {
                         visible: page.selected < 0 && page.paletteId !== ""
                         Kirigami.FormData.label: qsTr("Palette colours:")
                         Repeater {
-                            model: [{ key: "background", name: qsTr("Background") }, { key: "accent", name: qsTr("Accent") }, { key: "text", name: qsTr("Text") }]
+                            model: page.paletteColours
                             delegate: ColorButton {
                                 required property var modelData
-                                implicitWidth: Kirigami.Units.gridUnit * 2.5
+                                implicitWidth: Kirigami.Units.gridUnit * 1.6
                                 value: page.editor.shared[page.paletteId]?.colours?.[modelData.key] ?? "#000000"
                                 QQC2.ToolTip.text: modelData.name
                                 QQC2.ToolTip.visible: hovered
@@ -664,7 +668,7 @@ Kirigami.Page {
                         Layout.maximumWidth: Kirigami.Units.gridUnit * 13 // a wrapping label would widen the form
                         wrapMode: Text.Wrap
                         opacity: 0.7
-                        text: qsTr("Background, accent and text. Changing them changes every design that uses this palette (%n), once it is applied again.", "",
+                        text: qsTr("Background, gradient, accent, second accent and text. Changing them changes every design that uses this palette (%n), once it is applied again.", "",
                                    page.editor.shared[page.paletteId]?.uses ?? 0)
                     }
                     ColourField {
@@ -695,6 +699,20 @@ Kirigami.Page {
                             raw: page.backgroundSpec.color2 ?? page.backgroundSpec.color ?? "#000000"
                             onPicked: value => page.editor.setBackground({ color2: value })
                         }
+                    }
+                    // As in CSS: 180° from the first colour at the top to the second at the bottom.
+                    DecimalField {
+                        visible: page.selected < 0 && page.backgroundSpec.color2 !== undefined
+                        Kirigami.FormData.label: qsTr("Gradient angle (°):")
+                        QQC2.ToolTip.text: qsTr("180° runs from the first colour at the top to the second at the bottom, 90° from left to right.")
+                        QQC2.ToolTip.visible: hovered
+                        decimals: 0
+                        from: 0
+                        to: 359
+                        stepSize: 15
+                        wrap: true
+                        number: page.backgroundSpec.angle ?? 180
+                        onEdited: v => page.editor.setBackground({ angle: v })
                     }
                     QQC2.CheckBox {
                         visible: page.selected < 0 && page.boot
@@ -1097,7 +1115,7 @@ Kirigami.Page {
         id: colourField
 
         property string raw
-        signal picked(var value) // a colour, or "@background", "@accent", "@text"
+        signal picked(var value) // a colour, or a palette colour such as "@accent"
 
         ColorButton {
             value: page.colour(colourField.raw)
@@ -1114,17 +1132,13 @@ Kirigami.Page {
 
             QQC2.Menu {
                 id: paletteMenu
-                QQC2.MenuItem {
-                    text: qsTr("Palette Background")
-                    onTriggered: colourField.picked("@background")
-                }
-                QQC2.MenuItem {
-                    text: qsTr("Palette Accent")
-                    onTriggered: colourField.picked("@accent")
-                }
-                QQC2.MenuItem {
-                    text: qsTr("Palette Text")
-                    onTriggered: colourField.picked("@text")
+                Repeater {
+                    model: page.paletteColours
+                    delegate: QQC2.MenuItem {
+                        required property var modelData
+                        text: qsTr("Palette %1").arg(modelData.name)
+                        onTriggered: colourField.picked("@" + modelData.key)
+                    }
                 }
             }
         }

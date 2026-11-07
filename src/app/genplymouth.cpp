@@ -362,7 +362,8 @@ QList<PayloadFile> buildPlymouthSplash(const Design &design, const QString &them
     if (top == bottom) {
         painter.fillRect(background.rect(), top);
     } else {
-        QLinearGradient gradient(0, 0, 0, screen.height());
+        const QLineF line = gradientLine(screen, gradientAngle(backgroundJson));
+        QLinearGradient gradient(line.p1(), line.p2());
         gradient.setColorAt(0, top);
         gradient.setColorAt(1, bottom);
         painter.fillRect(background.rect(), gradient);

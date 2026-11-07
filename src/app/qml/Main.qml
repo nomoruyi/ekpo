@@ -35,6 +35,7 @@ Kirigami.ApplicationWindow {
     property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
     property bool startUpdateDialog: false // EKPO_UPDATE_DIALOG (dev only): open the update dialog once a check finds one
     property bool startTour: false // EKPO_TOUR (dev only): switch pages as clicks would, see the tour below
+    property bool tourDone: false // the screenshot follows it
     property bool editing: false // the editor has the window; the sidebar is hidden
     property var editorState: ({}) // the editor page's selection and preview size while its review shows
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
@@ -122,11 +123,12 @@ Kirigami.ApplicationWindow {
         onTriggered: root.reportBug()
     }
     // The tour: every section in turn, then with EKPO_EDIT_DESIGN the editor opens and
-    // closes twice (tests run it with fatal warnings).
+    // closes twice (tests run it with fatal warnings). The editor gets longer: leaving it
+    // while Kirigami still builds its toolbar warns, and CI machines are slow.
     Timer {
         property int step: 0
         running: root.startTour
-        interval: 500
+        interval: step < root.allSections.length ? 500 : 1500
         repeat: true
         onTriggered: {
             const sections = root.allSections.length;
@@ -134,6 +136,7 @@ Kirigami.ApplicationWindow {
                 root.currentSection = root.allSections[step];
             } else if (root.startEdit === "" || step >= sections + 4) {
                 stop();
+                root.tourDone = true;
             } else if ((step - sections) % 2 === 0) {
                 Backend.editor.open(root.startEdit);
                 root.showEditor();

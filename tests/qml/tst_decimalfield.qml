@@ -62,4 +62,30 @@ TestCase {
         field.number = 42; // another element selected
         compare(field.value, 4200);
     }
+
+    // Whole degrees for the gradient angle: no decimals, and the arrows wrap around.
+    DecimalField {
+        id: angle
+        y: 100
+        decimals: 0
+        from: 0
+        to: 359
+        stepSize: 15
+        wrap: true
+        number: 350
+        onEdited: v => number = v
+    }
+
+    function test_wholeDegrees() {
+        compare(angle.contentItem.text, "350");
+        angle.contentItem.forceActiveFocus();
+        keyClick(Qt.Key_Up); // 365 wraps to the start
+        compare(angle.number, 0);
+        angle.contentItem.selectAll();
+        keyClick(Qt.Key_9);
+        keyClick(Qt.Key_0);
+        compare(angle.contentItem.text, "90");
+        keyClick(Qt.Key_Return);
+        compare(angle.number, 90);
+    }
 }

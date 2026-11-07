@@ -35,6 +35,21 @@ QString readColour(const QJsonObject &o, const QString &key, const QString &fall
     return fallback;
 }
 
+double gradientAngle(const QJsonObject &background)
+{
+    const double angle = std::fmod(background.value(QStringLiteral("angle")).toDouble(180), 360.0);
+    return angle < 0 ? angle + 360 : angle;
+}
+
+QLineF gradientLine(const QSizeF &size, double degrees)
+{
+    const double r = degrees * M_PI / 180;
+    const QPointF direction(std::sin(r), -std::cos(r)); // y points down
+    const double half = (std::abs(size.width() * direction.x()) + std::abs(size.height() * direction.y())) / 2;
+    const QPointF centre(size.width() / 2, size.height() / 2);
+    return QLineF(centre - direction * half, centre + direction * half);
+}
+
 QString registerFont(const QString &file)
 {
     static QHash<QString, QString> families;

@@ -8,8 +8,9 @@
 // working without Ekpo.
 //
 // Design content (positions and sizes in % of the screen, top-left corner):
-//   background: {color: "#rrggbb" | "#aarrggbb", color2: bottom of a vertical gradient
-//                (optional), image: <asset hash, optional>}
+//   background: {color: "#rrggbb" | "#aarrggbb", color2: a gradient's other end (optional),
+//                angle: its direction in degrees as in CSS (180, the default, top to
+//                bottom; gencommon.h), image: <asset hash, optional>}
 //   fadeIn: milliseconds, 0 = none
 //   elements: [
 //     {type: "image", asset, x, y, width, height}            (aspect ratio kept)

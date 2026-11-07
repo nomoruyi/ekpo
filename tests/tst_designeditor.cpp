@@ -41,6 +41,7 @@ private Q_SLOTS:
     void sharesPalettes();
     void reusesPaletteWithSameColours();
     void deletesPalette();
+    void fiveColourPalettes();
     void bootMenuPreview();
     void bootMenuStarters();
     void bootMenuIcons();
@@ -622,6 +623,37 @@ void TestDesignEditor::deletesPalette()
     QVERIFY(error.contains(QStringLiteral("version 1")));
     QCOMPARE(e.shared().size(), 1);
     QCOMPARE(e.content().value(QStringLiteral("palette")).toString(), linked); // nothing changed
+}
+
+// Palettes have five colours (issue #3): a gradient's second colour and a second accent
+// join background, accent and text. Palettes made with three fill those two in.
+void TestDesignEditor::fiveColourPalettes()
+{
+    DesignEditor &e = *m_editor;
+    e.create();
+    e.setBackground({{QStringLiteral("color"), QStringLiteral("#102030")}, {QStringLiteral("color2"), QStringLiteral("#000010")}});
+    e.addElement(QStringLiteral("spinner"), {{QStringLiteral("color"), QStringLiteral("#ff8800")}});
+    e.addElement(QStringLiteral("progress"), {{QStringLiteral("color"), QStringLiteral("#00ff88")}});
+    QCOMPARE(e.newPalette({}), QString());
+    const QString id = e.content().value(QStringLiteral("palette")).toString();
+    const QVariantMap colours = e.shared().value(id).toMap().value(QStringLiteral("colours")).toMap();
+    QCOMPARE(colours.value(QStringLiteral("gradient")).toString(), QStringLiteral("#000010"));
+    QCOMPARE(colours.value(QStringLiteral("accent")).toString(), QStringLiteral("#ff8800"));
+    QCOMPARE(colours.value(QStringLiteral("accent2")).toString(), QStringLiteral("#00ff88"));
+    QCOMPARE(e.content().value(QStringLiteral("background")).toMap().value(QStringLiteral("color2")).toString(), QStringLiteral("@gradient"));
+    QCOMPARE(elementAt(e, 0).value(QStringLiteral("color")).toString(), QStringLiteral("@accent"));
+    QCOMPARE(elementAt(e, 1).value(QStringLiteral("color")).toString(), QStringLiteral("@accent2"));
+    QCOMPARE(e.setPaletteColour(QStringLiteral("accent2"), QColor(Qt::blue)), QString());
+
+    // A palette saved with three colours.
+    const std::optional<SharedElement> old = SharedElement::fromJson(
+        QStringLiteral("p"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("palette")}, {QStringLiteral("name"), QStringLiteral("Old")},
+                                         {QStringLiteral("colours"), QJsonObject{{QStringLiteral("background"), QStringLiteral("#111111")},
+                                                                                 {QStringLiteral("accent"), QStringLiteral("#222222")},
+                                                                                 {QStringLiteral("text"), QStringLiteral("#333333")}}}});
+    QVERIFY(old);
+    QCOMPARE(old->colours.value(QStringLiteral("gradient")), QStringLiteral("#111111"));
+    QCOMPARE(old->colours.value(QStringLiteral("accent2")), QStringLiteral("#222222"));
 }
 
 void TestDesignEditor::bootMenuPreview()

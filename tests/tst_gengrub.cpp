@@ -3,6 +3,7 @@
 #include "testmain.h"
 #include "validate.h"
 
+#include <functional>
 #include <QImage>
 #include <QJsonArray>
 #include <QStandardPaths>
@@ -22,6 +23,7 @@ private Q_SLOTS:
     void findsClippedEntries();
     void rendersPreview();
     void gradientBackground();
+    void gradientAngle();
     void builtinIcons();
     void reportsProblems();
 
@@ -228,6 +230,40 @@ void TestGenGrub::gradientBackground()
     QVERIFY(background.pixelColor(0, 1439).blue() > 250 && background.pixelColor(0, 1439).red() < 5);
     QVERIFY(theme.contains("desktop-image: \"background.png\""));
     QCOMPARE(validateTheme(ThemeTarget::Grub, QStringLiteral("ekpo-night-v1"), files), QStringList());
+}
+
+
+// 90°: from left to right; 45°: the corners get exactly the end colours, as in CSS.
+static void checkAngles(const std::function<QImage(double)> &render)
+{
+    const auto red = [](const QColor &c) { return c.red() > 245 && c.blue() < 10; };
+    const auto blue = [](const QColor &c) { return c.blue() > 245 && c.red() < 10; };
+    QImage image = render(90);
+    QVERIFY(!image.isNull());
+    const int w = image.width(), h = image.height();
+    QVERIFY2(red(image.pixelColor(0, h / 2)), qPrintable(image.pixelColor(0, h / 2).name()));
+    QVERIFY2(blue(image.pixelColor(w - 1, h / 2)), qPrintable(image.pixelColor(w - 1, h / 2).name()));
+    QVERIFY(red(image.pixelColor(0, 0)) && red(image.pixelColor(0, h - 1))); // the same down a column
+    image = render(45);
+    QVERIFY2(red(image.pixelColor(0, h - 1)), qPrintable(image.pixelColor(0, h - 1).name()));
+    QVERIFY2(blue(image.pixelColor(w - 1, 0)), qPrintable(image.pixelColor(w - 1, 0).name()));
+    const QColor middle = image.pixelColor(w / 2, h / 2);
+    QVERIFY2(middle.red() > 100 && middle.blue() > 100, qPrintable(middle.name()));
+}
+
+void TestGenGrub::gradientAngle()
+{
+    checkAngles([this](double angle) {
+        Design d = design();
+        d.content.insert(QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#ff0000")}, {QStringLiteral("color2"), QStringLiteral("#0000ff")},
+                                                                   {QStringLiteral("angle"), angle}});
+        QStringList problems;
+        for (const PayloadFile &f : buildBootMenu(d, *m_library, m_screen, entries(), problems)) {
+            if (f.path == QLatin1String("background.png"))
+                return QImage::fromData(f.data);
+        }
+        return QImage();
+    });
 }
 
 void TestGenGrub::builtinIcons()

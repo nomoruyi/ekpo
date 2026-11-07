@@ -254,7 +254,8 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
         QImage canvas(screen, QImage::Format_RGB32);
         QPainter p(&canvas);
         const QColor top(readColour(background, QStringLiteral("color"), QStringLiteral("#000000"), problems));
-        QLinearGradient fill(0, 0, 0, H);
+        const QLineF line = gradientLine(screen, gradientAngle(background));
+        QLinearGradient fill(line.p1(), line.p2());
         fill.setColorAt(0, top);
         fill.setColorAt(1, gradient ? QColor(readColour(background, QStringLiteral("color2"), QStringLiteral("#000000"), problems)) : top);
         p.fillRect(canvas.rect(), fill);
