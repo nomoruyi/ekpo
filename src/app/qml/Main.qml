@@ -33,7 +33,9 @@ Kirigami.ApplicationWindow {
     property string startReview: "" // EKPO_REVIEW_IMPORT (dev only): open the review of this import
     property string startEdit: "" // EKPO_EDIT_DESIGN (dev only): open this design in the editor
     property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
+    property bool startTour: false // EKPO_TOUR (dev only): switch pages as clicks would, see the tour below
     property bool editing: false // the editor has the window; the sidebar is hidden
+    property var editorState: ({}) // the editor page's selection and preview size while its review shows
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
 
     function showSection(name) {
@@ -42,21 +44,27 @@ Kirigami.ApplicationWindow {
     function pageFor(name) {
         return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, history: historyPage, settings: settingsPage, about: aboutPage })[name] ?? placeholderPage;
     }
+    function showPage(page) {
+        const old = pageStack.currentItem;
+        if (old === page)
+            return;
+        pageStack.replace(page);
+        if (old instanceof EditorPage)
+            old.destroy();
+    }
     // The review takes over the window until it is closed (SPEC.md §4.1).
     // (Not a Kirigami layer: pushing any page onto layers warns in Kirigami 6.24.)
     function showReview() {
         reviewPage.reset();
-        if (pageStack.currentItem !== reviewPage)
-            pageStack.replace(reviewPage);
+        showPage(reviewPage);
     }
 
     // The editor opens in the window with the sidebar collapsed (SPEC.md §4.4).
     // (Set, not bound: Kirigami opens a non-modal drawer itself at start.)
-    function showEditor() {
+    function showEditor(state) {
         editing = true;
         globalDrawer.drawerOpen = false;
-        editorPage.selected = -1;
-        pageStack.replace(editorPage);
+        showPage(editorComponent.createObject(contentItem, Object.assign({ visible: false }, state)));
     }
 
     // Report a Bug from any page: the sidebar, each page's header and Ctrl+Shift+B. The
@@ -92,11 +100,33 @@ Kirigami.ApplicationWindow {
         interval: 300
         onTriggered: root.reportBug()
     }
+    // The tour: every section in turn, then with EKPO_EDIT_DESIGN the editor opens and
+    // closes twice (tests run it with fatal warnings).
+    Timer {
+        property int step: 0
+        running: root.startTour
+        interval: 500
+        repeat: true
+        onTriggered: {
+            const sections = root.allSections.length;
+            if (step < sections) {
+                root.currentSection = root.allSections[step];
+            } else if (root.startEdit === "" || step >= sections + 4) {
+                stop();
+            } else if ((step - sections) % 2 === 0) {
+                Backend.editor.open(root.startEdit);
+                root.showEditor();
+            } else {
+                (root.pageStack.currentItem as EditorPage)?.tryLeave();
+            }
+            ++step;
+        }
+    }
 
     onCurrentSectionChanged: {
         const page = pageFor(currentSection.name);
-        if (pageStack.depth > 0 && pageStack.currentItem !== page && !Backend.applying)
-            pageStack.replace(page);
+        if (pageStack.depth > 0 && !Backend.applying)
+            showPage(page);
     }
     // Pages are kept as items: pushing components makes Kirigami warn, and the
     // pages keep their state (e.g. the last import message) between visits.
@@ -168,7 +198,7 @@ Kirigami.ApplicationWindow {
     }
 
     Timer {
-        running: root.startEdit !== ""
+        running: root.startEdit !== "" && !root.startTour
         interval: 300
         onTriggered: {
             Backend.editor.open(root.startEdit);
@@ -263,7 +293,7 @@ Kirigami.ApplicationWindow {
     ReviewPage {
         id: reviewPage
         visible: false
-        onDone: root.pageStack.replace(root.editing ? editorPage : root.pageFor(root.currentSection.name))
+        onDone: root.editing ? root.showEditor(root.editorState) : root.showPage(root.pageFor(root.currentSection.name))
     }
     StagePage {
         id: bootMenuPage
@@ -290,14 +320,24 @@ Kirigami.ApplicationWindow {
         title: qsTr("Plasma Splash")
     }
 
-    EditorPage {
-        id: editorPage
-        visible: false
-        onReview: root.showReview()
-        onLeave: {
-            root.editing = false;
-            root.globalDrawer.drawerOpen = true;
-            root.pageStack.replace(root.pageFor(root.currentSection.name));
+    // A new editor page each time the editor shows (its state lives in Backend.editor),
+    // destroyed when it leaves: Kirigami 6.24 loses the page row of an editor page that
+    // comes back into the row, and its header warns while it rebuilds the toolbar.
+    Component {
+        id: editorComponent
+
+        EditorPage {
+            id: editorItem
+
+            onReview: {
+                root.editorState = { selected: editorItem.selected, resolution: editorItem.resolution };
+                root.showReview();
+            }
+            onLeave: {
+                root.editing = false;
+                root.globalDrawer.drawerOpen = true;
+                root.showPage(root.pageFor(root.currentSection.name));
+            }
         }
     }
 

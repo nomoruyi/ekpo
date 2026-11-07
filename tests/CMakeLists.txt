@@ -66,6 +66,12 @@ add_test(NAME smoke_review COMMAND ekpo)
 set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_REVIEW_IMPORT=00000000-0000-0000-0000-000000000005;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/review.png")
 
+# Every page in turn, then the boot menu editor opened and left twice: Kirigami warns
+# when a page comes back into the row the wrong way.
+add_test(NAME smoke_tour COMMAND ekpo)
+set_tests_properties(smoke_tour PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_TOUR=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d3;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/tour.png")
+
 # Report a Bug from the Overview: the dialog with its screenshot preview.
 add_test(NAME smoke_bug_report COMMAND ekpo)
 set_tests_properties(smoke_bug_report PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT

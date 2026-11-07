@@ -1,0 +1,10 @@
+# A theme that brings entry icons (test fixture).
+title-text: ""
+desktop-color: "#000000"
+
++ boot_menu {
+    left = 30%
+    top = 30%
+    width = 40%
+    height = 40%
+}

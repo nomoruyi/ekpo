@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
         start.insert(QStringLiteral("startReview"), qEnvironmentVariable("EKPO_REVIEW_IMPORT"));
         start.insert(QStringLiteral("startEdit"), qEnvironmentVariable("EKPO_EDIT_DESIGN"));
         start.insert(QStringLiteral("startBugReport"), qEnvironmentVariableIsSet("EKPO_BUG_REPORT"));
+        start.insert(QStringLiteral("startTour"), qEnvironmentVariableIsSet("EKPO_TOUR"));
     }
     engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");
@@ -95,7 +96,8 @@ int main(int argc, char *argv[])
     const QString shot = qEnvironmentVariable("EKPO_SCREENSHOT");
     if (!shot.isEmpty()) {
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
-        QTimer::singleShot(1000, &app, [window, shot] {
+        // (The page tour takes about 6.5 s.)
+        QTimer::singleShot(qEnvironmentVariableIsSet("EKPO_TOUR") ? 7500 : 1000, &app, [window, shot] {
             const bool saved = window->grabWindow().save(shot);
             QCoreApplication::exit(saved ? 0 : 2);
         });

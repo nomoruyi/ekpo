@@ -1,0 +1,287 @@
+#include "gengrub.h"
+#include "golden.h"
+#include "testmain.h"
+#include "validate.h"
+
+#include <QImage>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QTemporaryDir>
+
+class TestGenGrub : public QObject
+{
+    Q_OBJECT
+
+private Q_SLOTS:
+    void initTestCase();
+    void init();
+    void matchesGoldenAndValidates();
+    void menuWidensForLongEntries();
+    void tooLongForAnyWidth();
+    void selectionStyles();
+    void findsClippedEntries();
+    void rendersPreview();
+    void gradientBackground();
+    void builtinIcons();
+    void reportsProblems();
+
+private:
+    static QJsonObject element(const QString &type, double x, double y, double w, double h, QJsonObject more = {})
+    {
+        more.insert(QStringLiteral("type"), type);
+        more.insert(QStringLiteral("x"), x);
+        more.insert(QStringLiteral("y"), y);
+        more.insert(QStringLiteral("width"), w);
+        more.insert(QStringLiteral("height"), h);
+        return more;
+    }
+    Design design(double menuWidth = 40) const
+    {
+        Design d;
+        d.id = QStringLiteral("00000000-0000-0000-0000-0000000000d3");
+        d.stage = Stage::BootMenu;
+        d.name = QStringLiteral("Night \"Menu\"");
+        d.version = 2;
+        d.content = {
+            {QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}},
+            {QStringLiteral("icons"), QJsonObject{{QStringLiteral("kubuntu"), m_logo}}},
+            {QStringLiteral("elements"),
+             QJsonArray{
+                 element(QStringLiteral("image"), 45, 8, 10, 10, {{QStringLiteral("asset"), m_logo}}),
+                 element(QStringLiteral("menu"), 50 - menuWidth / 2, 30, menuWidth, 45,
+                         {{QStringLiteral("font"), m_font}, {QStringLiteral("size"), 2.2}, {QStringLiteral("color"), QStringLiteral("#c0c0c0")},
+                          {QStringLiteral("selectedColor"), QStringLiteral("#ffffff")},
+                          {QStringLiteral("selection"), QJsonObject{{QStringLiteral("style"), QStringLiteral("rounded")}, {QStringLiteral("color"), QStringLiteral("#3daee9")}}}}),
+                 element(QStringLiteral("countdown"), 30, 80, 40, 4, {{QStringLiteral("font"), m_font}, {QStringLiteral("text"), QStringLiteral("Starting in %d s")}, {QStringLiteral("size"), 1.6}}),
+                 element(QStringLiteral("progress"), 40, 85, 20, 0.5, {{QStringLiteral("color"), QStringLiteral("#3daee9")}}),
+                 element(QStringLiteral("text"), 10, 92, 80, 4, {{QStringLiteral("font"), m_font}, {QStringLiteral("text"), QStringLiteral("Enter: start · e: edit · c: command line")}, {QStringLiteral("size"), 1.4}}),
+             }},
+        };
+        return d;
+    }
+    QStringList entries() const
+    {
+        return {QStringLiteral("Kubuntu"), QStringLiteral("Advanced options for Kubuntu"), QStringLiteral("Kubuntu, with Linux 7.0.0-42-generic (recovery mode)"),
+                QStringLiteral("UEFI Firmware Settings")};
+    }
+    static QByteArray fileData(const QList<PayloadFile> &files, const QString &path)
+    {
+        for (const PayloadFile &f : files) {
+            if (f.path == path)
+                return f.data;
+        }
+        return {};
+    }
+
+    std::unique_ptr<QTemporaryDir> m_tmp;
+    std::optional<Library> m_library;
+    QString m_logo;
+    QString m_font;
+    const QSize m_screen{2560, 1440};
+};
+
+void TestGenGrub::initTestCase()
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("grub-mkfont")).isEmpty())
+        QSKIP("grub-mkfont isn't installed (grub-common)");
+}
+
+void TestGenGrub::init()
+{
+    m_tmp = std::make_unique<QTemporaryDir>();
+    QString error;
+    m_library = Library::open(m_tmp->filePath(QStringLiteral("lib")), error);
+    QVERIFY2(m_library, qPrintable(error));
+    const auto logo = m_library->addAsset(QStringLiteral(FIXTURES_DIR "/assets/logo.png"), Asset::Kind::Image, QStringLiteral("Logo"), error);
+    QVERIFY2(logo, qPrintable(error));
+    m_logo = logo->hash;
+    const auto font = m_library->addAsset(QStringLiteral("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"), Asset::Kind::Font, QStringLiteral("Noto Sans"), error);
+    QVERIFY2(font, qPrintable(error));
+    m_font = font->hash;
+}
+
+void TestGenGrub::matchesGoldenAndValidates()
+{
+    QStringList problems;
+    GrubLayout layout;
+    const QList<PayloadFile> files = buildBootMenu(design(), *m_library, m_screen, entries(), problems, &layout);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    QStringList paths;
+    for (const PayloadFile &f : files)
+        paths << f.path;
+    // One .pf2 per size: menu 31 px, countdown 23 px, help line 20 px.
+    QCOMPARE(paths, (QStringList{QStringLiteral("f1-20.pf2"), QStringLiteral("f1-23.pf2"), QStringLiteral("f1-31.pf2"), QStringLiteral("icons/kubuntu.png"),
+                                 QStringLiteral("image-1.png"), QStringLiteral("select_c.png"), QStringLiteral("select_e.png"), QStringLiteral("select_n.png"),
+                                 QStringLiteral("select_ne.png"), QStringLiteral("select_nw.png"), QStringLiteral("select_s.png"), QStringLiteral("select_se.png"),
+                                 QStringLiteral("select_sw.png"), QStringLiteral("select_w.png"), QStringLiteral("theme.txt")}));
+    QVERIFY(layout.fits);
+    QCOMPARE(layout.itemFontPixels, 31);
+    QVERIFY(matchesGolden(QStringLiteral("grub-theme.txt"), fileData(files, QStringLiteral("theme.txt"))));
+    // What the root helper checks before installing it (src/common/validate.cpp).
+    QCOMPARE(validateTheme(ThemeTarget::Grub, QStringLiteral("ekpo-night-v1"), files), QStringList());
+    // The logo is scaled to the size it is shown at: 144 px square in a 256×144 box.
+    QCOMPARE(QImage::fromData(fileData(files, QStringLiteral("image-1.png"))).size(), QSize(144, 144));
+}
+
+void TestGenGrub::menuWidensForLongEntries()
+{
+    QStringList problems;
+    GrubLayout layout;
+    buildBootMenu(design(10), *m_library, m_screen, entries(), problems, &layout); // 256 px wide: too narrow
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    QCOMPARE(layout.longestEntry, QStringLiteral("Kubuntu, with Linux 7.0.0-42-generic (recovery mode)"));
+    QVERIFY(layout.menu.width() >= layout.neededWidth);
+    QVERIFY(layout.neededWidth > 256);
+    QVERIFY(qAbs(layout.menu.x() + layout.menu.width() / 2.0 - 1280) <= 0.5); // around its centre
+    QVERIFY(layout.fits);
+
+    // A wide menu stays as designed.
+    buildBootMenu(design(80), *m_library, m_screen, entries(), problems, &layout);
+    QCOMPARE(layout.menu.width(), 2048);
+}
+
+void TestGenGrub::tooLongForAnyWidth()
+{
+    QStringList problems;
+    GrubLayout layout;
+    buildBootMenu(design(), *m_library, m_screen, {QString(200, QLatin1Char('W'))}, problems, &layout);
+    QVERIFY(!layout.fits);
+    QCOMPARE(layout.menu, QRect(0, 432, 2560, 648)); // as wide as the screen, still too narrow
+}
+
+void TestGenGrub::selectionStyles()
+{
+    for (const char *style : {"flat", "rounded", "glow"}) {
+        Design d = design();
+        QJsonArray elements = d.content.value(QStringLiteral("elements")).toArray();
+        QJsonObject menu = elements[1].toObject();
+        menu.insert(QStringLiteral("selection"), QJsonObject{{QStringLiteral("style"), QLatin1String(style)}, {QStringLiteral("color"), QStringLiteral("#ff0000")}});
+        elements[1] = menu;
+        d.content.insert(QStringLiteral("elements"), elements);
+        QStringList problems;
+        const QList<PayloadFile> files = buildBootMenu(d, *m_library, m_screen, entries(), problems);
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        // GRUB stretches the 1-pixel centre and edges; the corners are the border's size.
+        const QImage centre = QImage::fromData(fileData(files, QStringLiteral("select_c.png")));
+        const QImage corner = QImage::fromData(fileData(files, QStringLiteral("select_nw.png")));
+        QCOMPARE(centre.size(), QSize(1, 1));
+        QCOMPARE(QImage::fromData(fileData(files, QStringLiteral("select_w.png"))).height(), 1);
+        QCOMPARE(corner.width(), QImage::fromData(fileData(files, QStringLiteral("select_e.png"))).width());
+        QCOMPARE(centre.pixelColor(0, 0).red(), 255);
+        if (QLatin1String(style) == QLatin1String("flat"))
+            QCOMPARE(corner.size(), QSize(1, 1));
+        else // rounded and glow: the outermost corner pixel stays clear
+            QVERIFY(corner.width() > 1 && qAlpha(corner.pixel(0, 0)) < 128);
+    }
+}
+
+void TestGenGrub::findsClippedEntries()
+{
+    // The theme as built fits the expected entries; a longer one from the real grub.cfg doesn't.
+    QStringList problems;
+    const QList<PayloadFile> files = buildBootMenu(design(), *m_library, m_screen, entries(), problems);
+    QVERIFY(clippedEntries(files, entries()).isEmpty());
+    const QString custom = QStringLiteral("My custom entry with a very long title that nobody expected when the theme was built, far too long");
+    QCOMPARE(clippedEntries(files, entries() << custom), QStringList{custom});
+    QVERIFY(clippedEntries({}, {custom}).isEmpty()); // no theme to measure against
+}
+
+void TestGenGrub::rendersPreview()
+{
+    QStringList problems;
+    GrubLayout layout;
+    const QList<PayloadFile> files = buildBootMenu(design(), *m_library, m_screen, entries(), problems, &layout);
+    const QImage image = renderBootMenu(files, m_screen, entries());
+    if (const QString save = qEnvironmentVariable("EKPO_SAVE_PREVIEW"); !save.isEmpty())
+        image.save(save);
+    QCOMPARE(image.size(), m_screen);
+    QCOMPARE(image.pixelColor(5, 5), QColor(QStringLiteral("#102030"))); // desktop-color
+    // The first entry is selected: the selection's colour fills its row's middle.
+    const int firstRow = layout.menu.y() + 10 + 55 / 2;
+    QCOMPARE(image.pixelColor(layout.menu.right() - 40, firstRow), QColor(QStringLiteral("#3daee9")));
+    // Text in the item colour somewhere on the second row (not selected).
+    bool text = false;
+    for (int x = layout.menu.x(); x < layout.menu.right() && !text; ++x)
+        for (int y = firstRow + 55; y < firstRow + 55 + 30 && !text; ++y)
+            text = image.pixelColor(x, y).red() > 150;
+    QVERIFY(text);
+}
+
+void TestGenGrub::gradientBackground()
+{
+    // GRUB fills with one colour: the gradient is drawn into background.png.
+    Design d = design();
+    d.content.insert(QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#ff0000")}, {QStringLiteral("color2"), QStringLiteral("#0000ff")}});
+    QStringList problems;
+    const QList<PayloadFile> files = buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    QByteArray data, theme;
+    for (const PayloadFile &f : files) {
+        if (f.path == QLatin1String("background.png"))
+            data = f.data;
+        else if (f.path == QLatin1String("theme.txt"))
+            theme = f.data;
+    }
+    const QImage background = QImage::fromData(data);
+    QCOMPARE(background.size(), m_screen);
+    QCOMPARE(background.pixelColor(0, 0), QColor(QStringLiteral("#ff0000")));
+    QVERIFY(background.pixelColor(0, 1439).blue() > 250 && background.pixelColor(0, 1439).red() < 5);
+    QVERIFY(theme.contains("desktop-image: \"background.png\""));
+    QCOMPARE(validateTheme(ThemeTarget::Grub, QStringLiteral("ekpo-night-v1"), files), QStringList());
+}
+
+void TestGenGrub::builtinIcons()
+{
+    QCOMPARE(builtinIconFor(QStringLiteral("kubuntu")), QStringLiteral("os"));
+    QCOMPARE(builtinIconFor(QStringLiteral("efi")), QStringLiteral("firmware"));
+    QCOMPARE(builtinIconFor(QString()), QString()); // "Advanced options": no icon
+    Design d = design();
+    d.content.insert(QStringLiteral("icons"), QJsonObject{{QStringLiteral("kubuntu"), QStringLiteral("builtin:os")}, {QStringLiteral("windows"), QStringLiteral("builtin:windows")},
+                                                          {QStringLiteral("efi"), QStringLiteral("builtin:firmware")}, {QStringLiteral("memtest86"), QStringLiteral("builtin:memory")}});
+    QStringList problems;
+    const QList<PayloadFile> files = buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    if (const QString save = qEnvironmentVariable("EKPO_SAVE_PREVIEW"); !save.isEmpty())
+        renderBootMenu(files, m_screen, entries() << QStringLiteral("Windows Boot Manager (on /dev/sda1)") << QStringLiteral("Memory test (memtest86+x64.efi)")).save(save);
+    for (const char *c : {"kubuntu", "windows", "efi", "memtest86"}) {
+        QImage icon;
+        for (const PayloadFile &f : files) {
+            if (f.path == QStringLiteral("icons/%1.png").arg(QLatin1String(c)))
+                icon = QImage::fromData(f.data);
+        }
+        // As tall as the menu's text line, drawn in the menu's text colour.
+        QVERIFY2(icon.width() > 30 && icon.width() == icon.height(), c);
+        bool ink = false;
+        for (int y = 0; y < icon.height() && !ink; ++y)
+            for (int x = 0; x < icon.width() && !ink; ++x)
+                ink = icon.pixelColor(x, y) == QColor(QStringLiteral("#c0c0c0"));
+        QVERIFY2(ink, c);
+    }
+    d.content.insert(QStringLiteral("icons"), QJsonObject{{QStringLiteral("kubuntu"), QStringLiteral("builtin:penguin")}});
+    buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QCOMPARE(problems, QStringList{QStringLiteral("There is no built-in icon “penguin”.")});
+}
+
+void TestGenGrub::reportsProblems()
+{
+    Design d = design();
+    QJsonArray elements = d.content.value(QStringLiteral("elements")).toArray();
+    elements.append(elements[1]); // a second menu
+    elements.append(element(QStringLiteral("clock"), 0, 0, 1, 1));
+    elements.append(element(QStringLiteral("text"), 0, 0, 1, 1, {{QStringLiteral("font"), QStringLiteral("gone")}}));
+    d.content.insert(QStringLiteral("elements"), elements);
+    d.content.insert(QStringLiteral("icons"), QJsonObject{{QStringLiteral("Bad Class"), m_logo}});
+    QStringList problems;
+    buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QCOMPARE(problems, (QStringList{QStringLiteral("“Bad Class” isn't a menu entry class."), QStringLiteral("Element 6 is a second menu; a boot menu has one."),
+                                    QStringLiteral("Element 7 has an unknown type “clock”."),
+                                    QStringLiteral("The design uses a font that is no longer in the library.")}));
+
+    d.content.insert(QStringLiteral("elements"), QJsonArray{});
+    problems.clear();
+    buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QCOMPARE(problems, QStringList{QStringLiteral("A boot menu design needs a menu.")});
+}
+
+EKPO_GUI_TEST_MAIN(TestGenGrub)
+#include "tst_gengrub.moc"

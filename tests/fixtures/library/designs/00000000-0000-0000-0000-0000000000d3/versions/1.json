@@ -1,0 +1,58 @@
+{
+    "stage": "bootMenu",
+    "name": "Night Menu",
+    "version": 1,
+    "savedAt": "2026-11-07T10:00:00Z",
+    "content": {
+        "background": {
+            "color": "#102030"
+        },
+        "elements": [
+            {
+                "type": "text",
+                "x": 30,
+                "y": 18,
+                "width": 40,
+                "height": 6,
+                "text": "Night",
+                "size": 4,
+                "color": "#ffeedd",
+                "align": "center"
+            },
+            {
+                "type": "menu",
+                "x": 32,
+                "y": 30,
+                "width": 36,
+                "height": 40,
+                "size": 2.2,
+                "color": "#c8c8c8",
+                "selectedColor": "#ffffff",
+                "selection": {
+                    "style": "rounded",
+                    "color": "#3daee9"
+                }
+            },
+            {
+                "type": "countdown",
+                "x": 30,
+                "y": 76,
+                "width": 40,
+                "height": 4,
+                "text": "Starting in %d s",
+                "size": 1.6,
+                "color": "#ffeedd",
+                "align": "center"
+            },
+            {
+                "type": "progress",
+                "x": 40,
+                "y": 81,
+                "width": 20,
+                "height": 0.4,
+                "color": "#3daee9",
+                "background": "#203040"
+            }
+        ]
+    }
+}

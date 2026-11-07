@@ -1,0 +1,36 @@
+{
+    "outputs": [
+        {
+            "name": "DP-1",
+            "enabled": true,
+            "priority": 1,
+            "currentModeId": "1",
+            "modes": [
+                {
+                    "id": "1",
+                    "size": {
+                        "height": 1440,
+                        "width": 2560
+                    },
+                    "refreshRate": 144
+                }
+            ]
+        },
+        {
+            "name": "HDMI-A-1",
+            "enabled": true,
+            "priority": 2,
+            "currentModeId": "50",
+            "modes": [
+                {
+                    "id": "50",
+                    "size": {
+                        "height": 1440,
+                        "width": 2560
+                    },
+                    "refreshRate": 120.0
+                }
+            ]
+        }
+    ]
+}
