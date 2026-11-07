@@ -50,6 +50,9 @@ class Backend : public QObject
     Q_PROPERTY(QString bugReportsDir READ bugReportsDir CONSTANT) // empty: no local reports (packages)
     // {canCheck, checking, checked, checkError, available, version, notes, busy, text, fraction, error, installed}
     Q_PROPERTY(QVariantMap updateInfo READ updateInfo NOTIFY updateChanged)
+    // The Assets page: {key, kind (image, video, font, palette, logo), name, url, size,
+    // added, source, licenceUrl, colours, usedBy (short), uses (all)}, by kind and name.
+    Q_PROPERTY(QVariantList assetList READ assetList NOTIFY assetsChanged)
     Q_PROPERTY(bool checkUpdates READ checkUpdates NOTIFY changed)
 
 public:
@@ -106,6 +109,15 @@ public:
     Q_INVOKABLE QVariantMap saveBugReport(const QString &title, const QString &body, bool withScreenshot); // {path} or {error}
     QString bugReportsDir() const;
 
+    // The Assets page (SPEC.md §4.13): images, videos and fonts in the library, shared
+    // palettes and logos, and what uses each. Keys are asset hashes or shared ids.
+    QVariantList assetList() const { return m_assetList; }
+    Q_INVOKABLE void reloadAssets();
+    Q_INVOKABLE QVariantMap addAssetFiles(const QList<QUrl> &files); // {added, errors}
+    Q_INVOKABLE QString renameItem(const QString &key, const QString &name); // empty on success
+    Q_INVOKABLE QString removeItem(const QString &key); // to the trash; refused while used
+    Q_INVOKABLE QVariantMap removeUnused(); // {removed, errors}
+
     // Updates from GitHub releases (SPEC.md §4.14).
     QVariantMap updateInfo() const { return m_update; }
     bool checkUpdates() const { return !m_library || m_library->settings().checkUpdates; }
@@ -159,6 +171,7 @@ Q_SIGNALS:
     void applyFinished(bool ok, const QString &error, int historyNumber);
     void bugReportRequested(); // a page's Report a Bug button; Main.qml opens the dialog
     void updateChanged();
+    void assetsChanged();
 
 private:
     QString m_rootDir = QStringLiteral("/");
@@ -196,4 +209,5 @@ private:
     std::unique_ptr<Updater> m_updater;
     Release m_release; // the newer release, once a check found one
     QVariantMap m_update;
+    QVariantList m_assetList;
 };

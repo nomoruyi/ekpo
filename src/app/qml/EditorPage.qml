@@ -1313,9 +1313,53 @@ Kirigami.Page {
         property string purpose // add, replace
 
         nameFilters: [qsTr("Videos (*.mp4 *.mkv *.webm *.mov *.avi *.m4v *.gif)")]
-        onAccepted: {
-            page.pendingAdd = purpose === "add" ? "video" : "";
-            page.message = page.editor.addVideo(selectedFile, purpose === "replace" ? page.selected : -1);
+        onAccepted: clipDialog.start(selectedFile, purpose === "replace" ? page.selected : -1)
+    }
+    // Which part of the video to use (one recording can give several clips).
+    Kirigami.Dialog {
+        id: clipDialog
+
+        property url file
+        property int replaceIndex: -1
+
+        function start(url, replace) {
+            const plan = page.editor.videoPlan(url, -1);
+            if (plan.error) {
+                page.message = plan.error;
+                return;
+            }
+            file = url;
+            replaceIndex = replace;
+            clipSegment.reset(url, plan.seconds);
+            open();
+        }
+
+        title: qsTr("Video")
+        standardButtons: Kirigami.Dialog.NoButton
+        preferredWidth: Kirigami.Units.gridUnit * 30
+        padding: Kirigami.Units.largeSpacing
+        customFooterActions: [
+            Kirigami.Action {
+                text: qsTr("Convert")
+                icon.name: "dialog-ok-apply"
+                onTriggered: {
+                    clipDialog.close();
+                    const whole = clipSegment.start === 0 && clipSegment.length >= clipSegment.duration;
+                    page.pendingAdd = clipDialog.replaceIndex < 0 ? "video" : "";
+                    page.message = page.editor.addVideo(clipDialog.file, clipDialog.replaceIndex, whole ? 0 : clipSegment.start,
+                                                        whole ? 0 : clipSegment.length);
+                }
+            },
+            Kirigami.Action {
+                text: qsTr("Cancel")
+                icon.name: "dialog-cancel"
+                onTriggered: clipDialog.close()
+            }
+        ]
+        onClosed: clipSegment.source = ""
+
+        VideoSegment {
+            id: clipSegment
         }
     }
 
@@ -1349,7 +1393,7 @@ Kirigami.Page {
         property int replaceIndex: -1
         property var plan: ({})
         property real bytesPerFrame: -1 // measured from the first second; -1 while measuring
-        readonly property int frames: Math.max(1, Math.round(fpsField.value * lengthField.number))
+        readonly property int frames: Math.max(1, Math.round(fpsField.value * framesSegment.length))
         readonly property real frameMemory: (plan.frameWidth ?? 0) * (plan.frameHeight ?? 0) * 4
 
         function start(url, replace) {
@@ -1361,19 +1405,21 @@ Kirigami.Page {
             file = url;
             replaceIndex = replace;
             fpsField.value = Math.min(30, Math.round(plan.fps));
-            lengthField.number = Math.min(plan.seconds, 2);
+            framesSegment.reset(url, plan.seconds);
+            framesSegment.setLength(2); // two-step's loop
             measure();
             open();
         }
         function measure() {
             bytesPerFrame = -1;
-            page.editor.measureFrames(file, plan.frameWidth, plan.frameHeight, fpsField.value);
+            page.editor.measureFrames(file, plan.frameWidth, plan.frameHeight, fpsField.value, framesSegment.start);
         }
 
         title: qsTr("Animation from Video")
         standardButtons: Kirigami.Dialog.NoButton
-        preferredWidth: Kirigami.Units.gridUnit * 28
+        preferredWidth: Kirigami.Units.gridUnit * 30
         padding: Kirigami.Units.largeSpacing
+        onClosed: framesSegment.source = ""
         customFooterActions: [
             Kirigami.Action {
                 text: qsTr("Convert")
@@ -1382,7 +1428,7 @@ Kirigami.Page {
                     framesDialog.close();
                     page.pendingAdd = framesDialog.replaceIndex < 0 ? "frames" : "";
                     page.message = page.editor.addVideoFrames(framesDialog.file, framesDialog.plan.frameWidth, framesDialog.plan.frameHeight,
-                                                              fpsField.value, lengthField.number, framesDialog.replaceIndex);
+                                                              fpsField.value, framesSegment.length, framesDialog.replaceIndex, framesSegment.start);
                 }
             },
             Kirigami.Action {
@@ -1398,49 +1444,57 @@ Kirigami.Page {
                 framesDialog.bytesPerFrame = bytes;
             }
         }
+        // Measures again from a new start once dragging stops.
+        Timer {
+            id: remeasure
+            interval: 400
+            onTriggered: framesDialog.measure()
+        }
 
-        Kirigami.FormLayout {
-            QQC2.Label {
-                Kirigami.FormData.label: qsTr("Video:")
-                text: qsTr("%1×%2, %3 s at %4 fps").arg(framesDialog.plan.width ?? 0).arg(framesDialog.plan.height ?? 0)
-                    .arg((framesDialog.plan.seconds ?? 0).toFixed(1)).arg(Math.round(framesDialog.plan.fps ?? 0))
-            }
-            QQC2.SpinBox {
-                id: fpsField
-                Kirigami.FormData.label: qsTr("Frames per second:")
-                from: 1
-                to: 30 // two-step draws at 30 fps
-                onValueModified: framesDialog.measure()
-            }
-            DecimalField {
-                id: lengthField
-                Kirigami.FormData.label: qsTr("Length (s):")
-                from: 10
-                to: Math.round((framesDialog.plan.seconds ?? 0) * 100)
-            }
-            QQC2.Label {
-                Kirigami.FormData.label: qsTr("Frames:")
-                text: qsTr("%1 of %2×%3 px; %4").arg(framesDialog.frames).arg(framesDialog.plan.frameWidth ?? 0).arg(framesDialog.plan.frameHeight ?? 0)
-                    .arg(Math.abs(lengthField.number - 2) < 0.01 ? qsTr("plays with two-step") : qsTr("plays with the script module"))
-            }
-            QQC2.Label {
-                Kirigami.FormData.label: qsTr("Memory:")
+        ColumnLayout {
+            VideoSegment {
+                id: framesSegment
                 Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                text: qsTr("%1 MB; up to %2 s fit in the %3 MB left")
-                    .arg(page.megabytes(framesDialog.frames * framesDialog.frameMemory))
-                    .arg((framesDialog.plan.memoryLeft / Math.max(1, framesDialog.frameMemory * fpsField.value)).toFixed(1))
-                    .arg(page.megabytes(framesDialog.plan.memoryLeft ?? 0))
+                onStartChanged: if (framesDialog.opened) remeasure.restart()
             }
-            QQC2.Label {
-                Kirigami.FormData.label: qsTr("File size:")
+            Kirigami.FormLayout {
                 Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                text: framesDialog.bytesPerFrame < 0 ? qsTr("Measuring…")
-                    : qsTr("about %1 MB; up to %2 s fit in the %3 MB left")
-                          .arg(page.megabytes(framesDialog.frames * framesDialog.bytesPerFrame))
-                          .arg((framesDialog.plan.bytesLeft / Math.max(1, framesDialog.bytesPerFrame * fpsField.value)).toFixed(1))
-                          .arg(page.megabytes(framesDialog.plan.bytesLeft ?? 0))
+                QQC2.Label {
+                    Kirigami.FormData.label: qsTr("Video:")
+                    text: qsTr("%1×%2, %3 s at %4 fps").arg(framesDialog.plan.width ?? 0).arg(framesDialog.plan.height ?? 0)
+                        .arg((framesDialog.plan.seconds ?? 0).toFixed(1)).arg(Math.round(framesDialog.plan.fps ?? 0))
+                }
+                QQC2.SpinBox {
+                    id: fpsField
+                    Kirigami.FormData.label: qsTr("Frames per second:")
+                    from: 1
+                    to: 30 // two-step draws at 30 fps
+                    onValueModified: framesDialog.measure()
+                }
+                QQC2.Label {
+                    Kirigami.FormData.label: qsTr("Frames:")
+                    text: qsTr("%1 of %2×%3 px; %4").arg(framesDialog.frames).arg(framesDialog.plan.frameWidth ?? 0).arg(framesDialog.plan.frameHeight ?? 0)
+                        .arg(Math.abs(framesSegment.length - 2) < 0.01 ? qsTr("plays with two-step") : qsTr("plays with the script module"))
+                }
+                QQC2.Label {
+                    Kirigami.FormData.label: qsTr("Memory:")
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: qsTr("%1 MB; up to %2 s fit in the %3 MB left")
+                        .arg(page.megabytes(framesDialog.frames * framesDialog.frameMemory))
+                        .arg((framesDialog.plan.memoryLeft / Math.max(1, framesDialog.frameMemory * fpsField.value)).toFixed(1))
+                        .arg(page.megabytes(framesDialog.plan.memoryLeft ?? 0))
+                }
+                QQC2.Label {
+                    Kirigami.FormData.label: qsTr("File size:")
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: framesDialog.bytesPerFrame < 0 ? qsTr("Measuring…")
+                        : qsTr("about %1 MB; up to %2 s fit in the %3 MB left")
+                              .arg(page.megabytes(framesDialog.frames * framesDialog.bytesPerFrame))
+                              .arg((framesDialog.plan.bytesLeft / Math.max(1, framesDialog.bytesPerFrame * fpsField.value)).toFixed(1))
+                              .arg(page.megabytes(framesDialog.plan.bytesLeft ?? 0))
+                }
             }
         }
     }

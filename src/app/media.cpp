@@ -43,21 +43,27 @@ std::optional<VideoInfo> probeVideo(const QString &file, QString &error)
     return info;
 }
 
-MediaJob::MediaJob(const QString &input, const QString &output, bool directory, double maxSeconds, QStringList arguments, QObject *parent)
+MediaJob::MediaJob(const QString &input, const QString &output, bool directory, double start, double maxSeconds, QStringList arguments, QObject *parent)
     : QObject(parent)
     , m_input(input)
     , m_output(output)
     , m_directory(directory)
+    , m_start(std::max(0.0, start))
     , m_maxSeconds(maxSeconds)
     , m_arguments(std::move(arguments))
 {
+    // Seeking before -i is fast and, as the output is encoded anew, exact.
+    if (m_start > 0)
+        m_arguments = QStringList{QStringLiteral("-ss"), QString::number(m_start)} + m_arguments;
+    if (m_maxSeconds > 0)
+        m_arguments << QStringLiteral("-t") << QString::number(m_maxSeconds);
 }
 
-MediaJob *MediaJob::toMp4(const QString &input, const QString &output, int maxHeight, QObject *parent)
+MediaJob *MediaJob::toMp4(const QString &input, const QString &output, int maxHeight, double start, double seconds, QObject *parent)
 {
     // Even sizes for yuv420p; no metadata from the source (phone videos carry places).
     const QString scale = QStringLiteral("scale=w=-2:h='trunc(min(ih,%1)/2)*2':flags=lanczos").arg(maxHeight);
-    return new MediaJob(input, output, false, 0,
+    return new MediaJob(input, output, false, start, seconds,
                         {QStringLiteral("-i"), input, QStringLiteral("-map"), QStringLiteral("0:v:0"), QStringLiteral("-an"), QStringLiteral("-sn"),
                          QStringLiteral("-dn"), QStringLiteral("-map_metadata"), QStringLiteral("-1"), QStringLiteral("-map_chapters"), QStringLiteral("-1"),
                          QStringLiteral("-vf"), scale, QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-preset"), QStringLiteral("medium"),
@@ -66,7 +72,7 @@ MediaJob *MediaJob::toMp4(const QString &input, const QString &output, int maxHe
                         parent);
 }
 
-MediaJob *MediaJob::toFrames(const QString &input, const QString &outputDir, QSize size, double fps, double seconds, QObject *parent)
+MediaJob *MediaJob::toFrames(const QString &input, const QString &outputDir, QSize size, double fps, double seconds, double start, QObject *parent)
 {
     // One palette over all frames (stats_mode=diff favours what moves), as measured in
     // notes/spikes-2026-11-06.md.
@@ -75,9 +81,8 @@ MediaJob *MediaJob::toFrames(const QString &input, const QString &outputDir, QSi
                               .arg(fps)
                               .arg(size.width())
                               .arg(size.height());
-    return new MediaJob(input, outputDir, true, seconds,
-                        {QStringLiteral("-i"), input, QStringLiteral("-map"), QStringLiteral("0:v:0"), QStringLiteral("-an"), QStringLiteral("-t"),
-                         QString::number(seconds), QStringLiteral("-vf"), graph},
+    return new MediaJob(input, outputDir, true, start, seconds,
+                        {QStringLiteral("-i"), input, QStringLiteral("-map"), QStringLiteral("0:v:0"), QStringLiteral("-an"), QStringLiteral("-vf"), graph},
                         parent);
 }
 
@@ -95,8 +100,11 @@ void MediaJob::start()
 {
     QString error;
     const auto info = probeVideo(m_input, error);
-    if (info) {
-        m_seconds = m_maxSeconds > 0 ? std::min(m_maxSeconds, info->seconds) : info->seconds;
+    if (info && m_start >= info->seconds) {
+        error = tr("The start (%1 s) lies after the end of the video (%2 s).").arg(m_start, 0, 'f', 1).arg(info->seconds, 0, 'f', 1);
+    } else if (info) {
+        const double left = info->seconds - m_start;
+        m_seconds = m_maxSeconds > 0 ? std::min(m_maxSeconds, left) : left;
         removePartial();
         if (m_directory && !QDir().mkpath(partial()))
             error = tr("Can't create %1.").arg(partial());

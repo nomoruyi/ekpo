@@ -44,7 +44,7 @@ Kirigami.ApplicationWindow {
         currentSection = allSections.find(s => s.name === name);
     }
     function pageFor(name) {
-        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, history: historyPage, settings: settingsPage, about: aboutPage })[name] ?? placeholderPage;
+        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, assets: assetsPage, history: historyPage, settings: settingsPage, about: aboutPage })[name] ?? placeholderPage;
     }
     function showPage(page) {
         const old = pageStack.currentItem;
@@ -318,6 +318,10 @@ Kirigami.ApplicationWindow {
         id: masksPage
         visible: false
         onReview: root.showReview()
+    }
+    AssetsPage {
+        id: assetsPage
+        visible: false
     }
     HistoryPage {
         id: historyPage

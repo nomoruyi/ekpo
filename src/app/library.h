@@ -81,6 +81,20 @@ public:
     // A TrueType/OpenType font, with its licence: a LICENSE, OFL or COPYING file
     // next to it, else the copyright file of the Debian package that ships it.
     std::optional<Asset> addFont(const QString &file, const QString &name, QString &error);
+    bool renameAsset(const QString &hash, const QString &name, QString &error);
+    // Moves the file to the trash and forgets the asset. Check uses() first: a design
+    // that still shows it would lose it.
+    bool removeAsset(const QString &hash, QString &error);
+
+    // Who uses an asset or a shared element, by asset hash or shared id: every saved
+    // version and draft of every design that names it, the shared logos that show an
+    // image, and the fonts a licence text belongs to.
+    struct Use {
+        QString design; // empty for a logo or a font
+        int version = 0; // 0: the unsaved changes (draft)
+        QString label; // e.g. “Dawn”, version 2
+    };
+    QMap<QString, QList<Use>> uses(QStringList &errors) const;
 
     QList<Mask> masks(QStringList &errors) const; // sorted by name; unreadable files go to errors
     bool saveMask(Mask &mask, QString &error); // assigns the id on first save

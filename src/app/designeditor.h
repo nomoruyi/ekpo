@@ -135,8 +135,9 @@ public:
     Q_INVOKABLE QVariantMap addSystemFont(const QString &family); // located through fontconfig
     // Converts a video to a silent MP4 of at most 1440p in the background (one at a
     // time), stores it as an asset and adds a video element, or puts it into the
-    // video element at replaceIndex. Empty if the conversion started.
-    Q_INVOKABLE QString addVideo(const QUrl &file, int replaceIndex = -1);
+    // video element at replaceIndex. Only the segment from start, seconds long (0: to
+    // the end), so one recording gives several clips. Empty if the conversion started.
+    Q_INVOKABLE QString addVideo(const QUrl &file, int replaceIndex = -1, double start = 0, double seconds = 0);
     Q_INVOKABLE void cancelConversion();
 
     // Boot splash animations (SPEC.md §4.6). From images: sorted by file name, each
@@ -147,11 +148,12 @@ public:
     // gives, and what the theme has left for an animation:
     // {width, height, fps, seconds, frameWidth, frameHeight, memoryLeft, bytesLeft} or {error}.
     Q_INVOKABLE QVariantMap videoPlan(const QUrl &file, int replaceIndex = -1) const;
-    // Converts the first second in the background and reports the bytes per frame
-    // (framesMeasured; -1 if it failed), for the file size before the real conversion.
-    Q_INVOKABLE void measureFrames(const QUrl &file, int width, int height, double fps);
-    // The real conversion, like addVideo (progress, cancel); then like addImageFrames.
-    Q_INVOKABLE QString addVideoFrames(const QUrl &file, int width, int height, double fps, double seconds, int replaceIndex = -1);
+    // Converts the first second from start in the background and reports the bytes per
+    // frame (framesMeasured; -1 if it failed), for the file size before the real conversion.
+    Q_INVOKABLE void measureFrames(const QUrl &file, int width, int height, double fps, double start = 0);
+    // The real conversion of seconds from start, like addVideo (progress, cancel); then
+    // like addImageFrames.
+    Q_INVOKABLE QString addVideoFrames(const QUrl &file, int width, int height, double fps, double seconds, int replaceIndex = -1, double start = 0);
 
     // Shared logos: share an image element's image under a name (the element links it),
     // add an element that links one, change one (every design that links it changes),

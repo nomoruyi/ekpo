@@ -33,6 +33,8 @@ private Q_SLOTS:
     void notAFontIsRefused();
     void fontFromDebianPackage();
     void resolvesSharedElements();
+    void findsUses();
+    void renamesAndRemovesAssets();
 
 private:
     static Library openFresh(const QTemporaryDir &tmp)
@@ -460,6 +462,62 @@ void TestLibrary::resolvesSharedElements()
     library.resolved(design, problems);
     QCOMPARE(problems, (QStringList{QStringLiteral("The design's palette is no longer in the library."),
                                     QStringLiteral("The design uses a shared logo that is no longer in the library.")}));
+}
+
+// Who uses what, for the Assets page: every saved version and draft, shared logos
+// and the fonts licence texts belong to.
+void TestLibrary::findsUses()
+{
+    QTemporaryDir tmp;
+    Library library = openFresh(tmp);
+    QString error;
+    const auto background = library.addAsset(QStringLiteral(FIXTURES_DIR "/assets/logo.png"), Asset::Kind::Image, QStringLiteral("Logo"), error);
+    QVERIFY2(background, qPrintable(error));
+    writeFile(tmp.filePath(QStringLiteral("other.png")), QByteArray::fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+    const auto inDraft = library.addAsset(tmp.filePath(QStringLiteral("other.png")), Asset::Kind::Image, QStringLiteral("Other"), error);
+    QVERIFY2(inDraft, qPrintable(error));
+    SharedElement palette{{}, SharedElement::Kind::Palette, QStringLiteral("Night"), {}, {{QStringLiteral("background"), QStringLiteral("#101010")}}};
+    SharedElement logo{{}, SharedElement::Kind::Logo, QStringLiteral("Brand"), inDraft->hash, {}};
+    QVERIFY(library.saveSharedElement(palette, error) && library.saveSharedElement(logo, error));
+
+    Design design;
+    design.name = QStringLiteral("Dawn");
+    design.stage = Stage::PlasmaSplash;
+    design.content = QJsonObject{{QStringLiteral("palette"), palette.id},
+                                 {QStringLiteral("background"), QJsonObject{{QStringLiteral("image"), background->hash}}}};
+    QVERIFY2(library.saveDesign(design, error), qPrintable(error));
+    design.content.insert(QStringLiteral("elements"), QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("asset"), inDraft->hash}}});
+    QVERIFY2(library.saveDraft(design, error), qPrintable(error));
+
+    QStringList errors;
+    const QMap<QString, QList<Library::Use>> uses = library.uses(errors);
+    QCOMPARE(uses.value(background->hash).size(), 2); // version 1 and the draft
+    QCOMPARE(uses.value(background->hash).first().label, QStringLiteral("“Dawn”, version 1"));
+    QCOMPARE(uses.value(palette.id).size(), 2);
+    QStringList labels;
+    for (const Library::Use &u : uses.value(inDraft->hash))
+        labels << u.label;
+    labels.sort();
+    QCOMPARE(labels, (QStringList{QStringLiteral("the logo “Brand”"), QStringLiteral("unsaved changes to “Dawn”")}));
+    QVERIFY(uses.value(logo.id).size() == 0); // the draft shows the image, it doesn't link the logo
+}
+
+void TestLibrary::renamesAndRemovesAssets()
+{
+    QTemporaryDir tmp;
+    Library library = openFresh(tmp);
+    QString error;
+    const auto image = library.addAsset(QStringLiteral(FIXTURES_DIR "/assets/logo.png"), Asset::Kind::Image, QStringLiteral("Logo"), error);
+    QVERIFY2(image, qPrintable(error));
+    QVERIFY2(library.renameAsset(image->hash, QStringLiteral("Mask logo"), error), qPrintable(error));
+    QStringList errors;
+    QCOMPARE(library.assets(errors).first().name, QStringLiteral("Mask logo"));
+    QVERIFY(!library.renameAsset(QStringLiteral("nope"), QStringLiteral("x"), error));
+
+    const QString file = library.assetPath(*image);
+    QVERIFY2(library.removeAsset(image->hash, error), qPrintable(error));
+    QVERIFY(!QFile::exists(file)); // in the trash
+    QVERIFY(library.assets(errors).isEmpty());
 }
 
 EKPO_TEST_MAIN(TestLibrary)

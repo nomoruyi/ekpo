@@ -1,4 +1,5 @@
 #include "designeditor.h"
+#include "media.h"
 #include "importer.h"
 #include "testmain.h"
 #include "validate.h"
@@ -42,6 +43,7 @@ private Q_SLOTS:
     void reusesPaletteWithSameColours();
     void deletesPalette();
     void fiveColourPalettes();
+    void videoSegments();
     void bootMenuPreview();
     void bootMenuStarters();
     void bootMenuIcons();
@@ -654,6 +656,44 @@ void TestDesignEditor::fiveColourPalettes()
     QVERIFY(old);
     QCOMPARE(old->colours.value(QStringLiteral("gradient")), QStringLiteral("#111111"));
     QCOMPARE(old->colours.value(QStringLiteral("accent2")), QStringLiteral("#222222"));
+}
+
+// One recording, several clips: each import takes a segment, and the asset's name
+// says which one.
+void TestDesignEditor::videoSegments()
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("ffmpeg")).isEmpty())
+        QSKIP("ffmpeg isn't installed");
+    DesignEditor &e = *m_editor;
+    e.create();
+    const QUrl clip = QUrl::fromLocalFile(QStringLiteral(FIXTURES_DIR "/assets/clip.mp4")); // 1 s at 10 fps
+    QSignalSpy finished(&e, &DesignEditor::conversionFinished);
+    QCOMPARE(e.addVideo(clip, -1, 0.5, 0.3), QString());
+    QCOMPARE(e.conversionName(), QStringLiteral("clip (0:00.5–0:00.8)"));
+    QVERIFY(finished.wait(60000));
+    QCOMPARE(finished.first().first().toString(), QString());
+    QStringList errors;
+    QList<Asset> assets = m_library->assets(errors);
+    QCOMPARE(assets.size(), 1);
+    QCOMPARE(assets.first().name, QStringLiteral("clip (0:00.5–0:00.8)"));
+    QString error;
+    const auto info = probeVideo(m_library->assetPath(assets.first()), error);
+    QVERIFY2(info && info->seconds < 0.45, qPrintable(error));
+
+    // Frames from the second half: 5 fps for 0.4 s are 2 frames.
+    e.create(QStringLiteral("bootSplash"));
+    e.flushPreview();
+    finished.clear();
+    QCOMPARE(e.addVideoFrames(clip, 128, 72, 5, 0.4, -1, 0.5), QString());
+    QVERIFY(finished.wait(60000));
+    QCOMPARE(finished.first().first().toString(), QString());
+    const QVariantMap animation = elementAt(e, 0);
+    QCOMPARE(animation.value(QStringLiteral("frames")).toList().size(), 2);
+    assets = m_library->assets(errors);
+    QStringList names;
+    for (const Asset &a : std::as_const(assets))
+        names << a.name;
+    QVERIFY2(names.contains(QStringLiteral("clip (0:00.5–0:00.9) 0001")), qPrintable(names.join(QStringLiteral(" | "))));
 }
 
 void TestDesignEditor::bootMenuPreview()

@@ -718,16 +718,29 @@ QString DesignEditor::startJob(MediaJob *job, const QString &name, const std::fu
     return {};
 }
 
-QString DesignEditor::addVideo(const QUrl &file, int replaceIndex)
+// "menu (1:23.0–1:25.0)": which part of the recording a clip is.
+static QString clipName(const QString &path, double start, double seconds)
+{
+    const QString base = QFileInfo(path).completeBaseName();
+    if (start <= 0 && seconds <= 0)
+        return base;
+    const auto time = [](double s) {
+        const int tenths = qRound(s * 10);
+        return QStringLiteral("%1:%2.%3").arg(tenths / 600).arg(tenths / 10 % 60, 2, 10, QLatin1Char('0')).arg(tenths % 10);
+    };
+    return seconds > 0 ? QStringLiteral("%1 (%2–%3)").arg(base, time(start), time(start + seconds)) : QStringLiteral("%1 (from %2)").arg(base, time(start));
+}
+
+QString DesignEditor::addVideo(const QUrl &file, int replaceIndex, double start, double seconds)
 {
     if (!m_open || !m_library)
         return tr("No design is open.");
     if (m_job)
         return tr("Wait until “%1” is converted.").arg(m_jobName);
     const QString path = localPath(file);
-    const QString name = QFileInfo(path).completeBaseName();
+    const QString name = clipName(path, start, seconds);
     const QString output = m_mediaDir.filePath(QStringLiteral("video.mp4"));
-    return startJob(MediaJob::toMp4(path, output, resolutions[0].height), name, [this, path, name, output, replaceIndex] {
+    return startJob(MediaJob::toMp4(path, output, resolutions[0].height, start, seconds), name, [this, path, name, output, replaceIndex] {
         QString error;
         const auto asset = m_library->addAsset(output, Asset::Kind::Video, name, error, {}, path);
         QFile::remove(output);
@@ -817,12 +830,12 @@ QVariantMap DesignEditor::videoPlan(const QUrl &file, int replaceIndex) const
             {QStringLiteral("bytesLeft"), double(plymouthThemeCap - (m_layout.bytes - m_layout.frameBytes))}};
 }
 
-void DesignEditor::measureFrames(const QUrl &file, int width, int height, double fps)
+void DesignEditor::measureFrames(const QUrl &file, int width, int height, double fps, double start)
 {
     m_sample.reset(); // stops a measurement still running
     const QString dir = m_mediaDir.filePath(QStringLiteral("sample"));
     QDir(dir).removeRecursively();
-    m_sample.reset(MediaJob::toFrames(localPath(file), dir, QSize(width, height), fps, 1.0));
+    m_sample.reset(MediaJob::toFrames(localPath(file), dir, QSize(width, height), fps, 1.0, start));
     connect(m_sample.get(), &MediaJob::finished, this, [this, dir](bool ok, const QString &) {
         m_sample.release()->deleteLater();
         qint64 bytes = 0;
@@ -835,17 +848,17 @@ void DesignEditor::measureFrames(const QUrl &file, int width, int height, double
     m_sample->start();
 }
 
-QString DesignEditor::addVideoFrames(const QUrl &file, int width, int height, double fps, double seconds, int replaceIndex)
+QString DesignEditor::addVideoFrames(const QUrl &file, int width, int height, double fps, double seconds, int replaceIndex, double start)
 {
     if (!m_open || !m_library)
         return tr("No design is open.");
     if (m_job)
         return tr("Wait until “%1” is converted.").arg(m_jobName);
     const QString path = localPath(file);
-    const QString name = QFileInfo(path).completeBaseName();
+    const QString name = clipName(path, start, seconds);
     const QString dir = m_mediaDir.filePath(QStringLiteral("frames"));
     QDir(dir).removeRecursively();
-    return startJob(MediaJob::toFrames(path, dir, QSize(width, height), fps, seconds), name, [this, path, name, dir, fps, replaceIndex] {
+    return startJob(MediaJob::toFrames(path, dir, QSize(width, height), fps, seconds, start), name, [this, path, name, dir, fps, replaceIndex] {
         QStringList frames;
         for (const QFileInfo &f : QDir(dir).entryInfoList({QStringLiteral("frame-*.png")}, QDir::Files, QDir::Name))
             frames << f.filePath();
@@ -1015,20 +1028,15 @@ QString DesignEditor::deletePalette(const QString &id)
 {
     if (!m_library)
         return tr("The library isn't available.");
-    // Every saved version and draft that links it would lose its colours.
+    // Every saved version and draft that links it would lose its colours; this
+    // design's unsaved changes are unlinked below.
     QStringList users;
     QStringList errors;
-    for (const Design &d : m_library->designs(errors)) {
-        for (int n : m_library->designVersions(d.id)) {
-            QString error;
-            const std::optional<Design> version = m_library->design(d.id, n, error);
-            if (version && version->content.value(QStringLiteral("palette")).toString() == id)
-                users << (d.id == m_id ? tr("version %1 of this design").arg(n) : tr("“%1”, version %2").arg(d.name).arg(n));
-        }
-    }
-    for (const Design &d : m_library->drafts(errors)) {
-        if (d.id != m_id && d.content.value(QStringLiteral("palette")).toString() == id)
-            users << tr("unsaved changes to “%1”").arg(d.name);
+    for (const Library::Use &use : m_library->uses(errors).value(id)) {
+        if (use.design == m_id && use.version > 0)
+            users << tr("version %1 of this design").arg(use.version);
+        else if (use.design != m_id || use.version > 0)
+            users << use.label;
     }
     if (!users.isEmpty())
         return tr("The palette is still used by %1. Switch those to another palette or None first.").arg(users.join(QStringLiteral(", ")));

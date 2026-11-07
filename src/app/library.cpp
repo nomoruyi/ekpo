@@ -672,6 +672,87 @@ std::optional<Asset> Library::addAsset(const QString &file, Asset::Kind kind, co
     return asset;
 }
 
+bool Library::renameAsset(const QString &hash, const QString &name, QString &error)
+{
+    const auto json = readJson(assetsManifest(m_path), error);
+    if (!json)
+        return false;
+    QJsonObject entries = *json;
+    if (!entries.contains(hash)) {
+        error = QStringLiteral("The library has no asset %1.").arg(hash);
+        return false;
+    }
+    QJsonObject entry = entries.value(hash).toObject();
+    entry.insert(QStringLiteral("name"), name.trimmed());
+    entries.insert(hash, entry);
+    return writeJson(assetsManifest(m_path), entries, error);
+}
+
+bool Library::removeAsset(const QString &hash, QString &error)
+{
+    const auto json = readJson(assetsManifest(m_path), error);
+    if (!json)
+        return false;
+    QJsonObject entries = *json;
+    const auto asset = Asset::fromJson(hash, entries.value(hash).toObject());
+    if (!asset) {
+        error = QStringLiteral("The library has no asset %1.").arg(hash);
+        return false;
+    }
+    if (QFile::exists(assetPath(*asset)) && !QFile::moveToTrash(assetPath(*asset))) {
+        error = QStringLiteral("Can't move %1 to the trash.").arg(assetPath(*asset));
+        return false;
+    }
+    entries.remove(hash);
+    return writeJson(assetsManifest(m_path), entries, error);
+}
+
+namespace {
+// Every string in a JSON value: hashes and ids sit at different places in designs.
+void collectStrings(const QJsonValue &value, QSet<QString> &out)
+{
+    if (value.isString())
+        out.insert(value.toString());
+    else if (value.isArray())
+        for (const QJsonValue &v : value.toArray())
+            collectStrings(v, out);
+    else if (value.isObject())
+        for (const QJsonValue &v : value.toObject())
+            collectStrings(v, out);
+}
+} // namespace
+
+QMap<QString, QList<Library::Use>> Library::uses(QStringList &errors) const
+{
+    QMap<QString, QList<Use>> result;
+    const auto add = [&](const QJsonObject &content, const Use &use) {
+        QSet<QString> strings;
+        collectStrings(content, strings);
+        for (const QString &s : std::as_const(strings))
+            result[s].append(use);
+    };
+    for (const Design &d : designs(errors)) {
+        for (int n : designVersions(d.id)) {
+            QString error;
+            if (const auto version = design(d.id, n, error))
+                add(version->content, Use{d.id, n, QStringLiteral("“%1”, version %2").arg(version->name).arg(n)});
+            else
+                errors << error;
+        }
+    }
+    for (const Design &d : drafts(errors))
+        add(d.content, Use{d.id, 0, QStringLiteral("unsaved changes to “%1”").arg(d.name)});
+    for (const SharedElement &e : sharedElements(errors)) {
+        if (e.kind == SharedElement::Kind::Logo && !e.asset.isEmpty())
+            result[e.asset].append(Use{{}, 0, QStringLiteral("the logo “%1”").arg(e.name)});
+    }
+    for (const Asset &a : assets(errors)) {
+        if (!a.licence.isEmpty())
+            result[a.licence].append(Use{{}, 0, QStringLiteral("the font “%1”").arg(a.name)});
+    }
+    return result;
+}
+
 std::optional<Asset> Library::addFont(const QString &file, const QString &name, QString &error)
 {
     QFile in(file);

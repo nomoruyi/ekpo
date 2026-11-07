@@ -196,6 +196,184 @@ Backend::Backend(QObject *parent)
         checkForUpdates();
 }
 
+void Backend::reloadAssets()
+{
+    m_assetList.clear();
+    if (!m_library) {
+        Q_EMIT assetsChanged();
+        return;
+    }
+    QStringList errors;
+    const QMap<QString, QList<Library::Use>> uses = m_library->uses(errors);
+    QHash<QString, QString> designNames; // current names, also of designs never saved
+    for (const Design &d : m_library->designs(errors))
+        designNames.insert(d.id, d.name);
+    for (const Design &d : m_library->drafts(errors))
+        designNames.insert(d.id, d.name);
+    const auto withUses = [&](QVariantMap item, const QString &key) {
+        QStringList all, short_;
+        for (const Library::Use &u : uses.value(key)) {
+            all << u.label;
+            const QString entry = u.design.isEmpty() ? u.label : QStringLiteral("“%1”").arg(designNames.value(u.design, u.label));
+            if (!short_.contains(entry))
+                short_ << entry;
+        }
+        item.insert(QStringLiteral("uses"), all);
+        item.insert(QStringLiteral("usedBy"), short_);
+        return item;
+    };
+    const QLocale locale;
+    QHash<QString, QString> licences; // licence hash -> file
+    const QList<Asset> assets = m_library->assets(errors);
+    for (const Asset &a : assets) {
+        if (a.kind == Asset::Kind::Licence)
+            licences.insert(a.hash, m_library->assetPath(a));
+    }
+    for (const Asset &a : assets) {
+        if (a.kind == Asset::Kind::Licence)
+            continue; // shown with its font
+        const QString path = m_library->assetPath(a);
+        const QString kind = a.kind == Asset::Kind::Image ? QStringLiteral("image") : a.kind == Asset::Kind::Video ? QStringLiteral("video") : QStringLiteral("font");
+        m_assetList << withUses({{QStringLiteral("key"), a.hash},
+                                 {QStringLiteral("kind"), kind},
+                                 {QStringLiteral("name"), a.name},
+                                 {QStringLiteral("url"), QUrl::fromLocalFile(path)},
+                                 {QStringLiteral("size"), locale.formattedDataSize(QFileInfo(path).size())},
+                                 {QStringLiteral("added"), locale.toString(a.addedAt.toLocalTime(), QLocale::ShortFormat)},
+                                 {QStringLiteral("source"), a.source},
+                                 {QStringLiteral("licenceUrl"), licences.contains(a.licence) ? QUrl::fromLocalFile(licences.value(a.licence)) : QUrl()}},
+                                a.hash);
+    }
+    QHash<QString, QString> assetFiles;
+    for (const Asset &a : assets)
+        assetFiles.insert(a.hash, m_library->assetPath(a));
+    for (const SharedElement &e : m_library->sharedElements(errors)) {
+        QVariantList colours;
+        for (const QString &key : paletteKeys) {
+            if (e.colours.contains(key))
+                colours << e.colours.value(key);
+        }
+        const bool palette = e.kind == SharedElement::Kind::Palette;
+        m_assetList << withUses({{QStringLiteral("key"), e.id},
+                                 {QStringLiteral("kind"), palette ? QStringLiteral("palette") : QStringLiteral("logo")},
+                                 {QStringLiteral("name"), e.name},
+                                 {QStringLiteral("url"), palette ? QUrl() : QUrl::fromLocalFile(assetFiles.value(e.asset))},
+                                 {QStringLiteral("colours"), colours}},
+                                e.id);
+    }
+    static const QStringList order = {QStringLiteral("image"), QStringLiteral("video"), QStringLiteral("font"), QStringLiteral("palette"), QStringLiteral("logo")};
+    std::stable_sort(m_assetList.begin(), m_assetList.end(), [](const QVariant &a, const QVariant &b) {
+        const QVariantMap x = a.toMap(), y = b.toMap();
+        const qsizetype kx = order.indexOf(x.value(QStringLiteral("kind")).toString()), ky = order.indexOf(y.value(QStringLiteral("kind")).toString());
+        return kx != ky ? kx < ky : QString::localeAwareCompare(x.value(QStringLiteral("name")).toString(), y.value(QStringLiteral("name")).toString()) < 0;
+    });
+    Q_EMIT assetsChanged();
+}
+
+QVariantMap Backend::addAssetFiles(const QList<QUrl> &files)
+{
+    if (!m_library)
+        return {{QStringLiteral("added"), 0}, {QStringLiteral("errors"), QStringList{m_libraryError}}};
+    static const QStringList images = {QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("webp"), QStringLiteral("svg")};
+    static const QStringList fonts = {QStringLiteral("ttf"), QStringLiteral("otf"), QStringLiteral("ttc")};
+    int added = 0;
+    QStringList errors;
+    for (const QUrl &url : files) {
+        const QString file = url.toLocalFile();
+        const QFileInfo info(file);
+        const QString suffix = info.suffix().toLower();
+        QString error;
+        std::optional<Asset> asset;
+        if (images.contains(suffix))
+            asset = m_library->addAsset(file, Asset::Kind::Image, info.completeBaseName(), error);
+        else if (fonts.contains(suffix))
+            asset = m_library->addFont(file, info.completeBaseName(), error);
+        else
+            error = tr("%1: only images and fonts can be added here. Videos are added in the editor, which converts them for their splash.").arg(info.fileName());
+        if (asset)
+            ++added;
+        else
+            errors << error;
+    }
+    reloadAssets();
+    return {{QStringLiteral("added"), added}, {QStringLiteral("errors"), errors}};
+}
+
+QString Backend::renameItem(const QString &key, const QString &name)
+{
+    if (!m_library)
+        return m_libraryError;
+    if (name.trimmed().isEmpty())
+        return tr("A name can't be empty.");
+    QString error;
+    QStringList errors;
+    for (SharedElement e : m_library->sharedElements(errors)) {
+        if (e.id == key) {
+            e.name = name.trimmed();
+            if (!m_library->saveSharedElement(e, error))
+                return error;
+            reloadAssets();
+            return {};
+        }
+    }
+    if (!m_library->renameAsset(key, name, error))
+        return error;
+    reloadAssets();
+    return {};
+}
+
+QString Backend::removeItem(const QString &key)
+{
+    if (!m_library)
+        return m_libraryError;
+    QStringList errors;
+    const QList<Library::Use> users = m_library->uses(errors).value(key);
+    if (!users.isEmpty()) {
+        QStringList names;
+        for (const Library::Use &u : users)
+            names << u.label;
+        return tr("Still used by %1.").arg(names.mid(0, 3).join(QStringLiteral(", ")) + (names.size() > 3 ? tr(" and %n more", "", int(names.size() - 3)) : QString()));
+    }
+    QString error;
+    bool shared = false;
+    for (const SharedElement &e : m_library->sharedElements(errors))
+        shared = shared || e.id == key;
+    if (shared) {
+        if (!m_library->removeSharedElement(key, error))
+            return error;
+    } else {
+        QString licence;
+        for (const Asset &a : m_library->assets(errors))
+            if (a.hash == key)
+                licence = a.licence;
+        if (!m_library->removeAsset(key, error))
+            return error;
+        // A font's licence text goes with it, unless another font has the same one.
+        if (!licence.isEmpty() && m_library->uses(errors).value(licence).isEmpty())
+            m_library->removeAsset(licence, error);
+    }
+    reloadAssets();
+    return {};
+}
+
+QVariantMap Backend::removeUnused()
+{
+    int removed = 0;
+    QStringList errors;
+    const QVariantList items = m_assetList;
+    for (const QVariant &v : items) {
+        const QVariantMap item = v.toMap();
+        if (!item.value(QStringLiteral("uses")).toStringList().isEmpty())
+            continue;
+        if (const QString error = removeItem(item.value(QStringLiteral("key")).toString()); error.isEmpty())
+            ++removed;
+        else
+            errors << error;
+    }
+    reloadAssets();
+    return {{QStringLiteral("removed"), removed}, {QStringLiteral("errors"), errors}};
+}
+
 void Backend::setCheckUpdates(bool check)
 {
     if (!m_library)

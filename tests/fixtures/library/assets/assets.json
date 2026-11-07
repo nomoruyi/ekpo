@@ -1,0 +1,18 @@
+{
+    "b7232c412339bd05a115d4ad": {
+        "suffix": "png",
+        "kind": "image",
+        "name": "Mask logo",
+        "source": "/home/user/Pictures/Mask logo.png",
+        "licence": "",
+        "addedAt": "2026-11-07T10:00:00Z"
+    },
+    "21ddc367920297b1dc40159b": {
+        "suffix": "mp4",
+        "kind": "video",
+        "name": "Menu loop (0:00.0\u20130:01.0)",
+        "source": "/home/user/Pictures/Menu loop (0:00.0\u20130:01.0).mp4",
+        "licence": "",
+        "addedAt": "2026-11-07T10:00:00Z"
+    }
+}

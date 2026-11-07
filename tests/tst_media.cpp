@@ -2,6 +2,7 @@
 #include "testmain.h"
 
 #include <QDir>
+#include <QImage>
 #include <QFile>
 #include <QSignalSpy>
 #include <QStandardPaths>
@@ -23,6 +24,7 @@ private Q_SLOTS:
     void makesPaletteFrames();
     void cancels();
     void reportsNonVideo();
+    void cutsSegment();
 
 private:
     // A test video made by ffmpeg itself: odd height, 4:4:4 colour and a sound track,
@@ -37,6 +39,20 @@ private:
                                                 QStringLiteral("-t"), QString::number(seconds), QStringLiteral("-c:v"), QStringLiteral("libx264"),
                                                 QStringLiteral("-preset"), QStringLiteral("ultrafast"), QStringLiteral("-pix_fmt"), QStringLiteral("yuv444p"),
                                                 QStringLiteral("-c:a"), QStringLiteral("aac"), path});
+        return ffmpeg.waitForFinished(60000) && ffmpeg.exitCode() == 0 ? path : QString();
+    }
+    // Red for a second, then blue, then green: which colour comes out shows where a
+    // segment started.
+    QString makeColourVideo(const QString &name) const
+    {
+        const QString path = m_tmp.filePath(name);
+        QProcess ffmpeg;
+        ffmpeg.start(QStringLiteral("ffmpeg"), {QStringLiteral("-hide_banner"), QStringLiteral("-loglevel"), QStringLiteral("error"), QStringLiteral("-nostdin"),
+                                                QStringLiteral("-f"), QStringLiteral("lavfi"), QStringLiteral("-i"),
+                                                QStringLiteral("color=c=red:s=64x36:r=10:d=1[a];color=c=blue:s=64x36:r=10:d=1[b];"
+                                                               "color=c=lime:s=64x36:r=10:d=1[c];[a][b][c]concat=n=3"),
+                                                QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-preset"), QStringLiteral("ultrafast"),
+                                                QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"), path});
         return ffmpeg.waitForFinished(60000) && ffmpeg.exitCode() == 0 ? path : QString();
     }
     static bool run(MediaJob &job, QString &error)
@@ -152,6 +168,38 @@ void TestMedia::reportsNonVideo()
     QString error;
     QVERIFY(!run(*job, error));
     QCOMPARE(error, QStringLiteral("logo.png isn't a video."));
+}
+
+// A segment: from 1 s for 1 s is the blue second, for the MP4 and for frames; a start
+// after the end is an error, not an empty result.
+void TestMedia::cutsSegment()
+{
+    const QString video = makeColourVideo(QStringLiteral("colours.mp4"));
+    QVERIFY(!video.isEmpty());
+    const auto blue = [](const QColor &c) { return c.blue() > 200 && c.red() < 60 && c.green() < 60; };
+
+    const QString mp4 = m_tmp.filePath(QStringLiteral("segment.mp4"));
+    std::unique_ptr<MediaJob> job(MediaJob::toMp4(video, mp4, 1440, 1.0, 1.0));
+    QString error;
+    QVERIFY2(run(*job, error), qPrintable(error));
+    QCOMPARE(job->progress(), 1.0);
+    const auto info = probeVideo(mp4, error);
+    QVERIFY2(info, qPrintable(error));
+    QVERIFY2(info->seconds > 0.9 && info->seconds < 1.15, qPrintable(QString::number(info->seconds)));
+
+    const QString dir = m_tmp.filePath(QStringLiteral("segment-frames"));
+    job.reset(MediaJob::toFrames(video, dir, QSize(64, 36), 10, 0.5, 1.2));
+    QVERIFY2(run(*job, error), qPrintable(error));
+    QStringList frames = QDir(dir).entryList(QDir::Files, QDir::Name);
+    QCOMPARE(frames.size(), 5);
+    for (const QString &f : {frames.first(), frames.last()}) {
+        const QImage frame(dir + QLatin1Char('/') + f);
+        QVERIFY2(blue(frame.pixelColor(32, 18)), qPrintable(f + QLatin1Char(' ') + frame.pixelColor(32, 18).name()));
+    }
+
+    job.reset(MediaJob::toFrames(video, m_tmp.filePath(QStringLiteral("late")), QSize(64, 36), 10, 1, 5.0));
+    QVERIFY(!run(*job, error));
+    QVERIFY2(error.contains(QStringLiteral("after the end")), qPrintable(error));
 }
 
 EKPO_TEST_MAIN(TestMedia)

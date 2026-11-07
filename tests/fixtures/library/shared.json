@@ -1,0 +1,18 @@
+{
+    "00000000-0000-0000-0000-0000000000e1": {
+        "kind": "logo",
+        "name": "Ekpo mask",
+        "asset": "b7232c412339bd05a115d4ad"
+    },
+    "00000000-0000-0000-0000-0000000000e2": {
+        "kind": "palette",
+        "name": "Dawn colours",
+        "colours": {
+            "background": "#1d1430",
+            "gradient": "#ff7a59",
+            "accent": "#ffd166",
+            "accent2": "#06d6a0",
+            "text": "#ffffff"
+        }
+    }
+}

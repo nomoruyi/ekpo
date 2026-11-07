@@ -28,12 +28,14 @@ class MediaJob : public QObject
 
 public:
     // A silent H.264 MP4 (yuv420p, moov atom first) at most maxHeight high, never
-    // enlarged: what a Plasma splash plays through QtMultimedia (SPEC.md §4.7).
-    static MediaJob *toMp4(const QString &input, const QString &output, int maxHeight, QObject *parent = nullptr);
+    // enlarged: what a Plasma splash plays through QtMultimedia (SPEC.md §4.7). From
+    // start, seconds long (0: to the end), so one recording can give several clips.
+    static MediaJob *toMp4(const QString &input, const QString &output, int maxHeight, double start = 0, double seconds = 0,
+                           QObject *parent = nullptr);
     // frame-0001.png, … in outputDir (which must not exist): 8-bit palette PNGs with
-    // one palette for all frames, fitted into size, at fps, at most seconds long. A
-    // Plymouth animation (SPEC.md §4.6).
-    static MediaJob *toFrames(const QString &input, const QString &outputDir, QSize size, double fps, double seconds,
+    // one palette for all frames, fitted into size, at fps, at most seconds long from
+    // start. A Plymouth animation (SPEC.md §4.6).
+    static MediaJob *toFrames(const QString &input, const QString &outputDir, QSize size, double fps, double seconds, double start = 0,
                               QObject *parent = nullptr);
     ~MediaJob() override; // cancels a running job
 
@@ -47,7 +49,7 @@ Q_SIGNALS:
     void finished(bool ok, const QString &error); // no error after cancel()
 
 private:
-    MediaJob(const QString &input, const QString &output, bool directory, double maxSeconds, QStringList arguments, QObject *parent);
+    MediaJob(const QString &input, const QString &output, bool directory, double start, double maxSeconds, QStringList arguments, QObject *parent);
     QString partial() const { return m_output + QStringLiteral(".part"); }
     void removePartial() const;
     void done(bool ok, const QString &error);
@@ -55,7 +57,8 @@ private:
     QString m_input;
     QString m_output;
     bool m_directory;
-    double m_maxSeconds; // 0 = the whole video
+    double m_start; // where in the video it starts
+    double m_maxSeconds; // 0 = to the end
     double m_seconds = 0; // what ffmpeg will write, for progress
     QStringList m_arguments; // the output path is appended
     QProcess m_process;

@@ -61,6 +61,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 - Drag on the canvas with snapping (centre, edges, other elements); number fields and arrow-key nudging. Positions and sizes are stored as % of the screen.
 - Explicit save (Ctrl+S); each save is a version (all kept); undo/redo per open design for the session; one crash-recovery draft.
 - New designs start from a few starters tinted with the Plasma accent colour, from blank, or by duplicating a Ekpo design.
+- Videos (both splashes) take a part of a longer recording: start and length on a range over the whole video, with a silent preview that loops the part (2026-11-07), so one recording gives one clip per look. The clip's asset name says which part it is.
 - Validation at all three resolutions; problems that would break or clip the result warn, invalid output blocks the build.
 - Fonts picked from the system are copied into the library with their licence file where one exists.
 
@@ -122,6 +123,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ### 4.13 Library, export, settings
 
 - Deleting moves items to the desktop trash with an inline Undo.
+- **Assets page** (2026-11-07): images, videos and fonts in the library, shared palettes and logos, filtered by type; for each a preview (font sample, palette colours), size, date, source, licence (fonts) and what uses it: designs with their saved versions and drafts, shared logos, fonts (licence texts). Add images and fonts; rename; move to the trash only what nothing uses (a saved version would lose it), one by one or "Remove Unused". Videos are added in the editor, which converts them for their splash.
 - Export a design or Mask as plain theme packages (GRUB/Plymouth `.tar.gz`, look-and-feel package). Export the whole library as one archive. Exports warn when an asset's licence forbids sharing.
 - Generated packages carry author "nomoruyi" and licence MIT, editable per design; fonts and imported art keep their own licences.
 - Library files carry a format version; newer versions migrate older ones.
