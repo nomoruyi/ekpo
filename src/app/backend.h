@@ -5,6 +5,7 @@
 #include "library.h"
 #include "planner.h"
 #include "probe.h"
+#include "updater.h"
 
 #include <QImage>
 #include <QObject>
@@ -47,6 +48,9 @@ class Backend : public QObject
     Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
     Q_PROPERTY(bool welcomeBack READ welcomeBack NOTIFY changed)
     Q_PROPERTY(QString bugReportsDir READ bugReportsDir CONSTANT) // empty: no local reports (packages)
+    // {canCheck, checking, checked, checkError, available, version, notes, busy, text, fraction, error, installed}
+    Q_PROPERTY(QVariantMap updateInfo READ updateInfo NOTIFY updateChanged)
+    Q_PROPERTY(bool checkUpdates READ checkUpdates NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -97,9 +101,19 @@ public:
     Q_INVOKABLE QString captureScreen(QObject *window);
     Q_INVOKABLE QString recentLog(); // Ekpo's last messages and the helper's last log lines
     // Puts the screenshot on the clipboard and opens the pre-filled issue in the browser.
+    Q_INVOKABLE QString fitBugReport(const QString &title, const QString &body); // shortened to fit a GitHub link
     Q_INVOKABLE QString openBugReport(const QString &title, const QString &body, bool withScreenshot); // empty on success
     Q_INVOKABLE QVariantMap saveBugReport(const QString &title, const QString &body, bool withScreenshot); // {path} or {error}
     QString bugReportsDir() const;
+
+    // Updates from GitHub releases (SPEC.md §4.14).
+    QVariantMap updateInfo() const { return m_update; }
+    bool checkUpdates() const { return !m_library || m_library->settings().checkUpdates; }
+    Q_INVOKABLE void setCheckUpdates(bool check);
+    Q_INVOKABLE void checkForUpdates();
+    Q_INVOKABLE void startUpdate(); // the newer release checkForUpdates found
+    Q_INVOKABLE void cancelUpdate();
+    Q_INVOKABLE void restartApp();
 
     QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
     int historySize() const { return m_library ? m_library->settings().historySize : 10; }
@@ -144,6 +158,7 @@ Q_SIGNALS:
     void applyProgress(const QString &text);
     void applyFinished(bool ok, const QString &error, int historyNumber);
     void bugReportRequested(); // a page's Report a Bug button; Main.qml opens the dialog
+    void updateChanged();
 
 private:
     QString m_rootDir = QStringLiteral("/");
@@ -178,4 +193,7 @@ private:
     QVariantMap m_planMap;
     HelperLauncher m_launcher;
     std::unique_ptr<Executor> m_executor;
+    std::unique_ptr<Updater> m_updater;
+    Release m_release; // the newer release, once a check found one
+    QVariantMap m_update;
 };

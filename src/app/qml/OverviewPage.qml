@@ -13,6 +13,7 @@ Kirigami.ScrollablePage {
     signal openStage(string stage)
     signal review
     signal intro
+    signal updateRequested
 
     readonly property var stageTitles: ({ bootMenu: qsTr("Boot Menu"), bootSplash: qsTr("Boot Splash"), plasmaSplash: qsTr("Plasma Splash") })
 
@@ -33,6 +34,31 @@ Kirigami.ScrollablePage {
 
     ColumnLayout {
         spacing: Kirigami.Units.largeSpacing
+
+        // A newer release on GitHub (SPEC.md §4.14).
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: Backend.updateInfo.available === true
+            type: Backend.updateInfo.installed === true ? Kirigami.MessageType.Positive : Kirigami.MessageType.Information
+            text: Backend.updateInfo.installed === true ? qsTr("Ekpo %1 is installed. Restart Ekpo to use it.").arg(Backend.updateInfo.version)
+                : Backend.updateInfo.busy === true ? Backend.updateInfo.text
+                : qsTr("Ekpo %1 is available (you have %2).").arg(Backend.updateInfo.version).arg(Qt.application.version)
+            // (Lists, not hidden actions: Kirigami 6.24 can't lay out hidden actions.)
+            actions: Backend.updateInfo.installed === true ? [restartAction] : [updateAction]
+
+            Kirigami.Action {
+                id: updateAction
+                text: qsTr("Update…")
+                icon.name: "update-none"
+                onTriggered: page.updateRequested()
+            }
+            Kirigami.Action {
+                id: restartAction
+                text: qsTr("Restart Ekpo")
+                icon.name: "view-refresh"
+                onTriggered: Backend.restartApp()
+            }
+        }
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true

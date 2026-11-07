@@ -12,6 +12,10 @@
 QUrl issueUrl(const QString &title, const QString &body);
 // GitHub refuses longer links, so a report this long must be shortened first.
 constexpr int maxIssueUrlLength = 8000;
+// The report shortened to fit such a link: the oldest lines of its Log section go
+// first (headers and the newest lines stay), with a note saying how many. Unchanged
+// when it fits, or when even an empty log wouldn't make it fit.
+QString fitIssueBody(const QString &title, const QString &body);
 // Opens that link in the browser, where the user reads and submits it. Empty on
 // success, else why not.
 QString openIssue(const QString &title, const QString &body);

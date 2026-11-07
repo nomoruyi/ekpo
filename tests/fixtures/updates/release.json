@@ -1,0 +1,16 @@
+{
+    "tag_name": "v99.0.0",
+    "name": "Ekpo 99.0.0",
+    "html_url": "https://github.com/nomoruyi/ekpo/releases/tag/v99.0.0",
+    "body": "- A new **Boot Menu** starter\n- Fixes for number fields in the editor",
+    "assets": [
+        {
+            "name": "SHA256SUMS",
+            "browser_download_url": "https://github.com/nomoruyi/ekpo/releases/download/v99.0.0/SHA256SUMS"
+        },
+        {
+            "name": "ekpo_99.0.0_amd64.deb",
+            "browser_download_url": "https://github.com/nomoruyi/ekpo/releases/download/v99.0.0/ekpo_99.0.0_amd64.deb"
+        }
+    ]
+}

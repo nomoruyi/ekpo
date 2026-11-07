@@ -10,6 +10,7 @@ Kirigami.ScrollablePage {
     id: page
 
     signal review
+    signal updateRequested
 
     property string removalMessage: ""
     property bool removalOk: false
@@ -102,6 +103,47 @@ Kirigami.ScrollablePage {
             text: qsTr("Show the introduction")
             checked: Backend.showIntro
             onToggled: Backend.setShowIntro(checked)
+        }
+        // SPEC.md §4.14.
+        QQC2.Switch {
+            Kirigami.FormData.label: qsTr("Updates:")
+            text: qsTr("Check for a new version at start")
+            enabled: Backend.updateInfo.canCheck === true
+            checked: Backend.checkUpdates
+            onToggled: Backend.setCheckUpdates(checked)
+        }
+        RowLayout {
+            QQC2.Button {
+                text: qsTr("Check Now")
+                icon.name: "view-refresh"
+                enabled: Backend.updateInfo.canCheck === true && Backend.updateInfo.checking !== true && Backend.updateInfo.busy !== true
+                onClicked: Backend.checkForUpdates()
+            }
+            QQC2.Button {
+                visible: Backend.updateInfo.available === true
+                text: qsTr("Update…")
+                icon.name: "update-none"
+                onClicked: page.updateRequested()
+            }
+        }
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            wrapMode: Text.Wrap
+            opacity: 0.7
+            text: {
+                const u = Backend.updateInfo;
+                if (u.canCheck !== true)
+                    return qsTr("This build doesn't check for updates.");
+                if (u.checking === true)
+                    return qsTr("Checking…");
+                if (u.checkError)
+                    return u.checkError;
+                if (u.available === true)
+                    return qsTr("Ekpo %1 is available; you have %2.").arg(u.version).arg(Qt.application.version);
+                if (u.checked === true)
+                    return qsTr("Ekpo %1 is the newest version.").arg(Qt.application.version);
+                return qsTr("Asks GitHub for the newest release of Ekpo; nothing else is sent.");
+            }
         }
 
         // SPEC.md §5: uninstalling the package leaves applied looks working; this

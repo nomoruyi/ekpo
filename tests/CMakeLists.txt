@@ -86,12 +86,21 @@ add_test(NAME smoke_tour COMMAND ekpo)
 set_tests_properties(smoke_tour PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_TOUR=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d3;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/tour.png")
 
+# A newer release found at start (a file:// fixture instead of GitHub): the Overview's
+# banner and the update dialog with the release notes.
+add_test(NAME smoke_update COMMAND ekpo)
+set_tests_properties(smoke_update PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_UPDATE_URL=file://${CMAKE_CURRENT_SOURCE_DIR}/fixtures/updates/release.json;EKPO_UPDATE_DIALOG=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/update.png")
+
 # Report a Bug from the Overview: the dialog with its screenshot preview.
 add_test(NAME smoke_bug_report COMMAND ekpo)
 set_tests_properties(smoke_bug_report PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_BUG_REPORT=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/bugReport.png")
 
 ekpo_test(tst_probe)
+ekpo_test(tst_updater)
+target_link_libraries(tst_updater PRIVATE Qt6::Network)
+target_compile_definitions(tst_updater PRIVATE STUBS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 ekpo_test(tst_library)
 ekpo_test(tst_importer)
 ekpo_test(tst_media)

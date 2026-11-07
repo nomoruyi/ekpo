@@ -228,6 +228,7 @@ QJsonObject Settings::toJson() const
         {QStringLiteral("technicalDetailsExpanded"), technicalDetailsExpanded},
         {QStringLiteral("showIntro"), showIntro},
         {QStringLiteral("rebuildAllKernels"), rebuildAllKernels},
+        {QStringLiteral("checkUpdates"), checkUpdates},
     };
 }
 
@@ -238,5 +239,6 @@ Settings Settings::fromJson(const QJsonObject &json)
     s.technicalDetailsExpanded = json.value(QStringLiteral("technicalDetailsExpanded")).toBool(s.technicalDetailsExpanded);
     s.showIntro = json.value(QStringLiteral("showIntro")).toBool(s.showIntro);
     s.rebuildAllKernels = json.value(QStringLiteral("rebuildAllKernels")).toBool(s.rebuildAllKernels);
+    s.checkUpdates = json.value(QStringLiteral("checkUpdates")).toBool(s.checkUpdates);
     return s;
 }

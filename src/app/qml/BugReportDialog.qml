@@ -72,6 +72,8 @@ Kirigami.Dialog {
         icon.name: "internet-web-browser"
         enabled: titleField.text.trim() !== ""
         onTriggered: {
+            // A long log loses its oldest lines, here too, so this stays what GitHub gets.
+            bodyArea.text = Backend.fitBugReport(titleField.text.trim(), bodyArea.text);
             const error = Backend.openBugReport(titleField.text.trim(), bodyArea.text, withScreenshot.checked);
             if (error)
                 dialog.showMessage(error, Kirigami.MessageType.Error);
@@ -107,6 +109,7 @@ Kirigami.Dialog {
                 id: bodyArea
                 wrapMode: Text.Wrap
                 font.family: "monospace"
+                onTextChanged: dialog.message = "" // an earlier error no longer applies
             }
         }
         RowLayout {

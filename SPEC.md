@@ -125,9 +125,16 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 - Export a design or Mask as plain theme packages (GRUB/Plymouth `.tar.gz`, look-and-feel package). Export the whole library as one archive. Exports warn when an asset's licence forbids sharing.
 - Generated packages carry author "nomoruyi" and licence MIT, editable per design; fonts and imported art keep their own licences.
 - Library files carry a format version; newer versions migrate older ones.
-- **Settings:** library location, history size, technical details expanded or collapsed, default preview resolution. Nothing else until a real need appears.
+- **Settings:** library location, history size, technical details expanded or collapsed, default preview resolution, check for updates at start. Nothing else until a real need appears.
 
-### 4.14 Command line
+### 4.14 Updates (approved 2026-11-07)
+
+- At every start Ekpo asks GitHub for the newest release of `nomoruyi/ekpo`: one request to the releases API, without a login, sending nothing but Ekpo's version as the user agent. A Settings switch turns it off; "Check Now" checks on demand. Failures (offline, rate limit) show only in Settings.
+- A newer release shows on the Overview ("Ekpo X.Y.Z is available") with its release notes and **Update…**: Ekpo downloads the `.deb` and `SHA256SUMS` (progress, cancel), checks the checksum and that the package is version X.Y.Z, installs it with `pkexec apt-get install` (one password prompt; apt resolves dependencies) and offers to restart. Not while an apply runs.
+- The checksum catches broken downloads, not a compromised GitHub account; signed releases may come later.
+- Dev and sandbox builds never contact GitHub on their own and never run `pkexec`: they check a URL given for tests and install through a stub.
+
+### 4.15 Command line
 
 `ekpo status | apply <mask> | restore <entry|original> | recover`, with the same review and a y/N prompt (`recover` rolls back an interrupted apply). Designing stays GUI-only.
 
@@ -154,7 +161,7 @@ Later, not scheduled: SDDM login screen; pixel-exact GRUB preview from a rescue 
 
 ## 8. Non-goals
 
-Editing GRUB menu entries or kernel parameters; editing third-party themes in the app; theme stores or any network use; scheduled or per-boot rotation; lock and logout screens; other user accounts; 4K (3840×2160) layouts; a VM-based preview; machines other than this one (exported packages may still work elsewhere).
+Editing GRUB menu entries or kernel parameters; editing third-party themes in the app; theme stores or any network use except the update check (§4.14); scheduled or per-boot rotation; lock and logout screens; other user accounts; 4K (3840×2160) layouts; a VM-based preview; machines other than this one (exported packages may still work elsewhere).
 
 ## 9. Technical limits the design accepts
 

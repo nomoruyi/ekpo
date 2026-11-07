@@ -128,6 +128,7 @@ struct Settings {
     bool technicalDetailsExpanded = false;
     bool showIntro = true; // the intro dialog at start (SPEC.md §4.2)
     bool rebuildAllKernels = false; // default of the review's switch for boot splash applies
+    bool checkUpdates = true; // ask GitHub for a newer release at start (SPEC.md §4.14)
 
     QJsonObject toJson() const;
     static Settings fromJson(const QJsonObject &json);

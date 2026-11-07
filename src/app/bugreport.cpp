@@ -12,6 +12,8 @@
 #include <QSaveFile>
 #include <QSysInfo>
 
+#include <algorithm>
+
 QStringList systemBasics(const QString &rootDir)
 {
     QString osName;
@@ -30,6 +32,35 @@ QUrl issueUrl(const QString &title, const QString &body)
     const auto encode = [](const QString &s) { return QString::fromLatin1(QUrl::toPercentEncoding(s)); };
     return QUrl(QStringLiteral("https://github.com/nomoruyi/ekpo/issues/new?labels=bug&title=") + encode(title) + QStringLiteral("&body=")
                 + encode(body));
+}
+
+QString fitIssueBody(const QString &title, const QString &body)
+{
+    const auto fits = [&title](const QString &b) { return issueUrl(title, b).toString(QUrl::FullyEncoded).size() <= maxIssueUrlLength; };
+    if (fits(body))
+        return body;
+    const QString open = QStringLiteral("## Log\n```\n");
+    const qsizetype start = body.indexOf(open);
+    const qsizetype end = start < 0 ? -1 : body.indexOf(QStringLiteral("\n```"), start + open.size());
+    if (end < 0)
+        return body;
+    QStringList lines = body.mid(start + open.size(), end - start - open.size()).split(QLatin1Char('\n'));
+    // The part headers ("Ekpo:", "ekpo-helper:") and the blank line between them stay.
+    const auto isHeader = [](const QString &line) {
+        return line.isEmpty() || line == QLatin1String("Ekpo:") || line == QLatin1String("ekpo-helper:");
+    };
+    const auto rebuilt = [&](int dropped) {
+        const QString note = QCoreApplication::translate("BugReport", "(%n older log lines left out to fit GitHub's link length)", "", dropped);
+        return body.left(start + open.size()) + note + QLatin1Char('\n') + lines.join(QLatin1Char('\n')) + body.mid(end);
+    };
+    for (int dropped = 1;; ++dropped) {
+        const qsizetype oldest = std::distance(lines.cbegin(), std::find_if_not(lines.cbegin(), lines.cend(), isHeader));
+        if (oldest >= lines.size())
+            return body; // nothing left to drop
+        lines.removeAt(oldest);
+        if (const QString shorter = rebuilt(dropped); fits(shorter))
+            return shorter;
+    }
 }
 
 QString openIssue(const QString &title, const QString &body)

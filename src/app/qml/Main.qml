@@ -33,6 +33,7 @@ Kirigami.ApplicationWindow {
     property string startReview: "" // EKPO_REVIEW_IMPORT (dev only): open the review of this import
     property string startEdit: "" // EKPO_EDIT_DESIGN (dev only): open this design in the editor
     property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
+    property bool startUpdateDialog: false // EKPO_UPDATE_DIALOG (dev only): open the update dialog once a check finds one
     property bool startTour: false // EKPO_TOUR (dev only): switch pages as clicks would, see the tour below
     property bool editing: false // the editor has the window; the sidebar is hidden
     property var editorState: ({}) // the editor page's selection and preview size while its review shows
@@ -94,6 +95,26 @@ Kirigami.ApplicationWindow {
     }
     BugReportDialog {
         id: bugReportDialog
+    }
+    UpdateDialog {
+        id: updateDialog
+    }
+    // (Opened once the window is laid out, like Report a Bug's: Kirigami centres
+    // dialogs on the window's size.)
+    Connections {
+        target: Backend
+        enabled: root.startUpdateDialog
+        function onUpdateChanged() {
+            if (Backend.updateInfo.available === true) {
+                root.startUpdateDialog = false;
+                updateDialogTimer.start();
+            }
+        }
+    }
+    Timer {
+        id: updateDialogTimer
+        interval: 300
+        onTriggered: updateDialog.open()
     }
     Timer {
         running: root.startBugReport
@@ -269,6 +290,7 @@ Kirigami.ApplicationWindow {
         onOpenStage: stage => root.showSection(stage)
         onReview: root.showReview()
         onIntro: introDialog.open()
+        onUpdateRequested: updateDialog.open()
     }
     AboutPage {
         id: aboutPage
@@ -279,6 +301,7 @@ Kirigami.ApplicationWindow {
         id: settingsPage
         visible: false
         onReview: root.showReview()
+        onUpdateRequested: updateDialog.open()
     }
     MasksPage {
         id: masksPage

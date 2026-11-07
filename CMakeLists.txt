@@ -31,6 +31,14 @@ set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXE
 # OFF for packages: no sandbox hook in the app, and no tests, since without the
 # sandbox the CLI and app tests would reach the real helper through pkexec.
 option(EKPO_SANDBOX "Build the sandbox mode and the tests" ON)
+# Dev builds write src/app/.qmlls.ini (gitignored), so the QML language server in
+# CLion, Qt Creator or VS Code finds the Ekpo module in this build. Not for packages:
+# a release build would point it at build-release. qmlls doesn't start builds itself;
+# they go through dev/env.sh, and it sees new C++ types after the next one.
+if(EKPO_SANDBOX)
+    set(QT_QML_GENERATE_QMLLS_INI ON)
+    set(QT_QML_GENERATE_QMLLS_INI_NO_CMAKE_CALLS ON)
+endif()
 add_subdirectory(src/common)
 add_subdirectory(src/helper)
 add_subdirectory(src/app)

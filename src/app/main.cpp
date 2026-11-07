@@ -1,6 +1,7 @@
 #include "bugreport.h"
 #include "cli.h"
 #include "executor.h"
+#include "updater.h"
 #include "library.h"
 
 #include <QGuiApplication>
@@ -8,6 +9,7 @@
 #include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -30,7 +32,7 @@ int main(int argc, char *argv[])
     if (qEnvironmentVariableIsSet("EKPO_DEV"))
         prctl(PR_SET_DUMPABLE, 0);
 
-    // A command runs the command line without any window (SPEC.md §4.14). Building a
+    // A command runs the command line without any window (SPEC.md §4.15). Building a
     // boot splash design draws text and images, which needs a GUI application; the
     // offscreen platform gives it one without a display.
     if (argc > 1) {
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
         start.insert(QStringLiteral("startEdit"), qEnvironmentVariable("EKPO_EDIT_DESIGN"));
         start.insert(QStringLiteral("startBugReport"), qEnvironmentVariableIsSet("EKPO_BUG_REPORT"));
         start.insert(QStringLiteral("startTour"), qEnvironmentVariableIsSet("EKPO_TOUR"));
+        start.insert(QStringLiteral("startUpdateDialog"), qEnvironmentVariableIsSet("EKPO_UPDATE_DIALOG"));
     }
     engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");
@@ -110,5 +113,12 @@ int main(int argc, char *argv[])
             QCoreApplication::exit(saved ? 0 : 2);
         });
     }
-    return app.exec();
+    const int code = app.exec();
+    // After an update (SPEC.md §4.14): the new Ekpo starts once this one has let go of
+    // the single-instance socket, which it would otherwise hand over to.
+    if (restartRequested()) {
+        instanceServer.close();
+        QProcess::startDetached(restartPath(), {});
+    }
+    return code;
 }

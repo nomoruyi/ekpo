@@ -73,6 +73,7 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
 | `executor` | Plasma step (copy package, write `ksplashrc` via KConfig), helper call with progress, Plasma rollback if the helper fails, history entry, after-reboot check (stores `/proc/sys/kernel/random/boot_id`) |
 | `ui` | QML + Kirigami pages per `notes/wireframes-round8.md`; C++ models exposed with `QML_ELEMENT`. The editor's state lives in `DesignEditor` (C++): undo/redo as snapshots (a drag is one step), the crash draft 0.5 s after the last change, the preview package in a temp folder (assets linked, not copied), warnings at 1440p/1080p/720p |
 | `cli` | `status`, `apply`, `restore` on the same planner and executor |
+| `updater` | Update check (SPEC §4.14): the newest GitHub release via `QNetworkAccessManager`, version compare, download with progress, `SHA256SUMS` and `dpkg-deb -f <deb> Version` checks, install through a launcher (`pkexec apt-get install -y`, a stub in dev builds), restart after `main()` released the single-instance socket |
 
 **Previews:** GRUB is drawn by the app with real `.pf2` glyphs over the sample menu; Plymouth is drawn by a QML scene from the design; the Plasma splash preview loads the generated `Splash.qml` itself in a `Loader`, plus *Run real splash* via `ksplashqml --test --window`.
 
@@ -99,7 +100,7 @@ A restore re-sends the build from `builds/`, so history survives a reinstall or 
 ## 6. Dependencies
 
 - **Build (installed):** qt6-base-dev, qt6-declarative-dev (+ tools: qmllint, qmltestrunner), libkirigami-dev, libkf6config-dev, extra-cmake-modules, cmake, ninja-build, g++.
-- **Runtime tools (installed):** grub-mkfont, update-grub, update-alternatives, update-initramfs/dracut, lsinitramfs/lsinitrd, ffmpeg, ksplashqml, pkexec, systemd-inhibit, unzip, tar.
+- **Runtime tools (installed):** grub-mkfont, update-grub, update-alternatives, update-initramfs/dracut, lsinitramfs/lsinitrd, ffmpeg, ksplashqml, pkexec, systemd-inhibit, unzip, tar; for updates apt-get and dpkg-deb (both essential packages) and Qt's OpenSSL TLS plugin (part of libqt6network6).
 - **None added.** Packaging uses CPack's DEB generator (dpkg-deb + fakeroot, both installed); no debhelper. ImageMagick isn't needed (QImage covers images).
 
 ## 7. Source layout
@@ -157,6 +158,13 @@ Spikes for SPEC §10 run before M2 (reading Plymouth 24 sources and measuring fr
 4. Apply: Boot Menu designs as a Mask slot; `GRUB_GFXMODE=<W×H>,auto` for them; the resolution on the review page; "Rebuild for <W×H>" on the Overview after a monitor change, and a warning when GRUB fell back to `auto`; the helper re-checks entry widths against the real `grub.cfg` after `update-grub`.
 5. Boot Menu designer in the editor: preview drawn with the real `.pf2` glyphs over the sample menu; font, colours, selected-entry style, icons, countdown and help line; per-resolution font size override.
 6. A small monochrome icon set of our own (Linux, Kubuntu-style, Windows, firmware settings, memtest) plus imported icons; boot menu starters.
+
+## 9c. Updates (approved 2026-11-07)
+
+The releases come from `https://api.github.com/repos/nomoruyi/ekpo/releases/latest`, so they need the repo to be public. Dev builds never use that URL: with `EKPO_DEV` they check only `EKPO_UPDATE_URL` (tests point it at a local server or a `file://` fixture) and install through `tests/stubs/install-update`.
+
+1. `updater` core: version compare, parsing the release (tag, notes, the `.deb` and `SHA256SUMS` assets), download into the cache with progress, cancel and redirects (GitHub serves assets through a redirect), the two checks, install through the launcher, restart; `tst_updater` against a local HTTP server and the stub installer.
+2. UI: check at start (Settings switch, "Check Now" with its result), the Overview banner, the update dialog (notes, progress, password prompt, restart); a smoke test with a `file://` release fixture.
 
 ## 10. Decisions for the owner
 

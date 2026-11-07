@@ -32,6 +32,7 @@ private Q_SLOTS:
     void keepsRecentMessages();
     void readsHelperLogUnderFakeRoot();
     void systemBasicsFromOsRelease();
+    void fitsLongLogIntoIssueLink();
 };
 
 void TestBugReport::encodesIssueLink()
@@ -122,6 +123,35 @@ void TestBugReport::systemBasicsFromOsRelease()
     QCoreApplication::setApplicationVersion(QStringLiteral("9.8.7"));
     QCOMPARE(systemBasics(root.path()),
              (QStringList{QStringLiteral("Ekpo 9.8.7"), QStringLiteral("System: Ubuntu 26.04.1 LTS, kernel %1").arg(QSysInfo::kernelVersion())}));
+}
+
+// A log too long for the link loses its oldest lines, never the headers or the text above.
+void TestBugReport::fitsLongLogIntoIssueLink()
+{
+    const QString head = QStringLiteral("## What happened\nThe colour picker is white\n\n## System\n```\nEkpo 1.0\n```\n\n");
+    QStringList messages, helper;
+    for (int i = 0; i < 50; ++i)
+        messages << QStringLiteral("12:00:%1 warning: qrc:/qt/qml/Ekpo/qml/EditorPage.qml:%1: something went wrong here: \"%1\"").arg(i, 2, 10, QLatin1Char('0'));
+    for (int i = 0; i < 20; ++i)
+        helper << QStringLiteral("2026-11-07T09:%1Z run: /usr/sbin/update-initramfs -u -k 7.0.0-42-generic").arg(i, 2, 10, QLatin1Char('0'));
+    const QString log = QStringLiteral("## Log\n```\nEkpo:\n") + messages.join(QLatin1Char('\n')) + QStringLiteral("\n\nekpo-helper:\n")
+        + helper.join(QLatin1Char('\n')) + QStringLiteral("\n```");
+    const QString title = QStringLiteral("Colour picker");
+    QVERIFY(issueUrl(title, head + log).toString(QUrl::FullyEncoded).size() > maxIssueUrlLength);
+
+    const QString fitted = fitIssueBody(title, head + log);
+    QVERIFY(issueUrl(title, fitted).toString(QUrl::FullyEncoded).size() <= maxIssueUrlLength);
+    QVERIFY(fitted.startsWith(head));
+    QVERIFY(fitted.contains(QStringLiteral("older log lines left out")));
+    QVERIFY(fitted.contains(QStringLiteral("\nEkpo:\n")));
+    QVERIFY(fitted.contains(QStringLiteral("\nekpo-helper:\n")));
+    QVERIFY(fitted.contains(messages.last())); // the newest lines stay
+    QVERIFY(!fitted.contains(messages.first()));
+    QVERIFY(fitted.endsWith(QStringLiteral("\n```")));
+    // Short reports and reports without a log stay as they are.
+    QCOMPARE(fitIssueBody(title, head), head);
+    const QString noLog = head + QString(9000, QLatin1Char('x'));
+    QCOMPARE(fitIssueBody(title, noLog), noLog);
 }
 
 EKPO_GUI_TEST_MAIN(TestBugReport)

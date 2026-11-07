@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fake "pkexec apt-get install -y <deb>" for dev builds (tests only): checks that the
+# file is a package and records it, so the update flow runs without root.
+# EKPO_STUB_INSTALL_FAIL=1 makes it fail like apt-get does.
+deb="$1"
+dpkg-deb -f "$deb" Package >/dev/null || exit 100
+echo "$deb" >> "${EKPO_STUB_INSTALL_LOG:-${EKPO_DEV:?}/installed-updates.log}"
+if [ -n "$EKPO_STUB_INSTALL_FAIL" ]; then
+    echo "install-update: injected failure" >&2
+    exit 100
+fi

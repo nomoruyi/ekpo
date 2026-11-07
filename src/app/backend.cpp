@@ -16,6 +16,7 @@
 #include <QSysInfo>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QStorageInfo>
 
 #include <utility>
@@ -163,6 +164,75 @@ Backend::Backend(QObject *parent)
     createExecutor();
     connect(&m_editor, &DesignEditor::libraryChanged, this, &Backend::refresh);
     refresh();
+
+    m_updater = std::make_unique<Updater>(updateSource(), QCoreApplication::applicationVersion(),
+                                          QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/updates"));
+    m_update.insert(QStringLiteral("canCheck"), m_updater->canCheck());
+    connect(m_updater.get(), &Updater::checked, this, [this](bool found, const Release &release, const QString &error) {
+        m_update.insert(QStringLiteral("checking"), false);
+        m_update.insert(QStringLiteral("checked"), error.isEmpty());
+        m_update.insert(QStringLiteral("checkError"), error);
+        if (found) {
+            m_release = release;
+            m_update.insert(QStringLiteral("available"), true);
+            m_update.insert(QStringLiteral("version"), release.version);
+            m_update.insert(QStringLiteral("notes"), release.notes);
+        }
+        Q_EMIT updateChanged();
+    });
+    connect(m_updater.get(), &Updater::progress, this, [this](const QString &text, double fraction) {
+        m_update.insert(QStringLiteral("busy"), true);
+        m_update.insert(QStringLiteral("text"), text);
+        m_update.insert(QStringLiteral("fraction"), fraction);
+        Q_EMIT updateChanged();
+    });
+    connect(m_updater.get(), &Updater::finished, this, [this](bool ok, const QString &error) {
+        m_update.insert(QStringLiteral("busy"), false);
+        m_update.insert(QStringLiteral("installed"), ok);
+        m_update.insert(QStringLiteral("error"), error); // empty when cancelled
+        Q_EMIT updateChanged();
+    });
+    if (checkUpdates())
+        checkForUpdates();
+}
+
+void Backend::setCheckUpdates(bool check)
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.checkUpdates = check;
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
+}
+
+void Backend::checkForUpdates()
+{
+    if (!m_updater->canCheck() || m_updater->busy())
+        return;
+    m_update.insert(QStringLiteral("checking"), true);
+    m_update.insert(QStringLiteral("checkError"), QString());
+    Q_EMIT updateChanged();
+    m_updater->check();
+}
+
+void Backend::startUpdate()
+{
+    if (applying() || m_updater->busy() || m_release.version.isEmpty())
+        return;
+    m_update.insert(QStringLiteral("error"), QString());
+    m_updater->update(m_release);
+}
+
+void Backend::cancelUpdate()
+{
+    m_updater->cancel();
+}
+
+void Backend::restartApp()
+{
+    requestRestart();
 }
 
 // Also hands the (new) library to the editor.
@@ -836,6 +906,11 @@ QString Backend::recentLog()
     return (QStringList{QStringLiteral("Ekpo:")} + (messages.isEmpty() ? QStringList{QStringLiteral("(no messages)")} : messages)
             + QStringList{QString(), QStringLiteral("ekpo-helper:")} + (helper.isEmpty() ? QStringList{QStringLiteral("(nothing logged)")} : helper))
         .join(QLatin1Char('\n'));
+}
+
+QString Backend::fitBugReport(const QString &title, const QString &body)
+{
+    return fitIssueBody(title, body);
 }
 
 QString Backend::openBugReport(const QString &title, const QString &body, bool withScreenshot)
