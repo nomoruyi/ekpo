@@ -28,6 +28,12 @@ Kirigami.Page {
     property real guideY: -1
     property string message: ""
     readonly property bool boot: editor.stage === "bootSplash"
+    readonly property bool grub: editor.stage === "bootMenu"
+    readonly property bool plasma: editor.stage === "plasmaSplash"
+    readonly property bool hasMenu: elements.some(e => e.type === "menu") // a boot menu has one
+    readonly property string screenKey: "%1x%2".arg(screenSize.width).arg(screenSize.height)
+    onScreenSizeChanged: editor.setPreviewScreen(screenSize.width, screenSize.height)
+    Component.onCompleted: editor.setPreviewScreen(screenSize.width, screenSize.height)
     // A boot splash has one animation and one progress bar (genplymouth.h).
     readonly property bool hasAnimation: elements.some(e => e.type === "spinner" || e.type === "frames")
     readonly property bool hasProgress: elements.some(e => e.type === "progress")
@@ -36,6 +42,7 @@ Kirigami.Page {
     readonly property string paletteId: editor.content.palette ?? ""
     readonly property var sharedLogos: Object.keys(editor.shared).filter(id => editor.shared[id].kind === "logo")
     readonly property var palettes: Object.keys(editor.shared).filter(id => editor.shared[id].kind === "palette")
+    readonly property var grubImports: Backend.imports.filter(t => t.stage === "bootMenu") // icons can come from them
 
     // A colour as shown: "@accent" and so on come from the palette.
     function colour(raw) {
@@ -53,11 +60,11 @@ Kirigami.Page {
             return editor.shared[e.shared]?.name ?? qsTr("(missing shared logo)");
         if (e.type === "image" || e.type === "video")
             return editor.assets[e.asset]?.name ?? (e.type === "image" ? qsTr("(missing image)") : qsTr("(missing video)"));
-        return ({ spinner: qsTr("Spinner"), frames: qsTr("Animation"), progress: qsTr("Progress bar") })[e.type] ?? e.type;
+        return ({ spinner: qsTr("Spinner"), frames: qsTr("Animation"), progress: qsTr("Progress bar"), menu: qsTr("Menu"), countdown: qsTr("Countdown") })[e.type] ?? e.type;
     }
     function iconFor(e) {
         return ({ text: "draw-text", image: "viewimage", spinner: "view-refresh", video: "video-x-generic", frames: "media-playlist-repeat",
-                  progress: "view-task" })[e.type] ?? "unknown";
+                  progress: "view-task", menu: "view-list-details", countdown: "chronometer" })[e.type] ?? "unknown";
     }
     // Fields commit when they lose focus, so take it before acting on the design.
     function commitFields() {
@@ -117,10 +124,10 @@ Kirigami.Page {
         }
     }
 
-    // (A list without Run Real Splash for boot splashes, not a hidden action: Kirigami
+    // (Run Real Splash only for Plasma splashes: a list without it, not a hidden action: Kirigami
     // 6.24 can't lay out hidden actions.)
-    actions: boot ? [undoAction, redoAction, saveAction, versionsAction, applyAction, bugAction]
-                  : [undoAction, redoAction, saveAction, versionsAction, runAction, applyAction, bugAction]
+    actions: plasma ? [undoAction, redoAction, saveAction, versionsAction, runAction, applyAction, bugAction]
+                    : [undoAction, redoAction, saveAction, versionsAction, applyAction, bugAction]
 
     ReportBugAction {
         id: bugAction
@@ -267,7 +274,7 @@ Kirigami.Page {
                         id: addButton
                         icon.name: "list-add"
                         text: qsTr("Add")
-                        onClicked: (page.boot ? bootAddMenu : addMenu).popup(addButton, 0, addButton.height)
+                        onClicked: (page.grub ? grubAddMenu : page.boot ? bootAddMenu : addMenu).popup(addButton, 0, addButton.height)
 
                         QQC2.Menu {
                             id: addMenu
@@ -304,6 +311,58 @@ Kirigami.Page {
                                 text: qsTr("Spinner")
                                 icon.name: "view-refresh"
                                 onTriggered: page.selected = page.editor.addElement("spinner")
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Animation from Images…")
+                                icon.name: "media-playlist-repeat"
+                                onTriggered: {
+                                    framesImageDialog.replaceIndex = -1;
+                                    framesImageDialog.open();
+                                }
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Progress Bar")
+                                icon.name: "view-task"
+                                onTriggered: page.selected = page.editor.addElement("progress")
+                            }
+                        }
+                        QQC2.Menu {
+                            id: grubAddMenu
+
+                            QQC2.MenuItem {
+                                text: qsTr("Menu")
+                                icon.name: "view-list-details"
+                                enabled: !page.hasMenu
+                                onTriggered: page.selected = page.editor.addElement("menu")
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Countdown")
+                                icon.name: "chronometer"
+                                onTriggered: page.selected = page.editor.addElement("countdown")
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Progress Bar")
+                                icon.name: "view-task"
+                                onTriggered: page.selected = page.editor.addElement("progress")
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Text")
+                                icon.name: "draw-text"
+                                onTriggered: page.selected = page.editor.addElement("text")
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Image…")
+                                icon.name: "viewimage"
+                                onTriggered: {
+                                    imageDialog.purpose = "add";
+                                    imageDialog.open();
+                                }
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Shared Logo…")
+                                icon.name: "emblem-shared-symbolic"
+                                enabled: page.sharedLogos.length > 0
+                                onTriggered: logoDialog.open()
                             }
                         }
                         QQC2.Menu {
@@ -462,7 +521,17 @@ Kirigami.Page {
                             height: page.screenSize.height
                             scale: canvas.zoom
                             transformOrigin: Item.TopLeft
-                            source: page.boot ? "" : page.editor.previewUrl
+                            source: page.plasma ? page.editor.previewUrl : ""
+                            // Midway through Plasma's start, so progress bars show (ksplashqml sets 1–6).
+                            onLoaded: item.stage = 3
+                        }
+                        // A boot menu: drawn by Ekpo as GRUB will draw it, in GRUB's fonts.
+                        Image {
+                            anchors.fill: parent
+                            visible: page.grub
+                            source: page.grub ? (page.editor.bootMenu.preview ?? "") : ""
+                            smooth: true
+                            mipmap: true
                         }
                         PlymouthPreview {
                             visible: page.boot
@@ -500,7 +569,7 @@ Kirigami.Page {
                     }
                     QQC2.Label {
                         anchors.centerIn: parent
-                        visible: !page.boot && preview.status === Loader.Error
+                        visible: page.plasma && preview.status === Loader.Error
                         text: qsTr("The preview couldn't be loaded.")
                     }
                 }
@@ -606,7 +675,7 @@ Kirigami.Page {
                         onRemove: page.editor.setBackground({ image: null })
                     }
                     RowLayout {
-                        visible: page.selected < 0 && page.boot
+                        visible: page.selected < 0
                         Kirigami.FormData.label: qsTr("Gradient to:")
                         QQC2.CheckBox {
                             checked: page.backgroundSpec.color2 !== undefined
@@ -625,8 +694,71 @@ Kirigami.Page {
                         checked: page.editor.content.hideMessages ?? false
                         onToggled: page.editor.setContent({ hideMessages: checked })
                     }
+                    // One form row: FormLayout can't follow a Repeater's rows coming and going.
+                    ColumnLayout {
+                        visible: page.selected < 0 && page.grub
+                        Layout.fillWidth: true
+                        Kirigami.FormData.label: qsTr("Entry icons:")
+                        RowLayout {
+                            QQC2.Button {
+                                text: qsTr("Built-in")
+                                icon.name: "view-list-icons"
+                                onClicked: page.editor.useBuiltinIcons()
+                            }
+                            QQC2.Button {
+                                id: importIconsButton
+                                text: qsTr("From a Theme…")
+                                icon.name: "document-import"
+                                enabled: page.grubImports.length > 0
+                                onClicked: importIconsMenu.popup(importIconsButton, 0, importIconsButton.height)
+
+                                QQC2.Menu {
+                                    id: importIconsMenu
+                                    Instantiator {
+                                        model: page.grubImports
+                                        delegate: QQC2.MenuItem {
+                                            required property var modelData
+                                            text: modelData.name
+                                            onTriggered: page.message = page.editor.useImportIcons(modelData.id)
+                                        }
+                                        onObjectAdded: (index, object) => importIconsMenu.insertItem(index, object)
+                                        onObjectRemoved: (index, object) => importIconsMenu.removeItem(object)
+                                    }
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: page.editor.iconClasses
+                            delegate: RowLayout {
+                                id: iconRow
+
+                                required property string modelData
+                                readonly property var icons: page.editor.content.icons ?? ({})
+
+                                Layout.fillWidth: true
+                                QQC2.Label {
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                    text: iconRow.modelData
+                                    opacity: 0.7
+                                }
+                                AssetRow {
+                                    Layout.fillWidth: true
+                                    asset: iconRow.icons[iconRow.modelData] ?? ""
+                                    onChoose: {
+                                        imageDialog.purpose = "icon:" + iconRow.modelData;
+                                        imageDialog.open();
+                                    }
+                                    onRemove: {
+                                        const all = Object.assign({}, iconRow.icons);
+                                        delete all[iconRow.modelData];
+                                        page.editor.setContent({ icons: Object.keys(all).length > 0 ? all : null });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     QQC2.SpinBox {
-                        visible: page.selected < 0 && !page.boot
+                        visible: page.selected < 0 && page.plasma
                         Kirigami.FormData.label: qsTr("Fade-in (ms):")
                         from: 0
                         to: 5000
@@ -636,18 +768,18 @@ Kirigami.Page {
                         onValueModified: page.editor.setContent({ fadeIn: value })
                     }
                     Kirigami.Separator {
-                        visible: page.selected < 0 && !page.boot
+                        visible: page.selected < 0 && page.plasma
                         Kirigami.FormData.isSection: true
                         Kirigami.FormData.label: qsTr("Package")
                     }
                     QQC2.TextField {
-                        visible: page.selected < 0 && !page.boot
+                        visible: page.selected < 0 && page.plasma
                         Kirigami.FormData.label: qsTr("Author:")
                         text: page.editor.content.author ?? "nomoruyi"
                         onEditingFinished: page.editor.setContent({ author: text })
                     }
                     QQC2.TextField {
-                        visible: page.selected < 0 && !page.boot
+                        visible: page.selected < 0 && page.plasma
                         Kirigami.FormData.label: qsTr("Licence:")
                         text: page.editor.content.licence ?? "MIT"
                         onEditingFinished: page.editor.setContent({ licence: text })
@@ -655,15 +787,23 @@ Kirigami.Page {
 
                     // Text
                     QQC2.TextArea {
-                        visible: page.element?.type === "text"
+                        visible: ["text", "countdown"].includes(page.element?.type)
                         Layout.fillWidth: true
                         Kirigami.FormData.label: qsTr("Text:")
                         text: page.element?.text ?? ""
                         wrapMode: TextEdit.Wrap
                         onEditingFinished: page.editor.setElement(page.selected, { text: text })
                     }
+                    QQC2.Label {
+                        visible: page.element?.type === "countdown"
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 13
+                        wrapMode: Text.Wrap
+                        opacity: 0.7
+                        text: qsTr("GRUB puts the seconds left where the text says %d.")
+                    }
                     QQC2.ComboBox {
-                        visible: page.element?.type === "text"
+                        visible: ["text", "menu", "countdown"].includes(page.element?.type)
                         Layout.fillWidth: true
                         Kirigami.FormData.label: qsTr("Font:")
                         model: [qsTr("Default font")].concat(Qt.fontFamilies())
@@ -679,7 +819,7 @@ Kirigami.Page {
                         }
                     }
                     RowLayout {
-                        visible: page.element?.type === "text"
+                        visible: ["text", "menu", "countdown"].includes(page.element?.type)
                         Kirigami.FormData.label: qsTr("Size (% of height):")
                         DecimalField {
                             number: page.element?.size ?? 3
@@ -691,7 +831,7 @@ Kirigami.Page {
                         }
                     }
                     QQC2.ComboBox {
-                        visible: page.element?.type === "text"
+                        visible: ["text", "countdown"].includes(page.element?.type)
                         Kirigami.FormData.label: qsTr("Alignment:")
                         textRole: "text"
                         valueRole: "value"
@@ -700,10 +840,64 @@ Kirigami.Page {
                         onActivated: page.editor.setElement(page.selected, { align: currentValue })
                     }
                     ColourField {
-                        visible: ["text", "spinner", "progress"].includes(page.element?.type)
+                        visible: ["text", "spinner", "progress", "menu", "countdown"].includes(page.element?.type)
                         Kirigami.FormData.label: qsTr("Colour:")
                         raw: page.element?.color ?? "#ffffff"
                         onPicked: value => page.editor.setElement(page.selected, { color: value })
+                    }
+
+                    // Boot menu: the selected entry, and the font size at this resolution
+                    ColourField {
+                        visible: page.element?.type === "menu"
+                        Kirigami.FormData.label: qsTr("Selected text:")
+                        raw: page.element?.selectedColor ?? "#ffffff"
+                        onPicked: value => page.editor.setElement(page.selected, { selectedColor: value })
+                    }
+                    RowLayout {
+                        visible: page.element?.type === "menu"
+                        Kirigami.FormData.label: qsTr("Selection:")
+                        QQC2.ComboBox {
+                            textRole: "text"
+                            valueRole: "value"
+                            model: [{ value: "flat", text: qsTr("Flat") }, { value: "rounded", text: qsTr("Rounded") }, { value: "glow", text: qsTr("Glow") }]
+                            currentIndex: Math.max(0, ["flat", "rounded", "glow"].indexOf(page.element?.selection?.style ?? "rounded"))
+                            onActivated: page.editor.setElement(page.selected, { selection: { style: currentValue, color: page.element?.selection?.color ?? "#40ffffff" } })
+                        }
+                        ColourField {
+                            raw: page.element?.selection?.color ?? "#40ffffff"
+                            onPicked: value => page.editor.setElement(page.selected, { selection: { style: page.element?.selection?.style ?? "rounded", color: value } })
+                        }
+                    }
+                    RowLayout {
+                        id: overrideRow
+
+                        readonly property var overrides: page.editor.content.sizeOverrides ?? ({})
+                        function setOverride(pixels) {
+                            const all = Object.assign({}, overrides);
+                            if (pixels > 0)
+                                all[page.screenKey] = pixels;
+                            else
+                                delete all[page.screenKey];
+                            page.editor.setContent({ sizeOverrides: Object.keys(all).length > 0 ? all : null });
+                        }
+
+                        visible: page.element?.type === "menu"
+                        Kirigami.FormData.label: qsTr("Font at %1p:").arg(page.resolution)
+                        QQC2.CheckBox {
+                            text: qsTr("Own size")
+                            checked: overrideRow.overrides[page.screenKey] !== undefined
+                            onToggled: overrideRow.setOverride(checked ? Math.floor(page.resolution * (page.element?.size ?? 3) / 100) : 0)
+                        }
+                        QQC2.SpinBox {
+                            enabled: overrideRow.overrides[page.screenKey] !== undefined
+                            from: 8
+                            to: 200
+                            value: overrideRow.overrides[page.screenKey] ?? Math.floor(page.resolution * (page.element?.size ?? 3) / 100)
+                            onValueModified: overrideRow.setOverride(value)
+                        }
+                        QQC2.Label {
+                            text: qsTr("px")
+                        }
                     }
 
                     // Image
@@ -783,7 +977,7 @@ Kirigami.Page {
                         onEdited: v => page.editor.setElement(page.selected, { seconds: v })
                     }
                     QQC2.Label {
-                        visible: page.element?.type === "frames"
+                        visible: page.element?.type === "frames" && page.boot
                         Layout.fillWidth: true
                         Layout.maximumWidth: Kirigami.Units.gridUnit * 13
                         wrapMode: Text.Wrap
@@ -802,6 +996,7 @@ Kirigami.Page {
                             }
                         }
                         QQC2.Button {
+                            visible: page.boot // a Plasma splash plays the video itself
                             text: qsTr("Video…")
                             enabled: page.editor.conversionProgress < 0
                             onClicked: {
@@ -962,7 +1157,8 @@ Kirigami.Page {
         QQC2.Label {
             Layout.fillWidth: true
             elide: Text.ElideRight
-            text: assetRow.asset === "" ? qsTr("None") : (page.editor.assets[assetRow.asset]?.name ?? qsTr("(missing)"))
+            text: assetRow.asset === "" ? qsTr("None") : assetRow.asset.startsWith("builtin:") ? qsTr("Built-in")
+                : (page.editor.assets[assetRow.asset]?.name ?? qsTr("(missing)"))
         }
         IconButton {
             icon.name: "document-open"
@@ -1088,6 +1284,11 @@ Kirigami.Page {
                 page.editor.setElement(page.selected, { asset: added.hash });
             else if (purpose === "shared")
                 page.message = page.editor.setSharedLogo(page.element.shared, added.hash);
+            else if (purpose.startsWith("icon:")) {
+                const icons = Object.assign({}, page.editor.content.icons ?? {});
+                icons[purpose.slice(5)] = added.hash;
+                page.editor.setContent({ icons: icons });
+            }
             else
                 page.selected = page.editor.addElement("image", { asset: added.hash });
         }

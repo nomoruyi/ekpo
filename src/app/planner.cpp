@@ -1,6 +1,7 @@
 #include "planner.h"
 
 #include "configtext.h"
+#include "gengrub.h"
 #include "genksplash.h"
 #include "genplymouth.h"
 #include "validate.h"
@@ -10,6 +11,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QRegularExpression>
 #include <QStorageInfo>
 
@@ -135,8 +137,14 @@ QString qmlEngine(const Target &before)
 
 } // namespace
 
+QSize primaryScreenOr(const SystemState &state)
+{
+    return state.primaryMode.isEmpty() ? builtScreen : state.primaryMode;
+}
+
 Plan planMask(const PlanContext &context, const Mask &mask)
 {
+    bool builtForScreen = false;
     const QString root = rootOf(context);
     const Target before = currentTarget(context.state, context.rootDir);
     QStringList loadErrors;
@@ -158,8 +166,30 @@ Plan planMask(const PlanContext &context, const Mask &mask)
             const std::optional<Design> design = context.library.resolved(*saved, problems);
             const QString stamp = Library::stamp(*design);
             if (design->stage == Stage::BootMenu) {
-                // ponytail: the boot menu designer and its generator arrive with M3.
-                problems << QStringLiteral("%1: designs for this stage can't be built yet.").arg(design->name);
+                // Built for one screen, the mode GRUB_GFXMODE then asks for (SPEC.md §4.5).
+                GrubLayout layout;
+                QStringList buildProblems;
+                const QList<PayloadFile> built = buildBootMenu(*design, context.library, context.screen, context.state.menuEntries, buildProblems, &layout);
+                problems << buildProblems;
+                if (!layout.fits)
+                    notes << QStringLiteral("\u201c%1\u201d won't fit: the menu needs %2 px and the screen is %3 px wide. A smaller menu font fixes it.")
+                                 .arg(layout.longestEntry)
+                                 .arg(layout.neededWidth)
+                                 .arg(context.screen.width());
+                const auto [id, build] = pickVersion(root + grubThemesDir, design->name, [&](const QString &) { return built; });
+                const BootMenuTarget &now = *before.bootMenu;
+                BootMenuTarget menu;
+                menu.label = design->name;
+                menu.theme = id;
+                menu.build = Library::buildHash(build);
+                menu.gfxmode = QStringLiteral("%1x%2,auto").arg(context.screen.width()).arg(context.screen.height());
+                menu.timeout = now.original ? std::nullopt : now.timeout;
+                menu.timeoutStyle = now.original ? QString() : now.timeoutStyle;
+                menu.design = design->id;
+                menu.stamp = stamp;
+                builds.insert(menu.build, build);
+                target.bootMenu = menu;
+                builtForScreen = true;
                 continue;
             }
             if (design->stage == Stage::BootSplash) {
@@ -178,6 +208,7 @@ Plan planMask(const PlanContext &context, const Mask &mask)
                 splash.stamp = stamp;
                 builds.insert(splash.build, build);
                 target.bootSplash = splash;
+                builtForScreen = true;
                 continue;
             }
             // A new versioned package whenever the files differ, so every history entry stays restorable.
@@ -217,7 +248,7 @@ Plan planMask(const PlanContext &context, const Mask &mask)
             BootMenuTarget menu;
             menu.label = theme.name;
             const BootMenuTarget &now = *before.bootMenu;
-            menu.gfxmode = now.original || now.gfxmode.isEmpty() ? defaultGfxmode : now.gfxmode;
+            menu.gfxmode = defaultGfxmode; // a theme made for several sizes, or none in particular (SPEC.md §4.9)
             menu.timeout = now.original ? std::nullopt : now.timeout;
             menu.timeoutStyle = now.original ? QString() : now.timeoutStyle;
             if (!theme.installedId.isEmpty()) {
@@ -269,6 +300,8 @@ Plan planMask(const PlanContext &context, const Mask &mask)
     }
 
     Plan plan = planTarget(context, target, mask.name, builds);
+    if (builtForScreen)
+        plan.screen = context.screen;
     plan.problems = problems + plan.problems;
     plan.notes = notes + plan.notes;
     if (target.isEmpty() && problems.isEmpty())
@@ -290,6 +323,8 @@ QMap<Stage, QString> designUpdates(const Library &library)
         if (const auto design = library.design(id, 0, error); design && Library::stamp(library.resolved(*design, problems)) != stamp)
             updates.insert(stage, design->id);
     };
+    if (last.bootMenu)
+        check(Stage::BootMenu, last.bootMenu->design, last.bootMenu->stamp);
     if (last.bootSplash)
         check(Stage::BootSplash, last.bootSplash->design, last.bootSplash->stamp);
     if (last.plasmaSplash)
@@ -478,6 +513,29 @@ Target lastApplied(const Library &library)
         }
     }
     return Target::fromJson(merged);
+}
+
+BootMenuCheck checkBootMenu(const Library &library, const SystemState &state)
+{
+    QStringList errors;
+    for (const HistoryEntry &e : library.history(errors)) { // newest first: the last apply of the boot menu
+        const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
+        if (!target.bootMenu)
+            continue;
+        BootMenuCheck check;
+        if (target.bootMenu->original || target.bootMenu->design.isEmpty())
+            return check;
+        static const QRegularExpression mode(QStringLiteral("^(\\d+)x(\\d+)"));
+        const auto m = mode.match(target.bootMenu->gfxmode);
+        check.design = target.bootMenu->design;
+        check.builtFor = m.hasMatch() ? QSize(m.captured(1).toInt(), m.captured(2).toInt()) : QSize();
+        check.screenChanged = !state.primaryMode.isEmpty() && state.primaryMode != check.builtFor;
+        check.fellBack = state.bootedAt.isValid() && e.createdAt < state.bootedAt && state.bootMode != check.builtFor;
+        for (const QJsonValue &v : e.state.value(QStringLiteral("clippedEntries")).toArray())
+            check.clipped << v.toString();
+        return check;
+    }
+    return {};
 }
 
 QList<Stage> driftedStages(const Library &library, const Target &current)

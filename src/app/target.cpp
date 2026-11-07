@@ -7,17 +7,6 @@
 
 namespace {
 
-QJsonObject bootMenuJson(const BootMenuTarget &t)
-{
-    if (t.original)
-        return {{QStringLiteral("original"), true}, {QStringLiteral("label"), t.label}};
-    QJsonObject o{{QStringLiteral("theme"), t.theme}, {QStringLiteral("gfxmode"), t.gfxmode}, {QStringLiteral("timeoutStyle"), t.timeoutStyle},
-                  {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label}};
-    if (t.timeout)
-        o.insert(QStringLiteral("timeout"), *t.timeout);
-    return o;
-}
-
 // Which design a stage was built from, when it was.
 QJsonObject withDesign(QJsonObject o, const QString &design, const QString &stamp)
 {
@@ -26,6 +15,17 @@ QJsonObject withDesign(QJsonObject o, const QString &design, const QString &stam
         o.insert(QStringLiteral("stamp"), stamp);
     }
     return o;
+}
+
+QJsonObject bootMenuJson(const BootMenuTarget &t)
+{
+    if (t.original)
+        return {{QStringLiteral("original"), true}, {QStringLiteral("label"), t.label}};
+    QJsonObject o{{QStringLiteral("theme"), t.theme}, {QStringLiteral("gfxmode"), t.gfxmode}, {QStringLiteral("timeoutStyle"), t.timeoutStyle},
+                  {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label}};
+    if (t.timeout)
+        o.insert(QStringLiteral("timeout"), *t.timeout);
+    return withDesign(o, t.design, t.stamp);
 }
 
 QJsonObject bootSplashJson(const BootSplashTarget &t)
@@ -80,6 +80,8 @@ Target Target::fromJson(const QJsonObject &json)
         m.timeoutStyle = str(o, "timeoutStyle");
         m.build = str(o, "build");
         m.label = str(o, "label");
+        m.design = str(o, "design");
+        m.stamp = str(o, "stamp");
         t.bootMenu = m;
     }
     if (const QJsonValue v = json.value(stageKey(Stage::BootSplash)); v.isObject()) {

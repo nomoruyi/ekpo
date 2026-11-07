@@ -147,6 +147,10 @@ int status(const Library &library, const AppEnvironment &env)
     out() << "Boot splash:   " << current.bootSplash->label << " (" << current.bootSplash->mode << ")\n";
     out() << "Plasma splash: " << (current.plasmaSplash->label.isEmpty() ? QStringLiteral("Plasma default") : current.plasmaSplash->label) << "\n";
     out() << "Initrds:       built by " << (state.initramfsGenerator.isEmpty() ? QStringLiteral("an unknown tool") : state.initramfsGenerator) << "\n";
+    if (!state.primaryMode.isEmpty())
+        out() << "Screen:        " << state.primaryOutput << " at " << state.primaryMode.width() << "x" << state.primaryMode.height()
+              << (state.bootMode.isEmpty() ? QStringLiteral(", boot menu in text mode") : QStringLiteral(", boot menu showed at %1x%2").arg(state.bootMode.width()).arg(state.bootMode.height()))
+              << "\n";
 
     QStringList attention = state.errors;
     if (state.leftoverJournal)
@@ -251,6 +255,7 @@ int runCli(const QStringList &rawArgs)
 
     const SystemState state = probeSystem(env.rootDir, env.homeDir);
     PlanContext context{*library, state, env.rootDir, env.homeDir};
+    context.screen = primaryScreenOr(state);
     context.allKernels = allKernels.value_or(command == QLatin1String("apply") ? library->settings().rebuildAllKernels : true);
     const QString arg = args.at(1);
     QStringList errors;

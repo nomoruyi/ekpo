@@ -42,6 +42,22 @@
         }
     ],
     "leftoverJournal": false,
+    "menuEntries": [
+        "Kubuntu",
+        "Advanced options for Kubuntu",
+        "Kubuntu, with Linux 7.0.0-42-generic",
+        "Kubuntu, with Linux 7.0.0-42-generic (recovery mode)",
+        "Kubuntu, with Linux 7.0.0-38-generic",
+        "Kubuntu, with Linux 7.0.0-38-generic (recovery mode)",
+        "Kubuntu, with Linux 7.0.0-30-generic",
+        "Kubuntu, with Linux 7.0.0-30-generic (recovery mode)",
+        "Kubuntu, with Linux 7.0.0-29-generic",
+        "Kubuntu, with Linux 7.0.0-29-generic (recovery mode)",
+        "Kubuntu, with Linux 7.0.0-27-generic",
+        "Kubuntu, with Linux 7.0.0-27-generic (recovery mode)",
+        "Windows Boot Manager (on /dev/nvme1n1p1)",
+        "UEFI Firmware Settings"
+    ],
     "plasmaSplash": {
         "engine": "",
         "packages": [
@@ -153,5 +169,12 @@
                 "name": "Ubuntu Text"
             }
         ]
+    },
+    "screen": {
+        "bootMode": "2560x1440",
+        "bootedAt": "2026-11-06T07:00:00Z",
+        "efi": true,
+        "primaryMode": "2560x1440",
+        "primaryOutput": "DP-1"
     }
 }

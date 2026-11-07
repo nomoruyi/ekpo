@@ -122,7 +122,7 @@ QStringList designWarnings(const Design &design, const Library &library)
             const double scale = s.isEmpty() ? 0 : std::min(largest.width * w / 100 / s.width(), largest.height * h / 100 / s.height());
             if (scale > 1.05)
                 warnings << DesignEditor::tr("1440p: %1 (%2×%3 px) is enlarged ×%4 and looks blurry.").arg(what).arg(s.width()).arg(s.height()).arg(scale, 0, 'f', 1);
-        } else if (type == QLatin1String("text")) {
+        } else if (type == QLatin1String("text") && design.stage != Stage::BootMenu) { // GRUB text is measured with its .pf2 fonts
             QFont font = QGuiApplication::font(); // what QML Text uses without a font
             const auto fontAsset = assets.constFind(e.value(QStringLiteral("font")).toString());
             if (fontAsset != assets.cend()) {
@@ -203,6 +203,36 @@ QJsonObject starterContent(Stage stage, const QString &starter, QColor accent)
         return {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), dark}, {QStringLiteral("color2"), QStringLiteral("#000000")}}},
                 {QStringLiteral("hideMessages"), true},
                 {QStringLiteral("elements"), QJsonArray{spinner(accentName, 60)}}};
+    }
+    // Boot menus: blank still needs a menu (and a countdown is what people expect).
+    const auto menu = [&](double x, double y, double w, double h, const QString &style, const QString &selection) {
+        return element(QStringLiteral("menu"), x, y, w, h,
+                       {{QStringLiteral("size"), 2.2}, {QStringLiteral("color"), QStringLiteral("#c8c8c8")}, {QStringLiteral("selectedColor"), QStringLiteral("#ffffff")},
+                        {QStringLiteral("selection"), QJsonObject{{QStringLiteral("style"), style}, {QStringLiteral("color"), selection}}}});
+    };
+    const auto countdown = [&](double y) {
+        return element(QStringLiteral("countdown"), 30, y, 40, 4,
+                       {{QStringLiteral("text"), DesignEditor::tr("Starting in %d s")}, {QStringLiteral("size"), 1.6}, {QStringLiteral("color"), light},
+                        {QStringLiteral("align"), QStringLiteral("center")}});
+    };
+    if (stage == Stage::BootMenu && starter.isEmpty()) {
+        return {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}},
+                {QStringLiteral("elements"), QJsonArray{menu(30, 30, 40, 40, QStringLiteral("flat"), QStringLiteral("#404040")), countdown(78)}}};
+    }
+    if (stage == Stage::BootMenu && starter == QLatin1String("centred")) {
+        return {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), dark}}},
+                {QStringLiteral("elements"),
+                 QJsonArray{menu(30, 30, 40, 40, QStringLiteral("rounded"), accentName), countdown(76),
+                            element(QStringLiteral("progress"), 40, 81, 20, 0.4, {{QStringLiteral("color"), accentName}, {QStringLiteral("background"), QColor::fromHslF(hue, saturation * 0.5, 0.25).name()}}),
+                            text(DesignEditor::tr("Enter: start · e: edit · c: command line"), 1.4, light, 10, 92, 80, 4)}}};
+    }
+    if (stage == Stage::BootMenu && starter == QLatin1String("side")) {
+        return {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}},
+                {QStringLiteral("elements"),
+                 QJsonArray{text(DesignEditor::tr("Choose a system"), 3, light, 8, 18, 50, 6), menu(8, 28, 45, 55, QStringLiteral("glow"), accentName),
+                            element(QStringLiteral("countdown"), 8, 86, 45, 4,
+                                    {{QStringLiteral("text"), DesignEditor::tr("Starting in %d s")}, {QStringLiteral("size"), 1.6}, {QStringLiteral("color"), accentName},
+                                     {QStringLiteral("align"), QStringLiteral("left")}})}}};
     }
     if (stage == Stage::BootSplash && starter == QLatin1String("progress")) {
         const QString dim = QColor::fromHslF(hue, saturation * 0.5, 0.25).name();
@@ -345,8 +375,6 @@ QString DesignEditor::open(const QString &id)
     if (!saved && !draft)
         return error;
     const Stage stage = saved ? saved->stage : draft->stage;
-    if (stage == Stage::BootMenu) // ponytail: the boot menu designer comes with M3
-        return tr("Designs for this stage can't be edited yet.");
     const State savedState = saved ? State{saved->name, saved->content} : State{};
     load(id, stage, saved ? saved->version : 0, draft ? State{draft->name, draft->content} : savedState, savedState, draft.has_value());
     return {};
@@ -355,13 +383,14 @@ QString DesignEditor::open(const QString &id)
 void DesignEditor::create(const QString &stage, const QString &starter, const QColor &accent)
 {
     const auto s = stageFromKey(stage);
-    if (!m_library || !s || *s == Stage::BootMenu)
+    if (!m_library || !s)
         return;
     close();
     QJsonObject content = starterContent(*s, starter, accent);
     if (content.isEmpty())
         content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}}, {QStringLiteral("elements"), QJsonArray()}};
-    load({}, *s, 0, State{*s == Stage::BootSplash ? tr("New boot splash") : tr("New splash"), content}, {}, false);
+    const QString name = *s == Stage::BootMenu ? tr("New boot menu") : *s == Stage::BootSplash ? tr("New boot splash") : tr("New splash");
+    load({}, *s, 0, State{name, content}, {}, false);
 }
 
 QString DesignEditor::duplicate(const QString &id)
@@ -372,8 +401,6 @@ QString DesignEditor::duplicate(const QString &id)
     const auto design = m_library->design(id, 0, error);
     if (!design)
         return error;
-    if (design->stage == Stage::BootMenu)
-        return tr("Designs for this stage can't be edited yet.");
     close();
     load({}, design->stage, 0, State{tr("Copy of %1").arg(design->name), design->content}, {}, false);
     return {};
@@ -442,6 +469,8 @@ void DesignEditor::close()
     m_previewTimer.stop();
     m_previewPackage.clear();
     m_previewUrl.clear();
+    m_plymouth.clear();
+    m_bootMenu.clear();
     m_problems.clear();
     m_warnings.clear();
     Q_EMIT changed();
@@ -569,6 +598,14 @@ int DesignEditor::addElement(const QString &type, const QVariantMap &values)
     } else if (type == QLatin1String("progress")) {
         e = {{QStringLiteral("color"), QStringLiteral("#ffffff")}, {QStringLiteral("background"), QStringLiteral("#404040")},
              {QStringLiteral("x"), 40}, {QStringLiteral("y"), 85}, {QStringLiteral("width"), 20}, {QStringLiteral("height"), 0.5}};
+    } else if (type == QLatin1String("menu")) {
+        e = {{QStringLiteral("size"), 2.2}, {QStringLiteral("color"), QStringLiteral("#c8c8c8")}, {QStringLiteral("selectedColor"), QStringLiteral("#ffffff")},
+             {QStringLiteral("selection"), QJsonObject{{QStringLiteral("style"), QStringLiteral("rounded")}, {QStringLiteral("color"), QStringLiteral("#40ffffff")}}},
+             {QStringLiteral("x"), 30}, {QStringLiteral("y"), 30}, {QStringLiteral("width"), 40}, {QStringLiteral("height"), 40}};
+    } else if (type == QLatin1String("countdown")) {
+        e = {{QStringLiteral("text"), tr("Starting in %d s")}, {QStringLiteral("size"), 1.6}, {QStringLiteral("color"), QStringLiteral("#ffffff")},
+             {QStringLiteral("align"), QStringLiteral("center")}, {QStringLiteral("x"), 30}, {QStringLiteral("y"), 78}, {QStringLiteral("width"), 40},
+             {QStringLiteral("height"), 4}};
     } else {
         return -1;
     }
@@ -995,6 +1032,8 @@ void DesignEditor::flushPreview()
         return;
     QStringList problems;
     const Design design = m_library->resolved(currentDesign(), problems); // with its shared logos and palette
+    if (m_stage == Stage::BootMenu)
+        return flushBootMenuPreview(design, problems);
     // Plasma splash assets are linked, not copied: a video would otherwise be rewritten
     // on every edit. A boot splash is all generated files.
     QMap<QString, QString> links;
@@ -1029,18 +1068,13 @@ void DesignEditor::flushPreview()
         if (!written)
             QDir(dir).removeRecursively();
     }
-    // Keeps this build and the one on screen, which the preview may still show.
-    if (m_previewDir.isValid()) {
-        for (const QString &old : QDir(m_previewDir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-            if (old != hash && m_previewDir.filePath(old) != m_previewPackage)
-                QDir(m_previewDir.filePath(old)).removeRecursively();
-        }
-    }
+    keepPreviews(hash);
     m_previewPackage = dir;
     m_problems = problems;
     m_warnings = designWarnings(design, *m_library);
     m_previewUrl.clear();
     m_plymouth.clear();
+    m_bootMenu.clear();
     if (!boot) {
         m_previewUrl = QUrl::fromLocalFile(dir + QStringLiteral("/contents/splash/Splash.qml"));
     } else {
@@ -1078,6 +1112,130 @@ void DesignEditor::flushPreview()
             m_warnings << tr("Plymouth holds %1 MB in memory before the splash shows (about %2 MB is the budget): a shorter, smaller or slower animation starts sooner.")
                               .arg(megabytes(layout.decodedBytes), megabytes(plymouthMemoryBudget));
     }
+    Q_EMIT previewChanged();
+}
+
+void DesignEditor::keepPreviews(const QString &current)
+{
+    // Keeps this build and the one on screen, which the preview may still show.
+    if (!m_previewDir.isValid())
+        return;
+    for (const QString &old : QDir(m_previewDir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        if (old != current && m_previewDir.filePath(old) != m_previewPackage)
+            QDir(m_previewDir.filePath(old)).removeRecursively();
+    }
+}
+
+void DesignEditor::setMenuEntries(const QStringList &entries)
+{
+    if (entries == m_menuEntries)
+        return;
+    m_menuEntries = entries;
+    if (m_open && m_stage == Stage::BootMenu)
+        m_previewTimer.start();
+}
+
+QStringList DesignEditor::menuEntries() const
+{
+    return m_menuEntries.isEmpty() ? QStringList{QStringLiteral("Kubuntu"), QStringLiteral("Advanced options for Kubuntu"),
+                                                 QStringLiteral("Kubuntu, with Linux 7.0.0-42-generic (recovery mode)"), QStringLiteral("UEFI Firmware Settings")}
+                                   : m_menuEntries;
+}
+
+void DesignEditor::setPreviewScreen(int width, int height)
+{
+    const QSize size(width, height);
+    if (size.isEmpty() || size == m_previewScreen)
+        return;
+    m_previewScreen = size;
+    if (m_open && m_stage == Stage::BootMenu)
+        m_previewTimer.start();
+}
+
+void DesignEditor::useBuiltinIcons()
+{
+    QVariantMap icons = m_current.content.value(QStringLiteral("icons")).toObject().toVariantMap();
+    for (const QString &c : iconClasses())
+        icons.insert(c, QStringLiteral("builtin:") + builtinIconFor(c));
+    setContent({{QStringLiteral("icons"), icons}});
+}
+
+QString DesignEditor::useImportIcons(const QString &importId)
+{
+    if (!m_open || !m_library)
+        return tr("No design is open.");
+    const QDir dir(m_library->importFilesPath(importId) + QStringLiteral("/icons"));
+    QVariantMap icons = m_current.content.value(QStringLiteral("icons")).toObject().toVariantMap();
+    int found = 0;
+    for (const QString &c : iconClasses()) {
+        const QString file = dir.filePath(c + QStringLiteral(".png"));
+        if (!QFileInfo::exists(file))
+            continue;
+        QString error;
+        const auto asset = m_library->addAsset(file, Asset::Kind::Image, QStringLiteral("%1 icon").arg(c), error);
+        if (!asset)
+            return error;
+        icons.insert(c, asset->hash);
+        ++found;
+    }
+    if (found == 0)
+        return tr("That theme has no icons for %1.").arg(iconClasses().join(QStringLiteral(", ")));
+    reloadLists();
+    setContent({{QStringLiteral("icons"), icons}});
+    return {};
+}
+
+void DesignEditor::flushBootMenuPreview(const Design &design, QStringList problems)
+{
+    // Built for the editor's resolution and drawn as GRUB will draw it (SPEC.md §4.5).
+    const QStringList entries = menuEntries();
+    GrubLayout layout;
+    const QList<PayloadFile> files = buildBootMenu(design, *m_library, m_previewScreen, entries, problems, &layout);
+    QList<PayloadFile> hashed = files;
+    hashed << PayloadFile{QStringLiteral("entries"), entries.join(QLatin1Char('\n')).toUtf8()}
+           << PayloadFile{QStringLiteral("screen"), QStringLiteral("%1x%2").arg(m_previewScreen.width()).arg(m_previewScreen.height()).toUtf8()};
+    const QString hash = Library::buildHash(hashed);
+    const QString dir = m_previewDir.filePath(hash);
+    const QString image = dir + QStringLiteral("/preview.png");
+    if (m_previewDir.isValid() && !QFileInfo::exists(image)) {
+        // Uncompressed: written on every change, read once.
+        if (!QDir().mkpath(dir) || !renderBootMenu(files, m_previewScreen, entries).save(image, "PNG", 100))
+            problems << tr("Can't write the preview.");
+    }
+    keepPreviews(hash);
+    m_previewPackage = dir;
+    m_previewUrl.clear();
+    m_plymouth.clear();
+    m_problems = problems;
+    m_warnings = designWarnings(design, *m_library);
+    m_bootMenu = {{QStringLiteral("preview"), QUrl::fromLocalFile(image)}, {QStringLiteral("fits"), layout.fits}};
+
+    // Each resolution: does the longest entry fit, did the menu have to widen, is a text cut off?
+    double designed = 0;
+    for (const QJsonValue &v : elementsOf(design.content)) {
+        if (v.toObject().value(QStringLiteral("type")) == QLatin1String("menu"))
+            designed = v.toObject().value(QStringLiteral("width")).toDouble();
+    }
+    QStringList widened;
+    QString longest;
+    for (const Resolution &r : resolutions) {
+        const QSize size(r.width, r.height);
+        GrubLayout l = layout;
+        QStringList ignored; // the same as above
+        if (size != m_previewScreen)
+            buildBootMenu(design, *m_library, size, entries, ignored, &l, false);
+        const QString at = QStringLiteral("%1p").arg(r.height);
+        if (!l.fits)
+            m_warnings << tr("%1: \u201c%2\u201d doesn't fit even across the whole screen, so GRUB cuts it off. A smaller menu font fixes it.").arg(at, l.longestEntry);
+        else if (l.menu.width() > std::ceil(r.width * designed / 100) + 1)
+            widened << QStringLiteral("%1 % at %2").arg(std::lround(100.0 * l.menu.width() / r.width)).arg(at);
+        longest = l.longestEntry;
+        for (const QString &text : std::as_const(l.clippedTexts))
+            m_warnings << tr("%1: GRUB cuts off \u201c%2\u201d; a text is one line, clipped to its box.").arg(at, text);
+    }
+    // Not a fault: the menu is wider than drawn, so the longest entry fits (SPEC.md §4.5).
+    if (!widened.isEmpty())
+        m_warnings << tr("The menu widens to %1 so \u201c%2\u201d fits.").arg(widened.join(QStringLiteral(", ")), longest);
     Q_EMIT previewChanged();
 }
 

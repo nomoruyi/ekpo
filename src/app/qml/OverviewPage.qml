@@ -144,6 +144,15 @@ Kirigami.ScrollablePage {
                                 }
                             }
                             QQC2.Button {
+                                visible: stageCard.modelData.rebuild !== undefined
+                                text: qsTr("Rebuild for %1…").arg(stageCard.modelData.rebuild ?? "")
+                                enabled: !Backend.applying
+                                onClicked: {
+                                    Backend.planRebuildBootMenu();
+                                    page.review();
+                                }
+                            }
+                            QQC2.Button {
                                 visible: stageCard.modelData.drift
                                 text: qsTr("Re-apply…")
                                 enabled: !Backend.applying

@@ -146,6 +146,28 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // Designs are built for one screen size (SPEC.md §4.5): the primary screen's, or another.
+        RowLayout {
+            visible: page.plan.screen !== undefined && page.outcome === null
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                text: qsTr("Built for the screen size")
+            }
+            QQC2.ComboBox {
+                id: screenBox
+                model: page.plan.screens ?? []
+                currentIndex: (page.plan.screens ?? []).indexOf(page.plan.screen ?? "")
+                enabled: !Backend.applying
+                onActivated: index => Backend.setPlanScreen(model[index])
+            }
+            QQC2.Label {
+                visible: screenBox.currentIndex === 0
+                opacity: 0.7
+                text: qsTr("(your primary screen)")
+            }
+        }
+
         QQC2.CheckBox {
             id: details
             text: qsTr("Show file changes and commands")

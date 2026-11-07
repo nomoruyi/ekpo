@@ -17,6 +17,8 @@ struct BootMenuTarget {
     QString timeoutStyle;
     QString build; // library build holding the theme files, when Ekpo installs a copy
     QString label; // what the review and history show
+    QString design; // the design it was built from, if any; then gfxmode starts with the screen it was built for
+    QString stamp; // Library::stamp of that design as built
 
     bool sameState(const BootMenuTarget &o) const
     {

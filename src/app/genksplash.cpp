@@ -176,6 +176,7 @@ QList<PayloadFile> buildPlasmaSplash(const Design &design, const QString &packag
 
     int number = 0;
     int videos = 0;
+    int animations = 0;
     for (const QJsonValue &value : c.value(QStringLiteral("elements")).toArray()) {
         const QJsonObject e = value.toObject();
         const QString type = e.value(QStringLiteral("type")).toString();
@@ -250,23 +251,78 @@ QList<PayloadFile> buildPlasmaSplash(const Design &design, const QString &packag
                 + QStringLiteral("        MediaPlayer {\n            source: Qt.resolvedUrl(%1)\n            videoOutput: %2\n"
                                  "            loops: MediaPlayer.Infinite\n            Component.onCompleted: play()\n        }\n")
                       .arg(qmlString(b.bundle(e.value(QStringLiteral("asset")).toString(), Asset::Kind::Video)), id);
+        } else if (type == QLatin1String("progress")) {
+            // ksplashqml counts Plasma's start from stage 1 and quits at 6 (splashapp.cpp).
+            const QString box = b.geometry(e, number);
+            const QString background = b.color(e, QStringLiteral("background"), QStringLiteral("#404040"));
+            content += QStringLiteral("        Rectangle {\n") + box
+                + QStringLiteral("            color: %1\n"
+                                 "            Rectangle {\n"
+                                 "                width: parent.width * Math.min(root.stage, 6) / 6\n"
+                                 "                height: parent.height\n"
+                                 "                color: %2\n"
+                                 "                Behavior on width {\n"
+                                 "                    NumberAnimation {\n"
+                                 "                        duration: 400\n"
+                                 "                    }\n"
+                                 "                }\n"
+                                 "            }\n"
+                                 "        }\n")
+                      .arg(background, b.color(e, QStringLiteral("color"), QStringLiteral("#ffffff")));
+        } else if (type == QLatin1String("frames")) {
+            // Frame by frame, looping in `seconds` (e.g. the boot splash's animation).
+            const QString box = b.geometry(e, number);
+            QStringList sources;
+            for (const QJsonValue &frame : e.value(QStringLiteral("frames")).toArray())
+                sources << qmlString(b.bundle(frame.toString(), Asset::Kind::Image));
+            if (sources.isEmpty())
+                b.problem(QStringLiteral("Element %1 has no frames.").arg(number));
+            const double seconds = e.value(QStringLiteral("seconds")).toDouble(sources.size() / 30.0);
+            if (!(seconds > 0))
+                b.problem(QStringLiteral("Element %1 has no valid loop length.").arg(number));
+            const QString id = QStringLiteral("frames%1").arg(++animations);
+            content += QStringLiteral("        Image {\n            id: %1\n").arg(id) + box
+                + QStringLiteral("            readonly property var frames: [%1]\n"
+                                 "            property int frame: 0\n"
+                                 "            source: frames[frame]\n"
+                                 "            sourceSize.width: width\n"
+                                 "            sourceSize.height: height\n"
+                                 "            fillMode: Image.PreserveAspectFit\n"
+                                 "            mipmap: true\n"
+                                 "            Timer {\n"
+                                 "                interval: %2\n"
+                                 "                repeat: true\n"
+                                 "                running: %3.frames.length > 1\n"
+                                 "                onTriggered: %3.frame = (%3.frame + 1) % %3.frames.length\n"
+                                 "            }\n"
+                                 "        }\n")
+                      .arg(sources.join(QStringLiteral(", ")), QString::number(std::max(16, int(std::lround(seconds * 1000 / std::max<qsizetype>(1, sources.size()))))), id);
         } else {
             b.problem(QStringLiteral("Element %1 has an unknown type “%2”.").arg(number).arg(type));
         }
     }
 
     const int fadeIn = c.value(QStringLiteral("fadeIn")).toInt(0);
+    // A vertical gradient from color to color2, as in the other stages.
+    QString gradient;
+    if (background.contains(QStringLiteral("color2"))) {
+        gradient = QStringLiteral("    gradient: Gradient {\n"
+                                  "        GradientStop {\n            position: 0\n            color: %1\n        }\n"
+                                  "        GradientStop {\n            position: 1\n            color: %2\n        }\n"
+                                  "    }\n")
+                       .arg(b.color(background, QStringLiteral("color"), QStringLiteral("#000000")), b.color(background, QStringLiteral("color2"), QStringLiteral("#000000")));
+    }
     QString qml = QStringLiteral("// Generated by Ekpo from the design %1, version %2.\n"
                                  "// Plain QtQuick%5: it keeps working without Ekpo.\n"
                                  "import QtQuick\n%4\n"
                                  "Rectangle {\n"
                                  "    id: root\n"
-                                 "    color: %3\n\n"
+                                 "    color: %3\n%6\n"
                                  "    property int stage // set by ksplashqml\n\n")
                       .arg(qmlString(design.name), QString::number(design.version), // one pass: the name may contain %2
                            b.color(background, QStringLiteral("color"), QStringLiteral("#000000")),
                            videos > 0 ? QStringLiteral("import QtMultimedia\n") : QString(),
-                           videos > 0 ? QStringLiteral(" and QtMultimedia") : QString());
+                           videos > 0 ? QStringLiteral(" and QtMultimedia") : QString(), gradient);
     qml += b.fontLoaders.join(QString());
     qml += QStringLiteral("    Item {\n        anchors.fill: parent\n");
     if (fadeIn > 0)

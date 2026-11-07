@@ -36,7 +36,7 @@ Each design is a named profile per target. A bundle groups one profile per targe
 
 ## Status and gates
 
-All three gates passed (SPEC.md and ARCHITECTURE.md approved 2026-11-05). M1 is complete (0.2.0) and was verified on the real system on 2026-11-06: the owner installed the package and applied boot menu, boot splash, Plasma splash and a whole Mask (`docs/FIRST-APPLY.md`). The spikes are done (`notes/spikes-2026-11-06.md`); M2 is built along ARCHITECTURE.md §9a (steps 1–7); not yet tried on the real system. The gates were:
+All three gates passed (SPEC.md and ARCHITECTURE.md approved 2026-11-05). M1 is complete (0.2.0) and was verified on the real system on 2026-11-06: the owner installed the package and applied boot menu, boot splash, Plasma splash and a whole Mask (`docs/FIRST-APPLY.md`). The spikes are done (`notes/spikes-2026-11-06.md`); M2 is built along ARCHITECTURE.md §9a (steps 1–7); not yet tried on the real system. M3 is built along §9b (steps 1–6); not yet tried on the real system. The gates were:
 
 1. Interview the owner in rounds of at most 5–7 focused questions. Don't move on while answers are vague or contradictory; point out technical limits. Record each round's answers and open points in `INTERVIEW.md`.
 2. Write `SPEC.md` (scope, MVP, later phases, non-goals, open questions) and wait for approval.

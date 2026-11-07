@@ -1,4 +1,5 @@
 #include "designeditor.h"
+#include "importer.h"
 #include "testmain.h"
 #include "validate.h"
 
@@ -38,6 +39,9 @@ private Q_SLOTS:
     void duplicates();
     void sharesLogos();
     void sharesPalettes();
+    void bootMenuPreview();
+    void bootMenuStarters();
+    void bootMenuIcons();
 
 private:
     static QVariantMap elementAt(const DesignEditor &editor, int index)
@@ -565,6 +569,78 @@ void TestDesignEditor::sharesPalettes()
     QVERIFY(!e.content().contains(QStringLiteral("palette")));
     QCOMPARE(elementAt(e, 1).value(QStringLiteral("color")).toString(), QStringLiteral("#0000ff"));
     QCOMPARE(e.content().value(QStringLiteral("background")).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#102030"));
+}
+
+void TestDesignEditor::bootMenuPreview()
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("grub-mkfont")).isEmpty())
+        QSKIP("grub-mkfont isn't installed (grub-common)");
+    DesignEditor &e = *m_editor;
+    e.create(QStringLiteral("bootMenu"));
+    QCOMPARE(e.stage(), QStringLiteral("bootMenu"));
+    QCOMPARE(elementAt(e, 0).value(QStringLiteral("type")).toString(), QStringLiteral("menu")); // blank still has one
+    e.setMenuEntries({QStringLiteral("Kubuntu"), QStringLiteral("Advanced options for Kubuntu"), QStringLiteral("Windows Boot Manager (on /dev/nvme1n1p1)")});
+    QCOMPARE(e.iconClasses(), (QStringList{QStringLiteral("kubuntu"), QStringLiteral("windows")}));
+
+    // The preview is the theme drawn as GRUB will draw it, at the editor's resolution.
+    e.flushPreview();
+    QVERIFY2(e.problems().isEmpty(), qPrintable(e.problems().join(QLatin1Char('\n'))));
+    const QString preview = e.bootMenu().value(QStringLiteral("preview")).toUrl().toLocalFile();
+    QCOMPARE(QImage(preview).size(), QSize(2560, 1440));
+    e.setPreviewScreen(1280, 720);
+    e.flushPreview();
+    QCOMPARE(QImage(e.bootMenu().value(QStringLiteral("preview")).toUrl().toLocalFile()).size(), QSize(1280, 720));
+
+    // A narrow menu widens (a note); a text too long for its box is cut off (a warning).
+    e.setElement(0, {{QStringLiteral("x"), 45}, {QStringLiteral("width"), 10}});
+    e.addElement(QStringLiteral("text"), {{QStringLiteral("text"), QString(60, QLatin1Char('W'))}, {QStringLiteral("x"), 45}, {QStringLiteral("width"), 10}});
+    e.flushPreview();
+    const QString warnings = e.warnings().join(QLatin1Char('\n'));
+    QVERIFY2(warnings.contains(QStringLiteral("The menu widens to ")), qPrintable(warnings));
+    QVERIFY2(warnings.contains(QStringLiteral("so “Windows Boot Manager (on /dev/nvme1n1p1)” fits.")), qPrintable(warnings));
+    QVERIFY2(warnings.contains(QStringLiteral("720p: GRUB cuts off “WWW")), qPrintable(warnings));
+
+    // Saved and opened again as a boot menu.
+    QCOMPARE(e.save(), QString());
+    const QString id = e.designId();
+    e.close();
+    QCOMPARE(e.open(id), QString());
+    QCOMPARE(e.stage(), QStringLiteral("bootMenu"));
+}
+
+void TestDesignEditor::bootMenuStarters()
+{
+    DesignEditor &e = *m_editor;
+    for (const char *starter : {"centred", "side"}) {
+        e.create(QStringLiteral("bootMenu"), QLatin1String(starter), QColor(QStringLiteral("#e01b24")));
+        const QVariantList elements = e.content().value(QStringLiteral("elements")).toList();
+        const auto menu = std::find_if(elements.cbegin(), elements.cend(), [](const QVariant &v) { return v.toMap().value(QStringLiteral("type")) == QLatin1String("menu"); });
+        QVERIFY(menu != elements.cend());
+        QCOMPARE(menu->toMap().value(QStringLiteral("selection")).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#e01b24"));
+    }
+}
+
+void TestDesignEditor::bootMenuIcons()
+{
+    DesignEditor &e = *m_editor;
+    e.create(QStringLiteral("bootMenu"));
+    e.setMenuEntries({QStringLiteral("Kubuntu"), QStringLiteral("Windows Boot Manager (on /dev/sda1)"), QStringLiteral("UEFI Firmware Settings")});
+    e.useBuiltinIcons();
+    QCOMPARE(e.content().value(QStringLiteral("icons")).toMap(),
+             (QVariantMap{{QStringLiteral("kubuntu"), QStringLiteral("builtin:os")}, {QStringLiteral("windows"), QStringLiteral("builtin:windows")},
+                          {QStringLiteral("efi"), QStringLiteral("builtin:firmware")}}));
+
+    // From an imported theme: the icons it has replace those; the rest stay.
+    const ImportResult imported = importThemes(*m_library, QStringLiteral(FIXTURES_DIR "/themes/grub-icons"), QStringLiteral("/"), QDir::homePath());
+    QCOMPARE(imported.themes.size(), 1);
+    QCOMPARE(e.useImportIcons(imported.themes.first().id), QString());
+    const QVariantMap icons = e.content().value(QStringLiteral("icons")).toMap();
+    QCOMPARE(e.assets().value(icons.value(QStringLiteral("kubuntu")).toString()).toMap().value(QStringLiteral("name")).toString(), QStringLiteral("kubuntu icon"));
+    QVERIFY(e.assets().contains(icons.value(QStringLiteral("windows")).toString()));
+    QCOMPARE(icons.value(QStringLiteral("efi")).toString(), QStringLiteral("builtin:firmware"));
+
+    e.setMenuEntries({QStringLiteral("Memory test (memtest86+x64.efi)")});
+    QCOMPARE(e.useImportIcons(imported.themes.first().id), QStringLiteral("That theme has no icons for memtest86."));
 }
 
 EKPO_GUI_TEST_MAIN(TestDesignEditor)

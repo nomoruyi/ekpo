@@ -17,8 +17,6 @@ Kirigami.ScrollablePage {
     signal review
     signal edit // the editor has the open design
 
-    // ponytail: the Boot Menu designer arrives with M3.
-    readonly property bool canDesign: stage !== "bootMenu"
     readonly property var designs: Backend.designs.filter(d => d.stage === stage)
     readonly property var imports: Backend.imports.filter(t => t.stage === stage)
     readonly property var installed: Backend.installed.filter(t => t.stage === stage)
@@ -39,9 +37,11 @@ Kirigami.ScrollablePage {
         lastResult = error ? { names: [], errors: [error] } : null;
     }
     // Starters (SPEC.md §4.4), tinted with the Plasma accent colour.
-    readonly property var starters: stage === "bootSplash"
-        ? [{ id: "spinner", name: qsTr("Spinner on a Gradient") }, { id: "progress", name: qsTr("Progress Bar") }]
-        : [{ id: "welcome", name: qsTr("Welcome and Spinner") }, { id: "accent", name: qsTr("Accent Colour") }]
+    readonly property var starters: ({
+        bootMenu: [{ id: "centred", name: qsTr("Centred Menu") }, { id: "side", name: qsTr("Menu on the Left") }],
+        bootSplash: [{ id: "spinner", name: qsTr("Spinner on a Gradient") }, { id: "progress", name: qsTr("Progress Bar") }],
+        plasmaSplash: [{ id: "welcome", name: qsTr("Welcome and Spinner") }, { id: "accent", name: qsTr("Accent Colour") }]
+    })[stage]
     function newDesign(starter) {
         Backend.editor.create(stage, starter, Kirigami.Theme.highlightColor);
         edit();
@@ -54,8 +54,7 @@ Kirigami.ScrollablePage {
             edit();
     }
 
-    // (A list without the action, not a hidden one: Kirigami 6.24 can't lay out hidden actions here.)
-    actions: canDesign ? [newDesignAction, importFolderAction, importArchiveAction, bugAction] : [importFolderAction, importArchiveAction, bugAction]
+    actions: [newDesignAction, importFolderAction, importArchiveAction, bugAction]
 
     ReportBugAction {
         id: bugAction
@@ -124,12 +123,11 @@ Kirigami.ScrollablePage {
 
         Kirigami.Heading {
             level: 2
-            visible: page.canDesign || page.designs.length > 0
             text: qsTr("Your designs")
         }
         QQC2.Label {
             Layout.fillWidth: true
-            visible: page.canDesign && page.designs.length === 0
+            visible: page.designs.length === 0
             wrapMode: Text.Wrap
             opacity: 0.7
             text: qsTr("No designs yet. New Design opens the editor.")
@@ -167,7 +165,6 @@ Kirigami.ScrollablePage {
                     QQC2.Button {
                         icon.name: "document-edit"
                         text: designCard.saved ? qsTr("Edit") : qsTr("Recover")
-                        enabled: page.canDesign
                         onClicked: page.openDesign(designCard.modelData.id)
                     }
                     QQC2.Button {

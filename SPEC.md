@@ -57,6 +57,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ### 4.4 Editors (all stages)
 
 - Layout: element list · canvas · properties panel; resolution switch 1440p / 1080p / 720p; warnings bar.
+- The same building blocks on every stage, as far as its format allows (2026-11-07): background colour, vertical gradient or image; images and shared logos; text in any font; palette colours; a progress indicator (Plasma splash: Plasma's start; boot splash: boot progress; boot menu: the countdown); an animation from frames (both splashes). Only where the format has them: video (Plasma splash; the boot splash converts video to frames), fade-in (Plasma splash), hiding status messages (boot splash), the menu, countdown text and entry icons (boot menu). GRUB can't animate, so the boot menu has no spinner or animation.
 - Drag on the canvas with snapping (centre, edges, other elements); number fields and arrow-key nudging. Positions and sizes are stored as % of the screen.
 - Explicit save (Ctrl+S); each save is a version (all kept); undo/redo per open design for the session; one crash-recovery draft.
 - New designs start from a few starters tinted with the Plasma accent colour, from blank, or by duplicating a Ekpo design.

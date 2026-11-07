@@ -59,6 +59,10 @@ QVariantMap bootMenuCard(const SystemState &s, const QString &root)
     lines << line(QStringLiteral("info"), s.ekpoGrubDropIn ? Backend::tr("Set by Ekpo.") : Backend::tr("Set in /etc/default/grub; Ekpo hasn't changed GRUB yet."));
     if (const QString mode = s.grub.value(QStringLiteral("GRUB_GFXMODE")); !mode.isEmpty())
         lines << line(QStringLiteral("info"), Backend::tr("Video mode: %1").arg(mode));
+    // The resolution boot menus get built for, and the mode GRUB really used (SPEC.md §4.5, §4.12).
+    if (!s.primaryMode.isEmpty() && !s.bootMode.isEmpty())
+        lines << line(QStringLiteral("info"), Backend::tr("Primary screen %1 at %2×%3; this boot's menu showed at %4×%5.")
+                                                  .arg(s.primaryOutput).arg(s.primaryMode.width()).arg(s.primaryMode.height()).arg(s.bootMode.width()).arg(s.bootMode.height()));
     const int timeout = effectiveTimeout(s, root);
     if (timeout == 0)
         lines << line(QStringLiteral("warning"), Backend::tr("The menu is skipped (0 s); it can't be reached without a live USB."));
@@ -215,6 +219,8 @@ void Backend::refresh()
             m_pendingCheck = check->toVariantMap();
     }
 
+    m_editor.setMenuEntries(m_state.menuEntries); // what the boot menu preview lists
+
     QStringList errors = m_state.errors;
     if (!m_library)
         errors << m_libraryError;
@@ -267,6 +273,32 @@ void Backend::refresh()
             c.insert(QStringLiteral("lines"), lines);
             v = c;
         }
+    }
+
+    // The applied boot menu design against this screen and this boot (SPEC.md §4.12).
+    const BootMenuCheck menu = m_library ? checkBootMenu(*m_library, m_state) : BootMenuCheck{};
+    m_rebuildBootMenu.clear();
+    for (QVariant &v : m_stageCards) {
+        QVariantMap c = v.toMap();
+        if (menu.design.isEmpty() || c.value(QStringLiteral("stage")) != stageKey(Stage::BootMenu))
+            continue;
+        QVariantList lines = c.value(QStringLiteral("lines")).toList();
+        const auto size = [](QSize s) { return QStringLiteral("%1×%2").arg(s.width()).arg(s.height()); };
+        if (menu.screenChanged) {
+            lines.prepend(line(QStringLiteral("warning"), tr("Built for %1, but the primary screen now runs %2: its text has the wrong size until it is rebuilt.")
+                                                              .arg(size(menu.builtFor), size(m_state.primaryMode))));
+            c.insert(QStringLiteral("rebuild"), size(m_state.primaryMode));
+            m_rebuildBootMenu = menu.design;
+        }
+        if (menu.fellBack)
+            lines.prepend(line(QStringLiteral("warning"), tr("On this boot GRUB couldn't use %1 and showed %2: the firmware doesn't offer that mode, so GRUB fell back. "
+                                                             "Build it for a mode the firmware offers (the review lets you pick one).")
+                                                              .arg(size(menu.builtFor), m_state.bootMode.isEmpty() ? tr("its text menu") : size(m_state.bootMode))));
+        if (!menu.clipped.isEmpty())
+            lines.prepend(line(QStringLiteral("warning"), tr("GRUB cuts off %n entries, such as \u201c%1\u201d. A smaller menu font fixes it.", "", int(menu.clipped.size()))
+                                                              .arg(menu.clipped.first())));
+        c.insert(QStringLiteral("lines"), lines);
+        v = c;
     }
 
     m_masks.clear();
@@ -396,6 +428,16 @@ void Backend::setPlan(const Plan &plan)
         {QStringLiteral("newestKernel"), plan.newestKernel},
         {QStringLiteral("kernelCount"), plan.kernelCount},
     };
+    // The screen a design is built for: the primary one, or a common size (SPEC.md §4.5).
+    if (!plan.screen.isEmpty()) {
+        QStringList screens{QStringLiteral("%1x%2").arg(primaryScreenOr(m_state).width()).arg(primaryScreenOr(m_state).height())};
+        for (const char *common : {"2560x1440", "1920x1080", "1280x720"}) {
+            if (!screens.contains(QLatin1String(common)))
+                screens << QLatin1String(common);
+        }
+        m_planMap.insert(QStringLiteral("screen"), QStringLiteral("%1x%2").arg(plan.screen.width()).arg(plan.screen.height()));
+        m_planMap.insert(QStringLiteral("screens"), screens);
+    }
     Q_EMIT planChanged();
 }
 
@@ -409,6 +451,17 @@ void Backend::planApplyImport(const QString &id)
         if (t.id == id)
             return preparePlan([mask = Mask{{}, t.name, {{t.stage, Slot{Slot::Kind::Import, t.id}}}}](const PlanContext &c) { return planMask(c, mask); },
                                m_library->settings().rebuildAllKernels);
+    }
+}
+
+void Backend::planRebuildBootMenu()
+{
+    if (!m_library || m_rebuildBootMenu.isEmpty())
+        return;
+    QString error;
+    if (const auto d = m_library->design(m_rebuildBootMenu, 0, error)) {
+        const QString title = tr("Rebuild \u201c%1\u201d for %2×%3").arg(d->name).arg(primaryScreenOr(m_state).width()).arg(primaryScreenOr(m_state).height());
+        preparePlan([mask = Mask{{}, title, {{Stage::BootMenu, Slot{Slot::Kind::Design, d->id}}}}](const PlanContext &c) { return planMask(c, mask); }, true);
     }
 }
 
@@ -608,18 +661,28 @@ void Backend::planApplyMask(const QString &id)
     }
 }
 
-void Backend::preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels)
+void Backend::preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels, QSize screen)
 {
     m_makePlan = make;
+    m_planScreen = screen.isEmpty() ? primaryScreenOr(m_state) : screen;
     PlanContext context{*m_library, m_state, m_rootDir, m_homeDir};
     context.allKernels = allKernels;
+    context.screen = m_planScreen;
     setPlan(make(context));
 }
 
 void Backend::setPlanAllKernels(bool all)
 {
     if (m_library && m_makePlan && !applying())
-        preparePlan(m_makePlan, all);
+        preparePlan(m_makePlan, all, m_planScreen);
+}
+
+void Backend::setPlanScreen(const QString &size)
+{
+    static const QRegularExpression mode(QStringLiteral("^(\\d{3,5})x(\\d{3,5})$"));
+    const auto m = mode.match(size);
+    if (m_library && m_makePlan && !applying() && m.hasMatch())
+        preparePlan(m_makePlan, m_plan.allKernels, QSize(m.captured(1).toInt(), m.captured(2).toInt()));
 }
 
 void Backend::setRebuildAllKernels(bool all)
@@ -735,6 +798,12 @@ QString Backend::systemReport()
     lines << QStringLiteral("Boot splash: %1 (%2, plymouthd.conf Theme=%3)").arg(current.bootSplash->label, current.bootSplash->mode, m_state.plymouthDaemonTheme)
           << QStringLiteral("Plasma splash: %1").arg(current.plasmaSplash->label.isEmpty() ? QStringLiteral("Plasma default") : current.plasmaSplash->label)
           << QStringLiteral("Kernel command line has splash: %1").arg(m_state.cmdlineSplash ? QStringLiteral("yes") : QStringLiteral("no"))
+          << QStringLiteral("Primary screen: %1").arg(m_state.primaryMode.isEmpty() ? QStringLiteral("unknown")
+                                                      : QStringLiteral("%1 at %2×%3").arg(m_state.primaryOutput).arg(m_state.primaryMode.width()).arg(m_state.primaryMode.height()))
+          << QStringLiteral("This boot's video mode: %1 (%2)").arg(m_state.bootMode.isEmpty() ? QStringLiteral("text")
+                                                                   : QStringLiteral("%1×%2").arg(m_state.bootMode.width()).arg(m_state.bootMode.height()),
+                                                                   m_state.efi ? QStringLiteral("EFI") : QStringLiteral("BIOS"))
+          << QStringLiteral("Expected boot menu entries: %1").arg(m_state.menuEntries.join(QStringLiteral(" | ")))
           << QStringLiteral("Kernels:");
     for (const SystemState::Kernel &k : m_state.kernels)
         lines << QStringLiteral("  %1, initrd %2").arg(k.version, k.hasInitrd ? k.initrdModified.toLocalTime().toString(QStringLiteral("yyyy-MM-dd HH:mm")) : QStringLiteral("missing"));

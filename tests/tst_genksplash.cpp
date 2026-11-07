@@ -40,6 +40,10 @@ private:
                         {QStringLiteral("x"), 0}, {QStringLiteral("y"), 90}, {QStringLiteral("width"), 100}, {QStringLiteral("height"), 5}},
             QJsonObject{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("color"), QStringLiteral("#80ffffff")},
                         {QStringLiteral("x"), 47.5}, {QStringLiteral("y"), 75}, {QStringLiteral("width"), 5}, {QStringLiteral("height"), 5}},
+            QJsonObject{{QStringLiteral("type"), QStringLiteral("progress")}, {QStringLiteral("color"), QStringLiteral("#3daee9")},
+                        {QStringLiteral("x"), 40}, {QStringLiteral("y"), 85}, {QStringLiteral("width"), 20}, {QStringLiteral("height"), 0.5}},
+            QJsonObject{{QStringLiteral("type"), QStringLiteral("frames")}, {QStringLiteral("frames"), QJsonArray{m_logo, m_logo}}, {QStringLiteral("seconds"), 1},
+                        {QStringLiteral("x"), 5}, {QStringLiteral("y"), 5}, {QStringLiteral("width"), 10}, {QStringLiteral("height"), 10}},
         };
         if (withFont) {
             QJsonObject text = elements[2].toObject();
@@ -52,7 +56,8 @@ private:
         d.name = QStringLiteral("Dawn");
         d.version = 3;
         d.content = {
-            {QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}, {QStringLiteral("image"), m_logo}}},
+            {QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}, {QStringLiteral("color2"), QStringLiteral("#000000")},
+                                                       {QStringLiteral("image"), m_logo}}},
             {QStringLiteral("fadeIn"), 400},
             {QStringLiteral("elements"), elements},
         };
@@ -186,8 +191,8 @@ void TestGenKSplash::reportsProblems()
     QStringList problems;
     buildPlasmaSplash(d, QStringLiteral("ekpo-dawn-v1"), *m_library, problems);
     QCOMPARE(problems, (QStringList{
-                           QStringLiteral("Element 6 has an unknown type “gif”."),
-                           QStringLiteral("Element 7 has no valid width."),
+                           QStringLiteral("Element 8 has an unknown type “gif”."),
+                           QStringLiteral("Element 9 has no valid width."),
                            QStringLiteral("red is not a colour."),
                            QStringLiteral("The design uses an image that is no longer in the library."),
                        }));

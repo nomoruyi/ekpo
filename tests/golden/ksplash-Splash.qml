@@ -6,6 +6,16 @@ import QtMultimedia
 Rectangle {
     id: root
     color: "#102030"
+    gradient: Gradient {
+        GradientStop {
+            position: 0
+            color: "#102030"
+        }
+        GradientStop {
+            position: 1
+            color: "#000000"
+        }
+    }
 
     property int stage // set by ksplashqml
 
@@ -110,6 +120,43 @@ Rectangle {
                         y: (parent.height - height) / 2 * (1 + Math.sin(angle))
                     }
                 }
+            }
+        }
+        Rectangle {
+            x: root.width * 0.4
+            y: root.height * 0.85
+            width: root.width * 0.2
+            height: root.height * 0.005
+            color: "#404040"
+            Rectangle {
+                width: parent.width * Math.min(root.stage, 6) / 6
+                height: parent.height
+                color: "#3daee9"
+                Behavior on width {
+                    NumberAnimation {
+                        duration: 400
+                    }
+                }
+            }
+        }
+        Image {
+            id: frames1
+            x: root.width * 0.05
+            y: root.height * 0.05
+            width: root.width * 0.1
+            height: root.height * 0.1
+            readonly property var frames: ["images/b7232c412339bd05a115d4ad.png", "images/b7232c412339bd05a115d4ad.png"]
+            property int frame: 0
+            source: frames[frame]
+            sourceSize.width: width
+            sourceSize.height: height
+            fillMode: Image.PreserveAspectFit
+            mipmap: true
+            Timer {
+                interval: 500
+                repeat: true
+                running: frames1.frames.length > 1
+                onTriggered: frames1.frame = (frames1.frame + 1) % frames1.frames.length
             }
         }
     }

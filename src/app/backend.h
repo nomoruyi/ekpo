@@ -72,6 +72,8 @@ public:
     Q_INVOKABLE void setTechnicalDetailsExpanded(bool expanded);
     // The review's switch: re-plans the current review for all kernels or the newest only.
     Q_INVOKABLE void setPlanAllKernels(bool all);
+    // The review's screen choice ("2560x1440"): re-plans the current review for it.
+    Q_INVOKABLE void setPlanScreen(const QString &size);
 
     // Removing Ekpo from the system (SPEC.md §5): Restore Original first, then this.
     bool atOriginal() const { return m_atOriginal; }
@@ -119,6 +121,8 @@ public:
     // Each prepares the plan property for the review page.
     Q_INVOKABLE void planApplyImport(const QString &id);
     Q_INVOKABLE void planApplyDesign(const QString &id);
+    // After a monitor change: the applied boot menu design for the primary screen (SPEC.md §4.12).
+    Q_INVOKABLE void planRebuildBootMenu();
     Q_INVOKABLE QString removeDesign(const QString &id); // empty on success
     Q_INVOKABLE void planRestoreEntry(int number);
     Q_INVOKABLE void planRestoreOriginal();
@@ -165,7 +169,10 @@ private:
 
     void createExecutor();
     void setPlan(const Plan &plan);
-    void preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels);
+    // screen: what designs are built for; empty = the primary screen's mode.
+    void preparePlan(const std::function<Plan(const PlanContext &)> &make, bool allKernels, QSize screen = {});
+    QSize m_planScreen;
+    QString m_rebuildBootMenu; // the boot menu design built for another screen, if any
     std::function<Plan(const PlanContext &)> m_makePlan;
     Plan m_plan;
     QVariantMap m_planMap;

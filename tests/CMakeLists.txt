@@ -58,6 +58,10 @@ add_test(NAME smoke_editor_boot COMMAND ekpo)
 set_tests_properties(smoke_editor_boot PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d2;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/editor-boot.png")
 
+add_test(NAME smoke_editor_grub COMMAND ekpo)
+set_tests_properties(smoke_editor_grub PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d3;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/editor-grub.png")
+
 add_test(NAME smoke_review COMMAND ekpo)
 set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_REVIEW_IMPORT=00000000-0000-0000-0000-000000000005;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/review.png")
@@ -72,6 +76,8 @@ ekpo_test(tst_library)
 ekpo_test(tst_importer)
 ekpo_test(tst_media)
 ekpo_test(tst_pf2)
+ekpo_test(tst_gengrub)
+set_tests_properties(tst_gengrub PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
 ekpo_test(tst_genplymouth)
 set_tests_properties(tst_genplymouth PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
 ekpo_test(tst_genksplash)

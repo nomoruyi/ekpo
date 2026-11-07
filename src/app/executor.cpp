@@ -1,5 +1,7 @@
 #include "executor.h"
 
+#include "gengrub.h"
+
 #include <KConfig>
 #include <KConfigGroup>
 
@@ -299,6 +301,17 @@ void Executor::succeed(const QJsonArray &menuEntries)
                        {{QStringLiteral("target"), m_plan.target.toJson()},
                         {QStringLiteral("before"), m_plan.before.toJson()},
                         {QStringLiteral("menuEntries"), menuEntries}}};
+    // An Ekpo-built menu against the real grub.cfg (SPEC.md §4.5): custom entries
+    // and other systems may be longer than what the build expected.
+    if (m_plan.target.bootMenu && !m_plan.target.bootMenu->design.isEmpty()) {
+        const QString hash = m_plan.target.bootMenu->build;
+        const auto files = m_plan.builds.contains(hash) ? std::optional(m_plan.builds.value(hash)) : m_library.buildFiles(hash);
+        QStringList titles;
+        for (const QJsonValue &v : menuEntries)
+            titles << v.toString();
+        if (files)
+            entry.state.insert(QStringLiteral("clippedEntries"), QJsonArray::fromStringList(clippedEntries(*files, titles)));
+    }
     QString error;
     const bool saved = m_library.addHistoryEntry(entry, error, {{QStringLiteral("RESTORE.txt"), restoreText(m_plan)}});
     if (saved)

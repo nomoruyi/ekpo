@@ -13,6 +13,7 @@
 #include <QJsonDocument>
 #include <QProcess>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 class TestExecutor : public QObject
@@ -35,6 +36,7 @@ private Q_SLOTS:
     void designAppliesAsPlasmaSplash();
     void designAppliesAsBootSplash();
     void sharedChangeMeansUpdate();
+    void designAppliesAsBootMenu();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -282,7 +284,7 @@ void TestExecutor::recoversAnInterruptedApply()
 void TestExecutor::timeoutOnlyChange()
 {
     Target target;
-    target.bootMenu = BootMenuTarget{false, {}, {}, 0, QStringLiteral("hidden"), {}, QStringLiteral("0 s")};
+    target.bootMenu = BootMenuTarget{false, {}, {}, 0, QStringLiteral("hidden"), {}, QStringLiteral("0 s"), {}, {}};
     const SystemState state = probe();
     const Plan p = planTarget(PlanContext{*m_library, state, m_root, m_home}, target, QStringLiteral("Timeout"));
     QVERIFY2(p.canApply(), qPrintable(QStringLiteral("%1 stages; %2").arg(p.stages.size()).arg(p.problems.join(QLatin1Char(';')))));
@@ -487,6 +489,65 @@ void TestExecutor::sharedChangeMeansUpdate()
     QCOMPARE(update.target.plasmaSplash->theme, QStringLiteral("ekpo-dusk-v2"));
     QVERIFY2(execute(update, &error), qPrintable(error));
     QVERIFY(designUpdates(*m_library).isEmpty());
+}
+
+void TestExecutor::designAppliesAsBootMenu()
+{
+    if (QStandardPaths::findExecutable(QStringLiteral("grub-mkfont")).isEmpty())
+        QSKIP("grub-mkfont isn't installed (grub-common)");
+    QString error;
+    const auto font = m_library->addAsset(QStringLiteral("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"), Asset::Kind::Font, QStringLiteral("Noto Sans"), error);
+    QVERIFY2(font, qPrintable(error));
+    Design design;
+    design.stage = Stage::BootMenu;
+    design.name = QStringLiteral("Night Menu");
+    design.content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}},
+                      {QStringLiteral("elements"), QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("menu")}, {QStringLiteral("font"), font->hash},
+                                                                          {QStringLiteral("size"), 2.2}, {QStringLiteral("x"), 30}, {QStringLiteral("y"), 30},
+                                                                          {QStringLiteral("width"), 40}, {QStringLiteral("height"), 40}}}}};
+    QVERIFY(m_library->saveDesign(design, error));
+    const Mask mask{{}, QStringLiteral("Night"), {{Stage::BootMenu, Slot{Slot::Kind::Design, design.id}}}};
+
+    // Built for the primary screen, which GRUB_GFXMODE then asks for (and auto after it).
+    const Plan first = plan(mask);
+    QVERIFY2(first.canApply(), qPrintable(first.problems.join(QLatin1Char('\n'))));
+    QCOMPARE(first.screen, QSize(2560, 1440));
+    QCOMPARE(first.target.bootMenu->theme, QStringLiteral("ekpo-night-menu-v1"));
+    QCOMPARE(first.target.bootMenu->gfxmode, QStringLiteral("2560x1440,auto"));
+    QCOMPARE(first.target.bootMenu->design, design.id);
+    QVERIFY2(execute(first, &error), qPrintable(error));
+    QVERIFY(QFile::exists(at(QStringLiteral("/boot/grub/themes/ekpo-night-menu-v1/theme.txt"))));
+    QFile dropInFile(at(QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg")));
+    QVERIFY(dropInFile.open(QIODevice::ReadOnly));
+    const QString dropIn = QString::fromUtf8(dropInFile.readAll());
+    QVERIFY2(dropIn.contains(QLatin1String("GRUB_GFXMODE=\"2560x1440,auto\"")) || dropIn.contains(QLatin1String("GRUB_GFXMODE=2560x1440,auto")), qPrintable(dropIn));
+
+    // The real grub.cfg's entries fit; this boot predates the apply, so it says nothing yet.
+    QStringList errors;
+    QCOMPARE(m_library->history(errors).first().state.value(QStringLiteral("clippedEntries")).toArray(), QJsonArray());
+    SystemState state = probe();
+    BootMenuCheck check = checkBootMenu(*m_library, state);
+    QCOMPARE(check.design, design.id);
+    QCOMPARE(check.builtFor, QSize(2560, 1440));
+    QVERIFY(!check.screenChanged);
+    QVERIFY(!check.fellBack);
+
+    // Another monitor: rebuild for it. A boot after the apply in another mode: GRUB fell back.
+    state.primaryMode = QSize(1920, 1080);
+    QVERIFY(checkBootMenu(*m_library, state).screenChanged);
+    state.bootedAt = QDateTime::currentDateTimeUtc().addSecs(60);
+    state.bootMode = QSize(1024, 768);
+    QVERIFY(checkBootMenu(*m_library, state).fellBack);
+    PlanContext context{*m_library, state, m_root, m_home};
+    context.screen = QSize(1920, 1080);
+    const Plan rebuild = planMask(context, mask);
+    QCOMPARE(rebuild.target.bootMenu->theme, QStringLiteral("ekpo-night-menu-v2"));
+    QCOMPARE(rebuild.target.bootMenu->gfxmode, QStringLiteral("1920x1080,auto"));
+
+    // An imported theme isn't built for one size: GRUB gets the usual list again.
+    const Plan imported = plan(Mask{{}, QStringLiteral("Hollow"), {{Stage::BootMenu, Slot{Slot::Kind::Import, m_hollow}}}});
+    QCOMPARE(imported.target.bootMenu->gfxmode, defaultGfxmode);
+    QVERIFY(imported.screen.isEmpty());
 }
 
 EKPO_GUI_TEST_MAIN(TestExecutor)

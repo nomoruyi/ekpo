@@ -10,6 +10,22 @@
     {
         "errors": [
         ],
+        "source": "grub-icons",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "grub-icons",
+                "report": [
+                    "No fonts of its own that GRUB loads; the menu uses GRUB's built-in font."
+                ],
+                "stage": "bootMenu",
+                "verdict": "works"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
         "source": "grub-ok",
         "themes": [
             {

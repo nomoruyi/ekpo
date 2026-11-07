@@ -40,6 +40,8 @@ struct Plan {
     bool allKernels = true;
     QString newestKernel;
     int kernelCount = 0;
+    // For the review's screen choice; set when a boot menu or boot splash design is built.
+    QSize screen;
 
     bool canApply() const { return !stages.isEmpty() && problems.isEmpty(); }
 };
@@ -52,8 +54,12 @@ struct PlanContext {
     // Boot splash changes: rebuild every kernel's initrd, or only the newest one's.
     // Applies default to the setting, restores to all (INTERVIEW.md, 2026-11-06).
     bool allKernels = true;
-    QSize screen = builtScreen; // boot splash designs are built for it
+    QSize screen = builtScreen; // boot menu and boot splash designs are built for it
 };
+
+// The screen designs are built for unless the review picks another (SPEC.md §4.5):
+// KScreen's primary output, or builtScreen if KScreen can't say.
+QSize primaryScreenOr(const SystemState &state);
 
 inline const QString defaultGfxmode = QStringLiteral("2560x1440,1920x1080,1280x720,auto");
 
@@ -67,6 +73,16 @@ Target lastApplied(const Library &library);
 // Stages last applied from a design that builds differently now (a new version, or a
 // shared logo or palette changed): stage → design id. "Update available" (SPEC.md §3).
 QMap<Stage, QString> designUpdates(const Library &library);
+
+// The applied Ekpo boot menu design against this screen and this boot (SPEC.md §4.12).
+struct BootMenuCheck {
+    QString design; // the design it was built from; empty if the menu isn't one
+    QSize builtFor;
+    bool screenChanged = false; // the primary screen runs another mode now: rebuild
+    bool fellBack = false; // since the apply, GRUB booted in another mode (its firmware didn't offer this one)
+    QStringList clipped; // entries of the real grub.cfg GRUB cuts off, measured after the apply
+};
+BootMenuCheck checkBootMenu(const Library &library, const SystemState &state);
 // Ekpo theme copies (ekpo-*) that history still needs once newTarget is applied: the
 // helper removes the others (SPEC.md §4.9).
 QStringList keptThemes(const Library &library, const Target &newTarget);

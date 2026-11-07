@@ -8,7 +8,8 @@
 // working without Ekpo.
 //
 // Design content (positions and sizes in % of the screen, top-left corner):
-//   background: {color: "#rrggbb" | "#aarrggbb", image: <asset hash, optional>}
+//   background: {color: "#rrggbb" | "#aarrggbb", color2: bottom of a vertical gradient
+//                (optional), image: <asset hash, optional>}
 //   fadeIn: milliseconds, 0 = none
 //   elements: [
 //     {type: "image", asset, x, y, width, height}            (aspect ratio kept)
@@ -16,6 +17,8 @@
 //      color, align: "left" | "center" | "right", x, y, width, height}
 //     {type: "spinner", color, x, y, width, height}
 //     {type: "video", asset: <silent MP4>, fill: "crop" | "fit", x, y, width, height}
+//     {type: "frames", frames: [<image asset>, …], seconds, x, y, width, height}  a loop
+//     {type: "progress", color, background, x, y, width, height}  follows Plasma's start
 //   ]
 //   author, licence: package metadata (default nomoruyi, MIT)
 //

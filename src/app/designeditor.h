@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gengrub.h"
 #include "genplymouth.h"
 #include "library.h"
 #include "media.h"
@@ -46,6 +47,10 @@ class DesignEditor : public QObject
     //  progress: {x, y, width, height, color, background} (pixels on the built screen),
     //  bytes, capBytes, memory, budgetBytes, builtWidth, builtHeight}
     Q_PROPERTY(QVariantMap plymouth READ plymouth NOTIFY previewChanged)
+    // Boot menu: {preview: the menu drawn as GRUB will (a PNG), fits}, built for previewScreen.
+    Q_PROPERTY(QVariantMap bootMenu READ bootMenu NOTIFY previewChanged)
+    // The entry classes GRUB looks up icons for ("kubuntu", "windows", ...).
+    Q_PROPERTY(QStringList iconClasses READ iconClasses NOTIFY previewChanged)
     Q_PROPERTY(QStringList problems READ problems NOTIFY previewChanged) // block applying
     Q_PROPERTY(QStringList warnings READ warnings NOTIFY previewChanged) // per resolution
     Q_PROPERTY(double conversionProgress READ conversionProgress NOTIFY conversionChanged) // 0..1, -1 = none running
@@ -73,6 +78,18 @@ public:
     QVariantMap shared() const { return m_shared; }
     QUrl previewUrl() const { return m_previewUrl; }
     QVariantMap plymouth() const { return m_plymouth; }
+    QVariantMap bootMenu() const { return m_bootMenu; }
+    QStringList iconClasses() const { return menuClasses(menuEntries()); }
+    // What the boot menu preview lists and is checked against: the probe's expected
+    // entries (Backend sets them), or a sample.
+    void setMenuEntries(const QStringList &entries);
+    QStringList menuEntries() const;
+    // The screen the boot menu preview is built for (the editor's resolution switch).
+    Q_INVOKABLE void setPreviewScreen(int width, int height);
+    // Boot menu icons for every class the menu shows: Ekpo's built-in ones, or those an
+    // imported GRUB theme has in icons/ (stored as assets). Empty on success.
+    Q_INVOKABLE void useBuiltinIcons();
+    Q_INVOKABLE QString useImportIcons(const QString &importId);
     QStringList problems() const { return m_problems; }
     QStringList warnings() const { return m_warnings; }
     QString previewPackage() const { return m_previewPackage; } // folder of the current preview build
@@ -188,6 +205,8 @@ private:
     // Stores frame files as assets and puts them into a frames element.
     QString putFrames(const QStringList &files, const QString &name, const QString &source, double seconds, int replaceIndex);
     QString saveShared(SharedElement &element); // assigns a new one's id; rebuilds the preview
+    void flushBootMenuPreview(const Design &design, QStringList problems);
+    void keepPreviews(const QString &current); // removes older preview builds
 
     Library *m_library = nullptr;
     bool m_open = false;
@@ -212,6 +231,9 @@ private:
     QString m_previewPackage;
     QUrl m_previewUrl;
     QVariantMap m_plymouth;
+    QVariantMap m_bootMenu;
+    QStringList m_menuEntries;
+    QSize m_previewScreen = builtScreen;
     PlymouthLayout m_layout; // of the last boot splash preview
     QStringList m_problems;
     QStringList m_warnings;
