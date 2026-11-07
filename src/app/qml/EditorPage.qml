@@ -620,18 +620,27 @@ Kirigami.Page {
                     width: propertiesView.availableWidth
 
                     // Background and package
-                    QQC2.ComboBox {
+                    RowLayout {
                         visible: page.selected < 0
                         Kirigami.FormData.label: qsTr("Palette:")
-                        model: [qsTr("None")].concat(page.palettes.map(id => page.editor.shared[id].name)).concat([qsTr("New from This Design")])
-                        currentIndex: page.paletteId === "" ? 0 : page.palettes.indexOf(page.paletteId) + 1
-                        onActivated: index => {
-                            if (index === 0)
-                                page.editor.linkPalette("");
-                            else if (index === count - 1)
-                                page.message = page.editor.newPalette("");
-                            else
-                                page.editor.linkPalette(page.palettes[index - 1]);
+                        QQC2.ComboBox {
+                            Layout.fillWidth: true
+                            model: [qsTr("None")].concat(page.palettes.map(id => page.editor.shared[id].name)).concat([qsTr("New from This Design")])
+                            currentIndex: page.paletteId === "" ? 0 : page.palettes.indexOf(page.paletteId) + 1
+                            onActivated: index => {
+                                if (index === 0)
+                                    page.editor.linkPalette("");
+                                else if (index === count - 1)
+                                    page.message = page.editor.newPalette("");
+                                else
+                                    page.editor.linkPalette(page.palettes[index - 1]);
+                            }
+                        }
+                        IconButton {
+                            text: qsTr("Delete Palette…")
+                            icon.name: "edit-delete"
+                            enabled: page.paletteId !== ""
+                            onClicked: deletePaletteDialog.open()
                         }
                     }
                     RowLayout {
@@ -1063,26 +1072,6 @@ Kirigami.Page {
         QQC2.ToolTip.visible: hovered
     }
 
-    // A value in % with two decimals; steps of 0.1.
-    component DecimalField: QQC2.SpinBox {
-        id: field
-
-        property real number
-        signal edited(real value)
-
-        from: -100000
-        to: 100000
-        stepSize: 10
-        editable: true
-        value: Math.round(number * 100)
-        textFromValue: (v, locale) => Number(v / 100).toLocaleString(locale, "f", 2)
-        valueFromText: (text, locale) => {
-            const v = Number.fromLocaleString(locale, text);
-            return isNaN(v) ? field.value : Math.round(v * 100);
-        }
-        onValueModified: edited(value / 100)
-    }
-
     component ColorButton: QQC2.Button {
         id: colorButton
 
@@ -1098,7 +1087,7 @@ Kirigami.Page {
         }
         onClicked: {
             colorDialog.target = colorButton;
-            colorDialog.selectedColor = value;
+            colorPicker.load(value);
             colorDialog.open();
         }
     }
@@ -1260,13 +1249,21 @@ Kirigami.Page {
         }
     }
 
-    ColorDialog {
+    // Our own picker: Qt's ColorDialog showed a blank square in the KDE style (issue #4).
+    Kirigami.Dialog {
         id: colorDialog
 
         property ColorButton target: null
 
-        options: ColorDialog.ShowAlphaChannel
-        onAccepted: target?.picked(selectedColor)
+        title: qsTr("Pick a Colour")
+        preferredWidth: Kirigami.Units.gridUnit * 22
+        padding: Kirigami.Units.largeSpacing
+        standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
+        onAccepted: target?.picked(colorPicker.picked)
+
+        ColorPicker {
+            id: colorPicker
+        }
     }
     FileDialog {
         id: imageDialog
@@ -1525,6 +1522,24 @@ Kirigami.Page {
                 text: qsTr("Opening a version puts its content into the editor (Undo takes it back); saving makes it the newest version. Every version is kept.")
             }
         }
+    }
+
+    Kirigami.PromptDialog {
+        id: deletePaletteDialog
+
+        title: qsTr("Delete Palette?")
+        subtitle: qsTr("“%1” is removed from the library. This design keeps its colours as its own.").arg(page.editor.shared[page.paletteId]?.name ?? "")
+        standardButtons: Kirigami.Dialog.Cancel
+        customFooterActions: [
+            Kirigami.Action {
+                text: qsTr("Delete")
+                icon.name: "edit-delete"
+                onTriggered: {
+                    deletePaletteDialog.close();
+                    page.message = page.editor.deletePalette(page.paletteId);
+                }
+            }
+        ]
     }
 
     Kirigami.PromptDialog {

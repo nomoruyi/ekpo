@@ -271,6 +271,14 @@ Kirigami.ApplicationWindow {
                 model: root.bottomSections
                 delegate: SidebarItem {}
             }
+            QQC2.Label {
+                Layout.fillWidth: true
+                leftPadding: Kirigami.Units.largeSpacing
+                bottomPadding: Kirigami.Units.smallSpacing
+                opacity: 0.6
+                font: Kirigami.Theme.smallFont
+                text: qsTr("Version %1").arg(Qt.application.version)
+            }
         }
     }
 

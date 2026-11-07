@@ -165,6 +165,9 @@ public:
     // linkPalette("") unlinks (palette colours become the design's own).
     Q_INVOKABLE QString newPalette(const QString &name);
     Q_INVOKABLE void linkPalette(const QString &id);
+    // Deletes a palette; the open design keeps its colours as its own. Refused while
+    // another design, a saved version or a draft links it. Empty on success.
+    Q_INVOKABLE QString deletePalette(const QString &id);
     Q_INVOKABLE QString setPaletteColour(const QString &key, const QColor &colour);
 
     // Snapping (positions and tolerances in % of the screen): the box's edges or

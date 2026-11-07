@@ -533,6 +533,16 @@ bool Library::saveSharedElement(SharedElement &element, QString &error)
     return true;
 }
 
+bool Library::removeSharedElement(const QString &id, QString &error)
+{
+    const auto json = readJson(sharedFile(m_path), error);
+    if (!json)
+        return false;
+    QJsonObject all = *json;
+    all.remove(id);
+    return writeJson(sharedFile(m_path), all, error);
+}
+
 Design Library::resolved(const Design &design, QStringList &problems) const
 {
     QStringList errors;

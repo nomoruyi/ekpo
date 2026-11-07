@@ -39,6 +39,8 @@ private Q_SLOTS:
     void duplicates();
     void sharesLogos();
     void sharesPalettes();
+    void reusesPaletteWithSameColours();
+    void deletesPalette();
     void bootMenuPreview();
     void bootMenuStarters();
     void bootMenuIcons();
@@ -569,6 +571,57 @@ void TestDesignEditor::sharesPalettes()
     QVERIFY(!e.content().contains(QStringLiteral("palette")));
     QCOMPARE(elementAt(e, 1).value(QStringLiteral("color")).toString(), QStringLiteral("#0000ff"));
     QCOMPARE(e.content().value(QStringLiteral("background")).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#102030"));
+}
+
+// "New from This Design" again with the same colours links the palette it made before
+// (issue #2: several clicks left identical palettes).
+void TestDesignEditor::reusesPaletteWithSameColours()
+{
+    DesignEditor &e = *m_editor;
+    e.create();
+    e.setBackground({{QStringLiteral("color"), QStringLiteral("#102030")}});
+    QCOMPARE(e.newPalette({}), QString());
+    const QString first = e.content().value(QStringLiteral("palette")).toString();
+    QCOMPARE(e.newPalette({}), QString());
+    QCOMPARE(e.newPalette({}), QString());
+    QCOMPARE(e.shared().size(), 1);
+    QCOMPARE(e.content().value(QStringLiteral("palette")).toString(), first);
+    // Other colours make another palette, under its own name.
+    e.linkPalette({});
+    e.setBackground({{QStringLiteral("color"), QStringLiteral("#ff0000")}});
+    QCOMPARE(e.newPalette({}), QString());
+    QCOMPARE(e.shared().size(), 2);
+    QStringList names;
+    for (const QVariant &v : e.shared())
+        names << v.toMap().value(QStringLiteral("name")).toString();
+    names.sort();
+    QCOMPARE(names, (QStringList{QStringLiteral("Palette of New splash"), QStringLiteral("Palette of New splash 2")}));
+}
+
+// Deleting a palette: the design keeps its colours; refused while a saved version or
+// another design still links it.
+void TestDesignEditor::deletesPalette()
+{
+    DesignEditor &e = *m_editor;
+    e.create();
+    e.setBackground({{QStringLiteral("color"), QStringLiteral("#102030")}});
+    e.addElement(QStringLiteral("spinner"), {{QStringLiteral("color"), QStringLiteral("#ff8800")}});
+    QCOMPARE(e.newPalette({}), QString());
+    const QString id = e.content().value(QStringLiteral("palette")).toString();
+    QCOMPARE(e.deletePalette(id), QString());
+    QVERIFY(e.shared().isEmpty());
+    QVERIFY(!e.content().contains(QStringLiteral("palette")));
+    QCOMPARE(elementAt(e, 0).value(QStringLiteral("color")).toString(), QStringLiteral("#ff8800"));
+    QCOMPARE(e.content().value(QStringLiteral("background")).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#102030"));
+
+    // Saved while linked: version 1 needs it.
+    QCOMPARE(e.newPalette({}), QString());
+    const QString linked = e.content().value(QStringLiteral("palette")).toString();
+    QCOMPARE(e.save(), QString());
+    const QString error = e.deletePalette(linked);
+    QVERIFY(error.contains(QStringLiteral("version 1")));
+    QCOMPARE(e.shared().size(), 1);
+    QCOMPARE(e.content().value(QStringLiteral("palette")).toString(), linked); // nothing changed
 }
 
 void TestDesignEditor::bootMenuPreview()

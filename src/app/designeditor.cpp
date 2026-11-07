@@ -932,8 +932,23 @@ QString DesignEditor::newPalette(const QString &name)
     palette.colours = {{QStringLiteral("background"), now.content.value(QStringLiteral("background")).toObject().value(QStringLiteral("color")).toString(QStringLiteral("#000000")).left(7).toLower()},
                        {QStringLiteral("accent"), first({QStringLiteral("spinner"), QStringLiteral("progress")}, QStringLiteral("#3daee9"))},
                        {QStringLiteral("text"), first({QStringLiteral("text")}, QStringLiteral("#ffffff"))}};
-    if (const QString error = saveShared(palette); !error.isEmpty())
-        return error;
+    // The same colours again (e.g. a second click) link the palette made before instead
+    // of a copy (issue #2); other colours get a name of their own.
+    QStringList errors;
+    const QList<SharedElement> existing = m_library->sharedElements(errors);
+    const auto same = std::find_if(existing.cbegin(), existing.cend(), [&](const SharedElement &e) {
+        return e.kind == SharedElement::Kind::Palette && e.colours == palette.colours;
+    });
+    if (same != existing.cend()) {
+        palette = *same;
+    } else {
+        const QString base = palette.name;
+        const auto taken = [&] { return std::any_of(existing.cbegin(), existing.cend(), [&](const SharedElement &e) { return e.name == palette.name; }); };
+        for (int n = 2; taken(); ++n)
+            palette.name = QStringLiteral("%1 %2").arg(base).arg(n);
+        if (const QString error = saveShared(palette); !error.isEmpty())
+            return error;
+    }
     // Those colours now come from the palette.
     edit([&](State &s) {
         s.content = now.content;
@@ -974,6 +989,38 @@ void DesignEditor::linkPalette(const QString &id)
         // Shared logos stay linked: resolved() only filled in their current asset.
         s.content = own.content;
     });
+}
+
+QString DesignEditor::deletePalette(const QString &id)
+{
+    if (!m_library)
+        return tr("The library isn't available.");
+    // Every saved version and draft that links it would lose its colours.
+    QStringList users;
+    QStringList errors;
+    for (const Design &d : m_library->designs(errors)) {
+        for (int n : m_library->designVersions(d.id)) {
+            QString error;
+            const std::optional<Design> version = m_library->design(d.id, n, error);
+            if (version && version->content.value(QStringLiteral("palette")).toString() == id)
+                users << (d.id == m_id ? tr("version %1 of this design").arg(n) : tr("“%1”, version %2").arg(d.name).arg(n));
+        }
+    }
+    for (const Design &d : m_library->drafts(errors)) {
+        if (d.id != m_id && d.content.value(QStringLiteral("palette")).toString() == id)
+            users << tr("unsaved changes to “%1”").arg(d.name);
+    }
+    if (!users.isEmpty())
+        return tr("The palette is still used by %1. Switch those to another palette or None first.").arg(users.join(QStringLiteral(", ")));
+    if (m_current.content.value(QStringLiteral("palette")).toString() == id)
+        linkPalette({});
+    QString error;
+    if (!m_library->removeSharedElement(id, error))
+        return error;
+    reloadLists();
+    Q_EMIT changed();
+    Q_EMIT libraryChanged();
+    return {};
 }
 
 QString DesignEditor::setPaletteColour(const QString &key, const QColor &colour)

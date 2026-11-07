@@ -26,6 +26,12 @@ add_test(NAME smoke_main_window COMMAND ekpo)
 set_tests_properties(smoke_main_window PROPERTIES ENVIRONMENT
     "${DEV_ENV};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/main.png")
 
+# QML tests (tests/qml, qmltestrunner) in the KDE style the app uses.
+find_program(QMLTESTRUNNER qmltestrunner HINTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" REQUIRED)
+add_test(NAME qml_tests COMMAND ${QMLTESTRUNNER} -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+set_tests_properties(qml_tests PROPERTIES ENVIRONMENT
+    "${DEV_ENV};QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=org.kde.desktop;QT_FATAL_WARNINGS=1")
+
 # A fake root without EKPO_DEV must stop the app instead of falling back to the real
 # system. EKPO_DEV is unset explicitly: ctest inherits it from dev/env.sh. (status
 # only reads, so even a broken guard can't change anything.)

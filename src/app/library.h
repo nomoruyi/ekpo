@@ -63,6 +63,7 @@ public:
     // Shared logos and palettes (shared.json), sorted by name.
     QList<SharedElement> sharedElements(QStringList &errors) const;
     bool saveSharedElement(SharedElement &element, QString &error); // assigns the id
+    bool removeSharedElement(const QString &id, QString &error);
     // The design with its shared elements put in, which is what the generators build:
     // an element with "shared" gets that logo's asset, a colour "@accent" (and so on)
     // the linked palette's ("palette" in the content). Missing ones go to problems.
