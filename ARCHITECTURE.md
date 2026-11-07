@@ -149,6 +149,15 @@ Spikes for SPEC §10 run before M2 (reading Plymouth 24 sources and measuring fr
 6. Plymouth designer in the editor shell: QML preview, animation from frames or video, file-size and decoded-memory meters.
 7. Starters tinted with the Plasma accent colour; linked shared elements (logo, palette) with "update available" on Masks that use them.
 
+## 9b. Build order for M3 (proposed 2026-11-07)
+
+1. `pf2`: `.pf2` fonts built with `grub-mkfont` (pixel size, Latin and symbol ranges, the name read back from the file) and a reader for glyph metrics and bitmaps: text width for the entry-width check, rendering for the preview.
+2. `probe`: the primary screen's mode, the mode GRUB booted in (`/sys/kernel/boot_params`), and the entries the menu will show (kernels in `/boot`, `GRUB_DISTRIBUTOR`, the `/etc/grub.d` scripts present).
+3. `gen grub`: `theme.txt`, 9-slice images for the selected-entry style, icons and `.pf2` fonts, built for one resolution with sizes scaled by screen height; the menu widens until the longest expected entry fits; countdown and help line; golden files and the helper's validator.
+4. Apply: Boot Menu designs as a Mask slot; `GRUB_GFXMODE=<W×H>,auto` for them; the resolution on the review page; "Rebuild for <W×H>" on the Overview after a monitor change, and a warning when GRUB fell back to `auto`; the helper re-checks entry widths against the real `grub.cfg` after `update-grub`.
+5. Boot Menu designer in the editor: preview drawn with the real `.pf2` glyphs over the sample menu; font, colours, selected-entry style, icons, countdown and help line; per-resolution font size override.
+6. A small monochrome icon set of our own (Linux, Kubuntu-style, Windows, firmware settings, memtest) plus imported icons; boot menu starters.
+
 ## 10. Decisions for the owner
 
 1. pkexec helper with stdin payload and own framing (above), or KAuth?

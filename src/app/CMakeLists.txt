@@ -1,4 +1,4 @@
-qt_add_library(ekpo_core STATIC bugreport.cpp cli.cpp executor.cpp gencommon.cpp genksplash.cpp genplymouth.cpp importer.cpp library.cpp media.cpp model.cpp planner.cpp probe.cpp target.cpp)
+qt_add_library(ekpo_core STATIC bugreport.cpp cli.cpp executor.cpp gencommon.cpp genksplash.cpp genplymouth.cpp importer.cpp library.cpp media.cpp model.cpp pf2.cpp planner.cpp probe.cpp target.cpp)
 target_compile_definitions(ekpo_core PRIVATE EKPO_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ekpo/ekpo-helper")
 # Sandbox mode (EKPO_DEV + EKPO_SYSTEM_ROOT): the test helper and its stub commands.
 # Packages are built with -DEKPO_SANDBOX=OFF (top-level option), so the installed
