@@ -43,6 +43,7 @@ env:
     qml6-module-qtquick-templates qml6-module-qtquick-window
     qml6-module-qtqml-models qml6-module-qtqml-workerscript
     qml6-module-qtmultimedia ffmpeg
+    sonnet6-plugins
   PACKAGING_PACKAGES: dpkg-dev fakeroot file
 
 jobs:

@@ -4,7 +4,6 @@
 #include "genksplash.h"
 #include "validate.h"
 
-#include <QCollator>
 #include <QColor>
 #include <QDir>
 #include <QFileInfo>
@@ -213,6 +212,33 @@ QJsonObject starterContent(Stage stage, const QString &starter, QColor accent)
                             element(QStringLiteral("progress"), 40, 52, 20, 0.4, {{QStringLiteral("color"), accentName}, {QStringLiteral("background"), dim}})}}};
     }
     return {};
+}
+
+// "frame2" before "frame10", in any locale: QCollator's numeric mode does nothing in
+// the C locale (CI runs in C.UTF-8).
+bool naturalLess(const QString &a, const QString &b)
+{
+    static const QRegularExpression chunk(QStringLiteral("\\d+|\\D+"));
+    QRegularExpressionMatchIterator i = chunk.globalMatch(a), j = chunk.globalMatch(b);
+    while (i.hasNext() && j.hasNext()) {
+        const QString x = i.next().captured(), y = j.next().captured();
+        if (x == y)
+            continue;
+        if (x.front().isDigit() && y.front().isDigit()) {
+            const auto digits = [](QString n) {
+                while (n.size() > 1 && n.front() == QLatin1Char('0'))
+                    n.remove(0, 1);
+                return n;
+            };
+            const QString u = digits(x), v = digits(y);
+            if (u.size() != v.size())
+                return u.size() < v.size();
+            if (u != v)
+                return u < v;
+        }
+        return x < y;
+    }
+    return !i.hasNext() && j.hasNext();
 }
 
 QString localPath(const QUrl &file)
@@ -726,9 +752,7 @@ QString DesignEditor::addImageFrames(const QList<QUrl> &files, int replaceIndex)
     }
     if (paths.isEmpty())
         return tr("No images were chosen.");
-    QCollator collator;
-    collator.setNumericMode(true); // frame2 before frame10
-    std::sort(paths.begin(), paths.end(), [&](const QString &a, const QString &b) { return collator.compare(a, b) < 0; });
+    std::sort(paths.begin(), paths.end(), naturalLess);
     // Up to 60 frames play in two-step's 2 s loop; more play at 30 fps (script module).
     return putFrames(paths, QFileInfo(paths.first()).dir().dirName(), {}, paths.size() <= 60 ? 2.0 : paths.size() / 30.0, replaceIndex);
 }

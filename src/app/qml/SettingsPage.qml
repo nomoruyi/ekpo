@@ -23,6 +23,9 @@ Kirigami.ScrollablePage {
     }
 
     title: qsTr("Settings")
+    actions: [
+        ReportBugAction {}
+    ]
 
     Connections {
         target: Backend

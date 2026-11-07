@@ -11,6 +11,8 @@ compile_commands.json
 
 # Dev sandbox, test homes and scratch files (dev/env.sh)
 /.dev/
+# Local bug reports from sandbox builds (Report a Bug → Save Report)
+/bug-reports/
 
 # Python (tests/stubs)
 __pycache__/

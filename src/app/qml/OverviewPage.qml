@@ -27,7 +27,8 @@ Kirigami.ScrollablePage {
             text: qsTr("Refresh")
             icon.name: "view-refresh"
             onTriggered: Backend.refresh()
-        }
+        },
+        ReportBugAction {}
     ]
 
     ColumnLayout {

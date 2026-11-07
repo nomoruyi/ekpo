@@ -55,7 +55,11 @@ Kirigami.ScrollablePage {
     }
 
     // (A list without the action, not a hidden one: Kirigami 6.24 can't lay out hidden actions here.)
-    actions: canDesign ? [newDesignAction, importFolderAction, importArchiveAction] : [importFolderAction, importArchiveAction]
+    actions: canDesign ? [newDesignAction, importFolderAction, importArchiveAction, bugAction] : [importFolderAction, importArchiveAction, bugAction]
+
+    ReportBugAction {
+        id: bugAction
+    }
 
     Kirigami.Action {
         id: newDesignAction

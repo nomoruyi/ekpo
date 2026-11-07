@@ -27,7 +27,8 @@ Kirigami.ScrollablePage {
             text: qsTr("New Mask…")
             icon.name: "list-add"
             onTriggered: maskDialog.edit(null)
-        }
+        },
+        ReportBugAction {}
     ]
 
     ColumnLayout {

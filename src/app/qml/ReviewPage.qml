@@ -25,6 +25,9 @@ Kirigami.ScrollablePage {
     }
 
     title: plan.title ? qsTr("Apply “%1”").arg(plan.title) : ""
+    actions: [
+        ReportBugAction {}
+    ]
 
     Connections {
         target: Backend

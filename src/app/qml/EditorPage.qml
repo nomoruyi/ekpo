@@ -119,8 +119,12 @@ Kirigami.Page {
 
     // (A list without Run Real Splash for boot splashes, not a hidden action: Kirigami
     // 6.24 can't lay out hidden actions.)
-    actions: boot ? [undoAction, redoAction, saveAction, versionsAction, applyAction]
-                  : [undoAction, redoAction, saveAction, versionsAction, runAction, applyAction]
+    actions: boot ? [undoAction, redoAction, saveAction, versionsAction, applyAction, bugAction]
+                  : [undoAction, redoAction, saveAction, versionsAction, runAction, applyAction, bugAction]
+
+    ReportBugAction {
+        id: bugAction
+    }
 
     Kirigami.Action {
         id: undoAction

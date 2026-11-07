@@ -32,6 +32,7 @@ Kirigami.ApplicationWindow {
     property string startSection: "overview" // EKPO_SECTION, for screenshots
     property string startReview: "" // EKPO_REVIEW_IMPORT (dev only): open the review of this import
     property string startEdit: "" // EKPO_EDIT_DESIGN (dev only): open this design in the editor
+    property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
     property bool editing: false // the editor has the window; the sidebar is hidden
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
 
@@ -58,6 +59,40 @@ Kirigami.ApplicationWindow {
         pageStack.replace(editorPage);
     }
 
+    // Report a Bug from any page: the sidebar, each page's header and Ctrl+Shift+B. The
+    // screenshot is taken before the dialog opens, so it shows the page as it was.
+    function reportBug() {
+        if (!bugReportDialog.opened)
+            bugReportDialog.start(Backend.captureScreen(root), screenInfo());
+    }
+    function screenInfo() {
+        const lines = [];
+        if (pageStack.currentItem === reviewPage)
+            lines.push(qsTr("Review: %1").arg(Backend.plan.title ?? ""));
+        else if (editing)
+            // (The name last: a later arg() would replace a "%n" in it.)
+            lines.push(qsTr("Editor: %1 design “%5”, id %2, version %3%4").arg(Backend.editor.stage).arg(Backend.editor.designId)
+                       .arg(Backend.editor.version).arg(Backend.editor.dirty ? qsTr(", changed") : "").arg(Backend.editor.name));
+        else
+            lines.push(qsTr("Page: %1").arg(currentSection.title));
+        if (Backend.applying)
+            lines.push(qsTr("An apply was running."));
+        lines.push(qsTr("Window: %1 × %2").arg(width).arg(height));
+        return lines.join("\n");
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+B"
+        onActivated: root.reportBug()
+    }
+    BugReportDialog {
+        id: bugReportDialog
+    }
+    Timer {
+        running: root.startBugReport
+        interval: 300
+        onTriggered: root.reportBug()
+    }
+
     onCurrentSectionChanged: {
         const page = pageFor(currentSection.name);
         if (pageStack.depth > 0 && pageStack.currentItem !== page && !Backend.applying)
@@ -69,6 +104,9 @@ Kirigami.ApplicationWindow {
     // Tell the user when an apply ends while the window is in the background.
     Connections {
         target: Backend
+        function onBugReportRequested() {
+            root.reportBug();
+        }
         function onApplyFinished(ok, error, number) {
             if (!root.active)
                 Backend.notify(ok ? qsTr("Done") : qsTr("Nothing was changed"),
@@ -114,7 +152,7 @@ Kirigami.ApplicationWindow {
     // emits changed() on every refresh and setting change, restarting a bound timer.
     property bool startDialogsShown: false
     Timer {
-        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === ""
+        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === "" && !root.startBugReport
         interval: 500
         onTriggered: {
             root.startDialogsShown = true;
@@ -171,6 +209,12 @@ Kirigami.ApplicationWindow {
             }
             Kirigami.Separator {
                 Layout.fillWidth: true
+            }
+            QQC2.ItemDelegate {
+                Layout.fillWidth: true
+                text: qsTr("Report a Bug…")
+                icon.name: "tools-report-bug"
+                onClicked: root.reportBug()
             }
             Repeater {
                 model: root.bottomSections
@@ -262,6 +306,9 @@ Kirigami.ApplicationWindow {
         id: placeholderPage
         visible: false
         title: root.currentSection.title
+        actions: [
+            ReportBugAction {}
+        ]
 
         Kirigami.PlaceholderMessage {
             anchors.centerIn: parent

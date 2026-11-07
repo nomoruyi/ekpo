@@ -13,6 +13,9 @@ Kirigami.ScrollablePage {
     property string report: ""
 
     title: qsTr("About Ekpo")
+    actions: [
+        ReportBugAction {}
+    ]
 
     ColumnLayout {
         spacing: Kirigami.Units.largeSpacing

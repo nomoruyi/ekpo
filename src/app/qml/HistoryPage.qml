@@ -15,6 +15,9 @@ Kirigami.ScrollablePage {
     readonly property var stageTitles: ({ bootMenu: qsTr("Boot menu"), bootSplash: qsTr("Boot splash"), plasmaSplash: qsTr("Plasma splash") })
 
     title: qsTr("History")
+    actions: [
+        ReportBugAction {}
+    ]
 
     ColumnLayout {
         spacing: Kirigami.Units.largeSpacing

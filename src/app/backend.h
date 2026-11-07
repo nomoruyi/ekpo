@@ -6,6 +6,7 @@
 #include "planner.h"
 #include "probe.h"
 
+#include <QImage>
 #include <QObject>
 #include <QQmlEngine>
 #include <QUrl>
@@ -45,6 +46,7 @@ class Backend : public QObject
     Q_PROPERTY(int historySize READ historySize NOTIFY changed)
     Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
     Q_PROPERTY(bool welcomeBack READ welcomeBack NOTIFY changed)
+    Q_PROPERTY(QString bugReportsDir READ bugReportsDir CONSTANT) // empty: no local reports (packages)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -88,6 +90,15 @@ public:
     // while the window is in the background.
     Q_INVOKABLE void notify(const QString &summary, const QString &body);
 
+    // Report a Bug (bugreport.h). captureScreen() grabs the window as it is now, for the
+    // report, and returns a small preview as a data: URL (empty if the grab failed).
+    Q_INVOKABLE QString captureScreen(QObject *window);
+    Q_INVOKABLE QString recentLog(); // Ekpo's last messages and the helper's last log lines
+    // Puts the screenshot on the clipboard and opens the pre-filled issue in the browser.
+    Q_INVOKABLE QString openBugReport(const QString &title, const QString &body, bool withScreenshot); // empty on success
+    Q_INVOKABLE QVariantMap saveBugReport(const QString &title, const QString &body, bool withScreenshot); // {path} or {error}
+    QString bugReportsDir() const;
+
     QString libraryPath() const { return m_library ? m_library->path() : Library::configuredPath(); }
     int historySize() const { return m_library ? m_library->settings().historySize : 10; }
     // Moves the library to an empty folder, or switches to a library found there.
@@ -128,6 +139,7 @@ Q_SIGNALS:
     void applyingChanged();
     void applyProgress(const QString &text);
     void applyFinished(bool ok, const QString &error, int historyNumber);
+    void bugReportRequested(); // a page's Report a Bug button; Main.qml opens the dialog
 
 private:
     QString m_rootDir = QStringLiteral("/");
@@ -136,6 +148,7 @@ private:
     QString m_libraryError;
     DesignEditor m_editor; // after m_library: it writes its draft on destruction
     SystemState m_state;
+    QImage m_screenshot; // for the bug report being written
 
     QVariantList m_stageCards;
     QVariantMap m_system;

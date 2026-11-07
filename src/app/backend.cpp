@@ -1,8 +1,10 @@
 #include "backend.h"
+#include "bugreport.h"
 
 #include "importer.h"
 #include "sysinfo.h"
 
+#include <QBuffer>
 #include <QClipboard>
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -10,6 +12,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QQuickWindow>
 #include <QSysInfo>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -750,6 +753,46 @@ QString Backend::systemReport()
 void Backend::copyToClipboard(const QString &text)
 {
     QGuiApplication::clipboard()->setText(text);
+}
+
+QString Backend::captureScreen(QObject *window)
+{
+    auto *quickWindow = qobject_cast<QQuickWindow *>(window);
+    m_screenshot = quickWindow ? quickWindow->grabWindow() : QImage();
+    if (m_screenshot.isNull())
+        return {};
+    QBuffer png;
+    png.open(QIODevice::WriteOnly);
+    m_screenshot.scaledToWidth(qMin(m_screenshot.width(), 800), Qt::SmoothTransformation).save(&png, "PNG");
+    return QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.data().toBase64());
+}
+
+QString Backend::recentLog()
+{
+    const QStringList messages = recentMessages();
+    const QStringList helper = helperLog(m_rootDir, 20);
+    return (QStringList{QStringLiteral("Ekpo:")} + (messages.isEmpty() ? QStringList{QStringLiteral("(no messages)")} : messages)
+            + QStringList{QString(), QStringLiteral("ekpo-helper:")} + (helper.isEmpty() ? QStringList{QStringLiteral("(nothing logged)")} : helper))
+        .join(QLatin1Char('\n'));
+}
+
+QString Backend::openBugReport(const QString &title, const QString &body, bool withScreenshot)
+{
+    if (withScreenshot && !m_screenshot.isNull())
+        QGuiApplication::clipboard()->setImage(m_screenshot);
+    return openIssue(title, body);
+}
+
+QVariantMap Backend::saveBugReport(const QString &title, const QString &body, bool withScreenshot)
+{
+    QString error;
+    const QString path = saveReport(bugReportsDir(), title, body, withScreenshot ? m_screenshot : QImage(), error);
+    return path.isEmpty() ? QVariantMap{{QStringLiteral("error"), error}} : QVariantMap{{QStringLiteral("path"), path}};
+}
+
+QString Backend::bugReportsDir() const
+{
+    return localReportsDir();
 }
 
 void Backend::notify(const QString &summary, const QString &body)

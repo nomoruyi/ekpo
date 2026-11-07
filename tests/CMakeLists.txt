@@ -62,6 +62,11 @@ add_test(NAME smoke_review COMMAND ekpo)
 set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_REVIEW_IMPORT=00000000-0000-0000-0000-000000000005;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/review.png")
 
+# Report a Bug from the Overview: the dialog with its screenshot preview.
+add_test(NAME smoke_bug_report COMMAND ekpo)
+set_tests_properties(smoke_bug_report PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_BUG_REPORT=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/bugReport.png")
+
 ekpo_test(tst_probe)
 ekpo_test(tst_library)
 ekpo_test(tst_importer)
@@ -78,6 +83,9 @@ target_sources(tst_designeditor PRIVATE ${CMAKE_SOURCE_DIR}/src/app/designeditor
 target_link_libraries(tst_designeditor PRIVATE Qt6::Gui Qt6::Qml)
 set_target_properties(tst_designeditor PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
 set_tests_properties(tst_designeditor PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
+ekpo_test(tst_bugreport)
+target_link_libraries(tst_bugreport PRIVATE Qt6::Gui)
+set_tests_properties(tst_bugreport PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
 ekpo_test(tst_common)
 ekpo_test(tst_helper)
 add_dependencies(tst_helper ekpo-helper ekpo-helper-test)

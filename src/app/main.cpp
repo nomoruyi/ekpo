@@ -1,3 +1,4 @@
+#include "bugreport.h"
 #include "cli.h"
 #include "library.h"
 
@@ -31,6 +32,7 @@ int main(int argc, char *argv[])
         return runCli(app.arguments().mid(1));
     }
 
+    installMessageLog(); // the last messages go into bug reports
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ekpo"));
     app.setApplicationDisplayName(QStringLiteral("Ekpo"));
@@ -69,6 +71,7 @@ int main(int argc, char *argv[])
     if (qEnvironmentVariableIsSet("EKPO_DEV")) {
         start.insert(QStringLiteral("startReview"), qEnvironmentVariable("EKPO_REVIEW_IMPORT"));
         start.insert(QStringLiteral("startEdit"), qEnvironmentVariable("EKPO_EDIT_DESIGN"));
+        start.insert(QStringLiteral("startBugReport"), qEnvironmentVariableIsSet("EKPO_BUG_REPORT"));
     }
     engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");
