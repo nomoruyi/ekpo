@@ -154,11 +154,14 @@ Backend::Backend(QObject *parent)
     m_launcher = env.launcher;
     m_library = Library::open(Library::configuredPath(), m_libraryError);
     createExecutor();
+    connect(&m_editor, &DesignEditor::libraryChanged, this, &Backend::refresh);
     refresh();
 }
 
+// Also hands the (new) library to the editor.
 void Backend::createExecutor()
 {
+    m_editor.setLibrary(m_library ? &*m_library : nullptr);
     m_executor.reset();
     if (m_library) {
         m_executor = std::make_unique<Executor>(*m_library, m_homeDir, m_launcher);
@@ -228,21 +231,59 @@ void Backend::refresh()
         m_system[QStringLiteral("errors")] = errors + loadErrors;
     }
 
+    m_designs.clear();
+    QMap<QString, QString> designNames;
+    if (m_library) {
+        QStringList loadErrors;
+        const QList<Design> drafts = m_library->drafts(loadErrors);
+        const auto map = [](const Design &d, int version, bool hasDraft) {
+            return QVariantMap{{QStringLiteral("id"), d.id}, {QStringLiteral("name"), d.name}, {QStringLiteral("stage"), stageKey(d.stage)},
+                               {QStringLiteral("version"), version}, {QStringLiteral("hasDraft"), hasDraft}};
+        };
+        for (const Design &d : m_library->designs(loadErrors)) {
+            const bool hasDraft = std::any_of(drafts.cbegin(), drafts.cend(), [&](const Design &draft) { return draft.id == d.id; });
+            m_designs << map(d, d.version, hasDraft);
+            designNames.insert(d.id, d.name);
+        }
+        for (const Design &d : drafts) {
+            if (!designNames.contains(d.id)) // never saved
+                m_designs << map(d, 0, true);
+        }
+        m_system[QStringLiteral("errors")] = m_system.value(QStringLiteral("errors")).toStringList() + loadErrors;
+    }
+
+    // Applied looks built from a design that has changed since (SPEC.md §3).
+    const QMap<Stage, QString> updates = m_library ? designUpdates(*m_library) : QMap<Stage, QString>();
+    for (QVariant &v : m_stageCards) {
+        QVariantMap c = v.toMap();
+        const auto stage = stageFromKey(c.value(QStringLiteral("stage")).toString());
+        if (stage && updates.contains(*stage)) {
+            QVariantList lines = c.value(QStringLiteral("lines")).toList();
+            lines.prepend(line(QStringLiteral("info"), tr("Update available: \u201c%1\u201d has changed since it was applied; apply its Mask again.")
+                                                            .arg(designNames.value(updates.value(*stage)))));
+            c.insert(QStringLiteral("lines"), lines);
+            v = c;
+        }
+    }
+
     m_masks.clear();
     if (m_library) {
         QStringList maskErrors;
-        QMap<QString, QString> names;
+        QMap<QString, QString> names = designNames;
         for (const QVariant &v : std::as_const(m_imports))
             names.insert(v.toMap().value(QStringLiteral("id")).toString(), v.toMap().value(QStringLiteral("name")).toString());
         for (const Mask &mask : m_library->masks(maskErrors)) {
             QVariantMap maskSlots;
+            bool update = false;
             for (Stage stage : allStages) {
+                update = update || (updates.contains(stage) && mask.stageSlots.value(stage).ref == updates.value(stage));
                 const Slot slot = mask.stageSlots.value(stage);
-                maskSlots.insert(stageKey(stage), slot.kind == Slot::Kind::Import
+                maskSlots.insert(stageKey(stage), slot.kind != Slot::Kind::LeaveAsIs
                                                   ? QVariantMap{{QStringLiteral("ref"), slot.ref}, {QStringLiteral("name"), names.value(slot.ref, tr("(missing theme)"))}}
                                                   : QVariantMap());
             }
-            m_masks << QVariantMap{{QStringLiteral("id"), mask.id}, {QStringLiteral("name"), mask.name}, {QStringLiteral("slots"), maskSlots}};
+            m_masks << QVariantMap{{QStringLiteral("id"), mask.id}, {QStringLiteral("name"), mask.name}, {QStringLiteral("slots"), maskSlots},
+                                   {QStringLiteral("update"), update}};
         }
     }
 
@@ -366,6 +407,35 @@ void Backend::planApplyImport(const QString &id)
             return preparePlan([mask = Mask{{}, t.name, {{t.stage, Slot{Slot::Kind::Import, t.id}}}}](const PlanContext &c) { return planMask(c, mask); },
                                m_library->settings().rebuildAllKernels);
     }
+}
+
+void Backend::planApplyDesign(const QString &id)
+{
+    if (!m_library)
+        return;
+    refresh();
+    QString error;
+    if (const auto d = m_library->design(id, 0, error))
+        preparePlan([mask = Mask{{}, d->name, {{d->stage, Slot{Slot::Kind::Design, d->id}}}}](const PlanContext &c) { return planMask(c, mask); },
+                    m_library->settings().rebuildAllKernels);
+}
+
+QString Backend::removeDesign(const QString &id)
+{
+    if (!m_library)
+        return m_libraryError;
+    QStringList errors;
+    for (const Mask &mask : m_library->masks(errors)) {
+        for (const Slot &slot : mask.stageSlots) {
+            if (slot.kind == Slot::Kind::Design && slot.ref == id)
+                return tr("Used by the Mask \u201c%1\u201d; remove it from there first.").arg(mask.name);
+        }
+    }
+    QString error;
+    if (!m_library->removeDesign(id, error))
+        return error;
+    refresh();
+    return {};
 }
 
 void Backend::planRestoreEntry(int number)
@@ -502,8 +572,10 @@ QString Backend::saveMask(const QString &id, const QString &name, const QString 
     Mask mask{id, name.trimmed(), {}};
     const QList<std::pair<Stage, QString>> refs = {{Stage::BootMenu, bootMenu}, {Stage::BootSplash, bootSplash}, {Stage::PlasmaSplash, plasmaSplash}};
     for (const auto &[stage, ref] : refs) {
-        if (!ref.isEmpty())
-            mask.stageSlots.insert(stage, Slot{Slot::Kind::Import, ref});
+        if (ref.isEmpty())
+            continue;
+        const bool design = std::any_of(m_designs.cbegin(), m_designs.cend(), [&](const QVariant &d) { return d.toMap().value(QStringLiteral("id")) == ref; });
+        mask.stageSlots.insert(stage, Slot{design ? Slot::Kind::Design : Slot::Kind::Import, ref});
     }
     QString error;
     if (!m_library->saveMask(mask, error))

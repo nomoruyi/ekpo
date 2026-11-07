@@ -31,6 +31,8 @@ Kirigami.ApplicationWindow {
     readonly property var allSections: mainSections.concat(bottomSections)
     property string startSection: "overview" // EKPO_SECTION, for screenshots
     property string startReview: "" // EKPO_REVIEW_IMPORT (dev only): open the review of this import
+    property string startEdit: "" // EKPO_EDIT_DESIGN (dev only): open this design in the editor
+    property bool editing: false // the editor has the window; the sidebar is hidden
     property var currentSection: allSections.find(s => s.name === startSection) ?? mainSections[0]
 
     function showSection(name) {
@@ -45,6 +47,15 @@ Kirigami.ApplicationWindow {
         reviewPage.reset();
         if (pageStack.currentItem !== reviewPage)
             pageStack.replace(reviewPage);
+    }
+
+    // The editor opens in the window with the sidebar collapsed (SPEC.md §4.4).
+    // (Set, not bound: Kirigami opens a non-modal drawer itself at start.)
+    function showEditor() {
+        editing = true;
+        globalDrawer.drawerOpen = false;
+        editorPage.selected = -1;
+        pageStack.replace(editorPage);
     }
 
     onCurrentSectionChanged: {
@@ -103,7 +114,7 @@ Kirigami.ApplicationWindow {
     // emits changed() on every refresh and setting change, restarting a bound timer.
     property bool startDialogsShown: false
     Timer {
-        running: !root.startDialogsShown && root.startReview === ""
+        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === ""
         interval: 500
         onTriggered: {
             root.startDialogsShown = true;
@@ -116,6 +127,15 @@ Kirigami.ApplicationWindow {
 
     IntroDialog {
         id: introDialog
+    }
+
+    Timer {
+        running: root.startEdit !== ""
+        interval: 300
+        onTriggered: {
+            Backend.editor.open(root.startEdit);
+            root.showEditor();
+        }
     }
 
     Timer {
@@ -199,11 +219,12 @@ Kirigami.ApplicationWindow {
     ReviewPage {
         id: reviewPage
         visible: false
-        onDone: root.pageStack.replace(root.pageFor(root.currentSection.name))
+        onDone: root.pageStack.replace(root.editing ? editorPage : root.pageFor(root.currentSection.name))
     }
     StagePage {
         id: bootMenuPage
         onReview: root.showReview()
+        onEdit: root.showEditor()
         visible: false
         stage: "bootMenu"
         title: qsTr("Boot Menu")
@@ -211,6 +232,7 @@ Kirigami.ApplicationWindow {
     StagePage {
         id: bootSplashPage
         onReview: root.showReview()
+        onEdit: root.showEditor()
         visible: false
         stage: "bootSplash"
         title: qsTr("Boot Splash")
@@ -218,9 +240,21 @@ Kirigami.ApplicationWindow {
     StagePage {
         id: plasmaSplashPage
         onReview: root.showReview()
+        onEdit: root.showEditor()
         visible: false
         stage: "plasmaSplash"
         title: qsTr("Plasma Splash")
+    }
+
+    EditorPage {
+        id: editorPage
+        visible: false
+        onReview: root.showReview()
+        onLeave: {
+            root.editing = false;
+            root.globalDrawer.drawerOpen = true;
+            root.pageStack.replace(root.pageFor(root.currentSection.name));
+        }
     }
 
     // ponytail: one placeholder for the sections later steps build.

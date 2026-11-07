@@ -7,12 +7,12 @@
 
 #include <optional>
 
-// The plain-file library (ARCHITECTURE.md §5): library.json, imports/, masks/,
-// history/. Assets, designs and builds join it in later steps.
+// The plain-file library (ARCHITECTURE.md §5): library.json, imports/, designs/,
+// assets/, masks/, builds/, history/.
 class Library
 {
 public:
-    static constexpr int currentFormat = 1;
+    static constexpr int currentFormat = 2; // 2: designs/ and assets/
 
     static QString defaultPath(); // ~/.local/share/ekpo
     // The library location from ~/.config/ekporc ([Library] Path), else defaultPath().
@@ -45,6 +45,41 @@ public:
     std::optional<QList<PayloadFile>> buildFiles(const QString &hash) const;
     // Deletes builds no history entry refers to (history/<n>/entry.json target.*.build).
     void pruneBuilds();
+
+    QList<Design> designs(QStringList &errors) const; // current versions, sorted by name
+    // The design as saved in version (0 = the current one).
+    std::optional<Design> design(const QString &id, int version, QString &error) const;
+    QList<int> designVersions(const QString &id) const; // ascending
+    // Saves the next version (all are kept), assigns id, version and savedAt, and
+    // clears the draft.
+    bool saveDesign(Design &design, QString &error);
+    // Crash recovery: the editor writes the open design here while it has unsaved
+    // changes. Assigns the id of a design that was never saved.
+    bool saveDraft(Design &design, QString &error);
+    QList<Design> drafts(QStringList &errors) const; // version = the one it started from
+    void clearDraft(const QString &id);
+    bool removeDesign(const QString &id, QString &error, QString *trashedPath = nullptr); // all versions, to the trash
+
+    // Shared logos and palettes (shared.json), sorted by name.
+    QList<SharedElement> sharedElements(QStringList &errors) const;
+    bool saveSharedElement(SharedElement &element, QString &error); // assigns the id
+    // The design with its shared elements put in, which is what the generators build:
+    // an element with "shared" gets that logo's asset, a colour "@accent" (and so on)
+    // the linked palette's ("palette" in the content). Missing ones go to problems.
+    Design resolved(const Design &design, QStringList &problems) const;
+    // Changes whenever what a resolved design builds changes (name and content).
+    static QString stamp(const Design &resolved);
+
+    QList<Asset> assets(QStringList &errors) const;
+    QString assetPath(const Asset &asset) const;
+    // Copies the file into assets/ and registers it; the same content is stored
+    // once, and adding it again returns the first registration. source is where it
+    // came from, if not file itself (e.g. the video a converted MP4 was made from).
+    std::optional<Asset> addAsset(const QString &file, Asset::Kind kind, const QString &name, QString &error,
+                                  const QString &licence = {}, const QString &source = {});
+    // A TrueType/OpenType font, with its licence: a LICENSE, OFL or COPYING file
+    // next to it, else the copyright file of the Debian package that ships it.
+    std::optional<Asset> addFont(const QString &file, const QString &name, QString &error);
 
     QList<Mask> masks(QStringList &errors) const; // sorted by name; unreadable files go to errors
     bool saveMask(Mask &mask, QString &error); // assigns the id on first save

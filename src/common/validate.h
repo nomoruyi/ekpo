@@ -9,6 +9,8 @@
 
 enum class ThemeTarget { Grub, Plymouth };
 
+inline constexpr qint64 plymouthThemeCap = 15 << 20; // copied into every initrd (SPEC.md §4.6)
+
 // Folder name of a theme Ekpo installs: ekpo-<slug>-v<n>.
 bool validPayloadThemeId(const QString &id);
 // Folder name of a theme already installed (e.g. fallout, hollow-grub).

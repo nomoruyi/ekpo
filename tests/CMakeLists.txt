@@ -49,6 +49,15 @@ add_test(NAME smoke_check COMMAND ekpo)
 set_tests_properties(smoke_check PROPERTIES FIXTURES_REQUIRED check_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${CMAKE_BINARY_DIR}/check-data;QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/check.png")
 
+# The editor on the sample design "Dawn".
+add_test(NAME smoke_editor COMMAND ekpo)
+set_tests_properties(smoke_editor PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/editor.png")
+
+add_test(NAME smoke_editor_boot COMMAND ekpo)
+set_tests_properties(smoke_editor_boot PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EDIT_DESIGN=00000000-0000-0000-0000-0000000000d2;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/editor-boot.png")
+
 add_test(NAME smoke_review COMMAND ekpo)
 set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_REVIEW_IMPORT=00000000-0000-0000-0000-000000000005;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/review.png")
@@ -56,6 +65,19 @@ set_tests_properties(smoke_review PROPERTIES FIXTURES_REQUIRED sample_library EN
 ekpo_test(tst_probe)
 ekpo_test(tst_library)
 ekpo_test(tst_importer)
+ekpo_test(tst_media)
+ekpo_test(tst_genplymouth)
+set_tests_properties(tst_genplymouth PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
+ekpo_test(tst_genksplash)
+target_link_libraries(tst_genksplash PRIVATE Qt6::Gui Qt6::Quick)
+set_target_properties(tst_genksplash PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE) # as for the app (src/app/CMakeLists.txt)
+set_tests_properties(tst_genksplash PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
+# The editor is part of the app's QML module; the test compiles it in directly.
+ekpo_test(tst_designeditor)
+target_sources(tst_designeditor PRIVATE ${CMAKE_SOURCE_DIR}/src/app/designeditor.cpp ${CMAKE_SOURCE_DIR}/src/app/designeditor.h)
+target_link_libraries(tst_designeditor PRIVATE Qt6::Gui Qt6::Qml)
+set_target_properties(tst_designeditor PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
+set_tests_properties(tst_designeditor PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
 ekpo_test(tst_common)
 ekpo_test(tst_helper)
 add_dependencies(tst_helper ekpo-helper ekpo-helper-test)
@@ -63,6 +85,7 @@ ekpo_test(tst_cli)
 add_dependencies(tst_cli ekpo ekpo-helper-test)
 target_compile_definitions(tst_cli PRIVATE EKPO_BIN="$<TARGET_FILE:ekpo>" STUBS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 ekpo_test(tst_executor)
+set_tests_properties(tst_executor PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen") # boot splash designs draw text
 add_dependencies(tst_executor ekpo-helper-test)
 target_compile_definitions(tst_executor PRIVATE
     HELPER_TEST_BIN="$<TARGET_FILE:ekpo-helper-test>"

@@ -21,9 +21,12 @@ int main(int argc, char *argv[])
     if (qEnvironmentVariableIsSet("EKPO_DEV"))
         prctl(PR_SET_DUMPABLE, 0);
 
-    // A command runs the command line without any GUI (SPEC.md §4.14).
+    // A command runs the command line without any window (SPEC.md §4.14). Building a
+    // boot splash design draws text and images, which needs a GUI application; the
+    // offscreen platform gives it one without a display.
     if (argc > 1) {
-        QCoreApplication app(argc, argv);
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+        QGuiApplication app(argc, argv);
         app.setApplicationName(QStringLiteral("ekpo"));
         return runCli(app.arguments().mid(1));
     }
@@ -63,8 +66,10 @@ int main(int argc, char *argv[])
     QVariantMap start;
     if (const QString section = qEnvironmentVariable("EKPO_SECTION"); !section.isEmpty())
         start.insert(QStringLiteral("startSection"), section);
-    if (qEnvironmentVariableIsSet("EKPO_DEV"))
+    if (qEnvironmentVariableIsSet("EKPO_DEV")) {
         start.insert(QStringLiteral("startReview"), qEnvironmentVariable("EKPO_REVIEW_IMPORT"));
+        start.insert(QStringLiteral("startEdit"), qEnvironmentVariable("EKPO_EDIT_DESIGN"));
+    }
     engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");
     if (engine.rootObjects().isEmpty())

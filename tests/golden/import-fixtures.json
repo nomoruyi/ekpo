@@ -109,6 +109,22 @@
     {
         "errors": [
         ],
+        "source": "plymouth-no-lock",
+        "themes": [
+            {
+                "installedId": "",
+                "name": "Bare Fixture",
+                "report": [
+                    "two-step shows no splash without lock.png, entry.png and bullet.png; this theme lacks lock.png, entry.png and bullet.png."
+                ],
+                "stage": "bootSplash",
+                "verdict": "broken"
+            }
+        ]
+    },
+    {
+        "errors": [
+        ],
         "source": "plymouth-two-step",
         "themes": [
             {

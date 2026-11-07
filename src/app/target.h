@@ -31,6 +31,8 @@ struct BootSplashTarget {
     QString build;
     QString label;
     bool allKernels = true; // how it was applied: every initrd, or only the newest kernel's
+    QString design; // the design it was built from, if any
+    QString stamp; // Library::stamp of that design as built: another one means "update available"
 
     bool sameState(const BootSplashTarget &o) const { return mode == o.mode && theme == o.theme && daemonTheme == o.daemonTheme; }
 };
@@ -40,6 +42,8 @@ struct PlasmaSplashTarget {
     QString engine; // ksplashrc Engine=; empty = Plasma's default
     QString build; // package files Ekpo copies into ~/.local/share/plasma/look-and-feel/<theme>
     QString label;
+    QString design; // as for BootSplashTarget
+    QString stamp;
 
     bool sameState(const PlasmaSplashTarget &o) const { return theme == o.theme && engine == o.engine; }
 };

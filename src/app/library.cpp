@@ -8,7 +8,9 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QProcess>
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
@@ -84,6 +86,38 @@ bool copyTree(const QString &src, const QString &dst, QStringList &notes, QStrin
 QString manifestPath(const QString &library)
 {
     return library + QStringLiteral("/library.json");
+}
+
+// The licence that comes with a font file: a licence file in its folder, else the
+// copyright file of the Debian package that ships it. Empty if there is none.
+QString fontLicence(const QString &file)
+{
+    const QFileInfo info(file);
+    const QStringList next = info.dir().entryList({QStringLiteral("LICEN[CS]E*"), QStringLiteral("OFL*"), QStringLiteral("COPYING*")},
+                                                  QDir::Files, QDir::Name); // name filters ignore case
+    if (!next.isEmpty())
+        return info.dir().filePath(next.first());
+
+    for (const QString &path : {info.absoluteFilePath(), info.canonicalFilePath()}) {
+        // dpkg-query takes a glob pattern: Ubuntu[wdth,wght].ttf must match literally.
+        QString pattern;
+        for (const QChar c : path)
+            pattern += QStringView(u"*?[]\\").contains(c) ? QStringLiteral("\\") + c : QString(c);
+        QProcess dpkg;
+        dpkg.start(QStringLiteral("dpkg-query"), {QStringLiteral("-S"), pattern});
+        if (!dpkg.waitForFinished(10000) || dpkg.exitStatus() != QProcess::NormalExit || dpkg.exitCode() != 0)
+            continue;
+        // "fonts-ubuntu: /usr/share/fonts/...", or "pkg:amd64, other: ..."; skip "diversion by" lines.
+        for (const QString &line : QString::fromUtf8(dpkg.readAllStandardOutput()).split(QLatin1Char('\n'))) {
+            if (line.startsWith(QLatin1String("diversion ")) || !line.contains(QLatin1String(": /")))
+                continue;
+            const QString package = line.section(QLatin1String(": "), 0, 0).section(QLatin1String(", "), 0, 0).section(QLatin1Char(':'), 0, 0);
+            const QString copyright = QStringLiteral("/usr/share/doc/%1/copyright").arg(package);
+            if (QFileInfo(copyright).isFile())
+                return copyright;
+        }
+    }
+    return {};
 }
 
 } // namespace
@@ -177,19 +211,23 @@ std::optional<Library> Library::open(const QString &path, QString &error)
         error = QStringLiteral("The library was written by a newer Ekpo (format %1).").arg(format);
         return std::nullopt;
     }
-    // ponytail: no migrations yet; add a step per format here once format 2 exists.
-    if (format != currentFormat) {
+    if (format < 1) {
         error = QStringLiteral("Unknown library format %1.").arg(format);
         return std::nullopt;
     }
     library.m_settings = Settings::fromJson(manifest->value(QStringLiteral("settings")).toObject());
 
-    for (const QString &sub : {QStringLiteral("imports"), QStringLiteral("masks"), QStringLiteral("history")}) {
+    for (const QString &sub : {QStringLiteral("imports"), QStringLiteral("designs"), QStringLiteral("assets"), QStringLiteral("masks"),
+                               QStringLiteral("history")}) {
         if (!dir.mkpath(sub)) {
             error = QStringLiteral("Can't create %1").arg(dir.filePath(sub));
             return std::nullopt;
         }
     }
+    // ponytail: format 2 only added designs/ and assets/ (made above), so migrating
+    // is writing the new number; add real steps here when a format changes files.
+    if (format < currentFormat && !library.saveManifest(library.m_settings, error))
+        return std::nullopt;
     return library;
 }
 
@@ -323,6 +361,327 @@ std::optional<QList<PayloadFile>> Library::buildFiles(const QString &hash) const
         files.append({QDir(dir).relativeFilePath(f.fileName()), f.readAll()});
     }
     return files;
+}
+
+namespace {
+QString designDir(const QString &library, const QString &id)
+{
+    return library + QStringLiteral("/designs/") + id;
+}
+
+// Every designs/<id>/<file> that exists, read as a design, sorted by name.
+QList<Design> readDesigns(const QString &library, const QString &file, QStringList &errors)
+{
+    QList<Design> result;
+    const QDir dir(library + QStringLiteral("/designs"));
+    for (const QString &id : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        const QString path = dir.filePath(id + QLatin1Char('/') + file);
+        if (!QFileInfo::exists(path))
+            continue;
+        QString error;
+        const auto json = readJson(path, error);
+        const auto design = json ? Design::fromJson(id, *json) : std::nullopt;
+        if (design)
+            result.append(*design);
+        else
+            errors << (error.isEmpty() ? QStringLiteral("%1: not a valid design").arg(path) : error);
+    }
+    std::sort(result.begin(), result.end(), [](const Design &a, const Design &b) {
+        return QString::localeAwareCompare(a.name, b.name) < 0;
+    });
+    return result;
+}
+} // namespace
+
+QList<Design> Library::designs(QStringList &errors) const
+{
+    return readDesigns(m_path, QStringLiteral("design.json"), errors);
+}
+
+QList<Design> Library::drafts(QStringList &errors) const
+{
+    return readDesigns(m_path, QStringLiteral("draft.json"), errors);
+}
+
+std::optional<Design> Library::design(const QString &id, int version, QString &error) const
+{
+    const QString file = version == 0 ? QStringLiteral("/design.json") : QStringLiteral("/versions/%1.json").arg(version);
+    const auto json = readJson(designDir(m_path, id) + file, error);
+    const auto design = json ? Design::fromJson(id, *json) : std::nullopt;
+    if (json && !design)
+        error = QStringLiteral("%1: not a valid design").arg(designDir(m_path, id) + file);
+    return design;
+}
+
+QList<int> Library::designVersions(const QString &id) const
+{
+    QList<int> numbers;
+    for (const QString &name : QDir(designDir(m_path, id) + QStringLiteral("/versions")).entryList({QStringLiteral("*.json")}, QDir::Files)) {
+        bool ok = false;
+        const int n = name.chopped(5).toInt(&ok);
+        if (ok && n > 0)
+            numbers.append(n);
+    }
+    std::sort(numbers.begin(), numbers.end());
+    return numbers;
+}
+
+bool Library::saveDesign(Design &design, QString &error)
+{
+    if (design.name.trimmed().isEmpty()) {
+        error = QStringLiteral("A design needs a name.");
+        return false;
+    }
+    Design saved = design;
+    if (saved.id.isEmpty())
+        saved.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString dir = designDir(m_path, saved.id);
+    const QList<int> versions = designVersions(saved.id);
+    saved.version = versions.isEmpty() ? 1 : versions.last() + 1;
+    saved.savedAt = QDateTime::currentDateTimeUtc();
+    if (!QDir().mkpath(dir + QStringLiteral("/versions"))) {
+        error = QStringLiteral("Can't create %1").arg(dir);
+        return false;
+    }
+    // The version first: a crash in between leaves design.json one version behind, never ahead.
+    if (!writeJson(dir + QStringLiteral("/versions/%1.json").arg(saved.version), saved.toJson(), error)
+        || !writeJson(dir + QStringLiteral("/design.json"), saved.toJson(), error))
+        return false;
+    QFile::remove(dir + QStringLiteral("/draft.json"));
+    design = saved;
+    return true;
+}
+
+bool Library::saveDraft(Design &design, QString &error)
+{
+    const QString id = design.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : design.id;
+    const QString dir = designDir(m_path, id);
+    if (!QDir().mkpath(dir)) {
+        error = QStringLiteral("Can't create %1").arg(dir);
+        return false;
+    }
+    Design draft = design;
+    draft.id = id;
+    if (!writeJson(dir + QStringLiteral("/draft.json"), draft.toJson(), error))
+        return false;
+    design.id = id;
+    return true;
+}
+
+void Library::clearDraft(const QString &id)
+{
+    QFile::remove(designDir(m_path, id) + QStringLiteral("/draft.json"));
+    QDir().rmdir(designDir(m_path, id)); // only if empty: a design that was never saved
+}
+
+bool Library::removeDesign(const QString &id, QString &error, QString *trashedPath)
+{
+    QString inTrash;
+    if (id.isEmpty() || !QFile::moveToTrash(designDir(m_path, id), &inTrash)) {
+        error = QStringLiteral("Can't move design %1 to the trash.").arg(id);
+        return false;
+    }
+    if (trashedPath)
+        *trashedPath = inTrash;
+    return true;
+}
+
+namespace {
+QString sharedFile(const QString &library)
+{
+    return library + QStringLiteral("/shared.json");
+}
+} // namespace
+
+QList<SharedElement> Library::sharedElements(QStringList &errors) const
+{
+    QList<SharedElement> result;
+    if (!QFile::exists(sharedFile(m_path)))
+        return result;
+    QString error;
+    const auto json = readJson(sharedFile(m_path), error);
+    if (!json) {
+        errors << error;
+        return result;
+    }
+    for (auto it = json->constBegin(); it != json->constEnd(); ++it) {
+        if (const auto e = SharedElement::fromJson(it.key(), it->toObject()))
+            result.append(*e);
+        else
+            errors << QStringLiteral("%1: entry %2 is not a shared element").arg(sharedFile(m_path), it.key());
+    }
+    std::sort(result.begin(), result.end(), [](const SharedElement &a, const SharedElement &b) { return QString::localeAwareCompare(a.name, b.name) < 0; });
+    return result;
+}
+
+bool Library::saveSharedElement(SharedElement &element, QString &error)
+{
+    QJsonObject all;
+    if (QFile::exists(sharedFile(m_path))) {
+        const auto json = readJson(sharedFile(m_path), error);
+        if (!json)
+            return false;
+        all = *json;
+    }
+    SharedElement saved = element;
+    if (saved.id.isEmpty())
+        saved.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    all.insert(saved.id, saved.toJson());
+    if (!writeJson(sharedFile(m_path), all, error))
+        return false;
+    element = saved;
+    return true;
+}
+
+Design Library::resolved(const Design &design, QStringList &problems) const
+{
+    QStringList errors;
+    QMap<QString, SharedElement> shared;
+    for (const SharedElement &e : sharedElements(errors))
+        shared.insert(e.id, e);
+    problems << errors;
+
+    std::optional<SharedElement> palette;
+    if (const QString id = design.content.value(QStringLiteral("palette")).toString(); !id.isEmpty()) {
+        const auto it = shared.constFind(id);
+        if (it == shared.cend() || it->kind != SharedElement::Kind::Palette)
+            problems << QStringLiteral("The design's palette is no longer in the library.");
+        else
+            palette = *it;
+    }
+    // Only colours: a text may well start with "@".
+    const auto colours = [&](QJsonObject o) {
+        for (const QString &key : {QStringLiteral("color"), QStringLiteral("color2"), QStringLiteral("background")}) {
+            const QString value = o.value(key).toString();
+            if (!value.startsWith(QLatin1Char('@')))
+                continue;
+            if (palette && palette->colours.contains(value.mid(1)))
+                o.insert(key, palette->colours.value(value.mid(1)));
+            else if (palette)
+                problems << QStringLiteral("The palette “%1” has no colour “%2”.").arg(palette->name, value.mid(1));
+            else if (design.content.value(QStringLiteral("palette")).toString().isEmpty())
+                problems << QStringLiteral("The colour %1 needs a palette, and the design has none.").arg(value);
+        }
+        return o;
+    };
+
+    Design out = design;
+    out.content.insert(QStringLiteral("background"), colours(design.content.value(QStringLiteral("background")).toObject()));
+    QJsonArray elements;
+    for (const QJsonValue &v : design.content.value(QStringLiteral("elements")).toArray()) {
+        QJsonObject e = colours(v.toObject());
+        if (const QString id = e.value(QStringLiteral("shared")).toString(); !id.isEmpty()) {
+            const auto it = shared.constFind(id);
+            if (it == shared.cend() || it->kind != SharedElement::Kind::Logo)
+                problems << QStringLiteral("The design uses a shared logo that is no longer in the library.");
+            else
+                e.insert(QStringLiteral("asset"), it->asset);
+        }
+        elements.append(e);
+    }
+    out.content.insert(QStringLiteral("elements"), elements);
+    return out;
+}
+
+QString Library::stamp(const Design &resolved)
+{
+    const QJsonObject input{{QStringLiteral("stage"), stageKey(resolved.stage)}, {QStringLiteral("name"), resolved.name}, {QStringLiteral("content"), resolved.content}};
+    return QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(input).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex().left(24));
+}
+
+namespace {
+QString assetsManifest(const QString &library)
+{
+    return library + QStringLiteral("/assets/assets.json");
+}
+} // namespace
+
+QList<Asset> Library::assets(QStringList &errors) const
+{
+    QList<Asset> result;
+    if (!QFile::exists(assetsManifest(m_path)))
+        return result;
+    QString error;
+    const auto json = readJson(assetsManifest(m_path), error);
+    if (!json) {
+        errors << error;
+        return result;
+    }
+    for (auto it = json->constBegin(); it != json->constEnd(); ++it) {
+        if (const auto asset = Asset::fromJson(it.key(), it.value().toObject()))
+            result.append(*asset);
+        else
+            errors << QStringLiteral("%1: entry %2 is not a valid asset").arg(assetsManifest(m_path), it.key());
+    }
+    return result;
+}
+
+QString Library::assetPath(const Asset &asset) const
+{
+    return m_path + QStringLiteral("/assets/") + asset.hash + (asset.suffix.isEmpty() ? QString() : QLatin1Char('.') + asset.suffix);
+}
+
+std::optional<Asset> Library::addAsset(const QString &file, Asset::Kind kind, const QString &name, QString &error, const QString &licence,
+                                       const QString &source)
+{
+    QFile in(file);
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!in.open(QIODevice::ReadOnly) || !hash.addData(&in)) {
+        error = QStringLiteral("%1: %2").arg(file, in.errorString());
+        return std::nullopt;
+    }
+    Asset asset{QString::fromLatin1(hash.result().toHex().left(24)),
+                kind == Asset::Kind::Licence ? QStringLiteral("txt") : QFileInfo(file).suffix().toLower(),
+                kind,
+                name,
+                source.isEmpty() ? QFileInfo(file).absoluteFilePath() : QFileInfo(source).absoluteFilePath(),
+                licence,
+                QDateTime::currentDateTimeUtc()};
+
+    QJsonObject entries;
+    if (QFile::exists(assetsManifest(m_path))) {
+        const auto json = readJson(assetsManifest(m_path), error);
+        if (!json)
+            return std::nullopt;
+        entries = *json;
+    }
+    if (const auto known = Asset::fromJson(asset.hash, entries.value(asset.hash).toObject()))
+        return known;
+
+    const QString target = assetPath(asset);
+    const QString fresh = target + QStringLiteral(".new");
+    QFile::remove(fresh);
+    if (!QFile::exists(target) && (!QFile::copy(file, fresh) || !QFile::rename(fresh, target))) {
+        QFile::remove(fresh);
+        error = QStringLiteral("Can't copy %1 into the library.").arg(file);
+        return std::nullopt;
+    }
+    entries.insert(asset.hash, asset.toJson());
+    if (!writeJson(assetsManifest(m_path), entries, error))
+        return std::nullopt;
+    return asset;
+}
+
+std::optional<Asset> Library::addFont(const QString &file, const QString &name, QString &error)
+{
+    QFile in(file);
+    if (!in.open(QIODevice::ReadOnly)) {
+        error = QStringLiteral("%1: %2").arg(file, in.errorString());
+        return std::nullopt;
+    }
+    const QByteArray magic = in.read(4);
+    if (magic != QByteArray("\x00\x01\x00\x00", 4) && magic != "OTTO" && magic != "true" && magic != "ttcf") {
+        error = QStringLiteral("%1 is not a TrueType or OpenType font.").arg(file);
+        return std::nullopt;
+    }
+    QString licenceHash;
+    if (const QString licence = fontLicence(file); !licence.isEmpty()) {
+        const auto text = addAsset(licence, Asset::Kind::Licence, QStringLiteral("Licence of %1").arg(name), error);
+        if (!text)
+            return std::nullopt;
+        licenceHash = text->hash;
+    }
+    return addAsset(file, Asset::Kind::Font, name, error, licenceHash);
 }
 
 QList<Mask> Library::masks(QStringList &errors) const

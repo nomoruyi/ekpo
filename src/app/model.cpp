@@ -17,6 +17,13 @@ const QMap<ImportedTheme::Verdict, QString> verdictKeys = {
     {ImportedTheme::Verdict::Broken, QStringLiteral("broken")},
 };
 
+const QMap<Asset::Kind, QString> assetKindKeys = {
+    {Asset::Kind::Image, QStringLiteral("image")},
+    {Asset::Kind::Video, QStringLiteral("video")},
+    {Asset::Kind::Font, QStringLiteral("font")},
+    {Asset::Kind::Licence, QStringLiteral("licence")},
+};
+
 } // namespace
 
 QString stageKey(Stage stage)
@@ -75,6 +82,8 @@ QJsonObject Slot::toJson() const
 {
     if (kind == Kind::Import)
         return {{QStringLiteral("kind"), QStringLiteral("import")}, {QStringLiteral("ref"), ref}};
+    if (kind == Kind::Design)
+        return {{QStringLiteral("kind"), QStringLiteral("design")}, {QStringLiteral("ref"), ref}};
     return {{QStringLiteral("kind"), QStringLiteral("leaveAsIs")}};
 }
 
@@ -86,6 +95,8 @@ std::optional<Slot> Slot::fromJson(const QJsonObject &json)
     const QString ref = json.value(QStringLiteral("ref")).toString();
     if (kind == QLatin1String("import") && !ref.isEmpty())
         return Slot{Kind::Import, ref};
+    if (kind == QLatin1String("design") && !ref.isEmpty())
+        return Slot{Kind::Design, ref};
     return std::nullopt;
 }
 
@@ -130,6 +141,83 @@ std::optional<HistoryEntry> HistoryEntry::fromJson(int number, const QJsonObject
                    json.value(QStringLiteral("state")).toObject()};
     if (!e.createdAt.isValid())
         return std::nullopt;
+    return e;
+}
+
+QJsonObject Design::toJson() const
+{
+    return {
+        {QStringLiteral("stage"), stageKey(stage)},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("version"), version},
+        {QStringLiteral("savedAt"), savedAt.toUTC().toString(Qt::ISODate)},
+        {QStringLiteral("content"), content},
+    };
+}
+
+std::optional<Design> Design::fromJson(const QString &id, const QJsonObject &json)
+{
+    const auto stage = stageFromKey(json.value(QStringLiteral("stage")).toString());
+    if (!stage)
+        return std::nullopt;
+    return Design{id,
+                  *stage,
+                  json.value(QStringLiteral("name")).toString(),
+                  json.value(QStringLiteral("version")).toInt(),
+                  QDateTime::fromString(json.value(QStringLiteral("savedAt")).toString(), Qt::ISODate),
+                  json.value(QStringLiteral("content")).toObject()};
+}
+
+QJsonObject Asset::toJson() const
+{
+    return {
+        {QStringLiteral("suffix"), suffix},
+        {QStringLiteral("kind"), assetKindKeys.value(kind)},
+        {QStringLiteral("name"), name},
+        {QStringLiteral("source"), source},
+        {QStringLiteral("licence"), licence},
+        {QStringLiteral("addedAt"), addedAt.toUTC().toString(Qt::ISODate)},
+    };
+}
+
+std::optional<Asset> Asset::fromJson(const QString &hash, const QJsonObject &json)
+{
+    const auto kind = assetKindKeys.key(json.value(QStringLiteral("kind")).toString(), Asset::Kind(-1));
+    if (!assetKindKeys.contains(kind))
+        return std::nullopt;
+    return Asset{hash,
+                 json.value(QStringLiteral("suffix")).toString(),
+                 kind,
+                 json.value(QStringLiteral("name")).toString(),
+                 json.value(QStringLiteral("source")).toString(),
+                 json.value(QStringLiteral("licence")).toString(),
+                 QDateTime::fromString(json.value(QStringLiteral("addedAt")).toString(), Qt::ISODate)};
+}
+
+QJsonObject SharedElement::toJson() const
+{
+    QJsonObject o{{QStringLiteral("kind"), kind == Kind::Logo ? QStringLiteral("logo") : QStringLiteral("palette")}, {QStringLiteral("name"), name}};
+    if (kind == Kind::Logo) {
+        o.insert(QStringLiteral("asset"), asset);
+    } else {
+        QJsonObject c;
+        for (auto it = colours.cbegin(); it != colours.cend(); ++it)
+            c.insert(it.key(), *it);
+        o.insert(QStringLiteral("colours"), c);
+    }
+    return o;
+}
+
+std::optional<SharedElement> SharedElement::fromJson(const QString &id, const QJsonObject &json)
+{
+    const QString kind = json.value(QStringLiteral("kind")).toString();
+    if (kind != QLatin1String("logo") && kind != QLatin1String("palette"))
+        return std::nullopt;
+    SharedElement e{id, kind == QLatin1String("logo") ? Kind::Logo : Kind::Palette, json.value(QStringLiteral("name")).toString(),
+                    json.value(QStringLiteral("asset")).toString(), {}};
+    const QJsonObject colours = json.value(QStringLiteral("colours")).toObject();
+    for (auto it = colours.constBegin(); it != colours.constEnd(); ++it)
+        e.colours.insert(it.key(), it->toString());
     return e;
 }
 

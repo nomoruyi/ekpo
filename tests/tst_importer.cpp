@@ -53,6 +53,7 @@ private Q_SLOTS:
     void archive();
     void reimportUpdatesTheSameEntry();
     void linkLeavingTheThemeIsSkipped();
+    void twoStepNeedsLockEntryAndBullet();
     void removeMovesToTrash();
 
 private:
@@ -146,6 +147,55 @@ void TestImporter::linkLeavingTheThemeIsSkipped()
     QVERIFY(QFileInfo(files + QStringLiteral("/alias.png")).isFile());
     QVERIFY(!QFileInfo(files + QStringLiteral("/alias.png")).isSymLink());
     QVERIFY(result.themes[0].report.contains(QStringLiteral("Not copied: the link outside.png points outside the theme folder or to a folder.")));
+}
+
+void TestImporter::twoStepNeedsLockEntryAndBullet()
+{
+    using Verdict = ImportedTheme::Verdict;
+    const QString pluginDir = QStringLiteral("/usr/lib/x86_64-linux-gnu/plymouth");
+    const QString themesDir = QStringLiteral("/usr/share/plymouth/themes");
+    const auto plymouthFile = [](const QString &imageDir) {
+        return QStringLiteral("[Plymouth Theme]\nName=Bare\nModuleName=two-step\n\n[two-step]\nImageDir=%1\n").arg(imageDir).toUtf8();
+    };
+
+    // A copy gets ImageDir rewritten to its own folder, so the images must be in the theme.
+    const QString copy = m_tmp->filePath(QStringLiteral("src/Bare"));
+    writeFile(copy + QStringLiteral("/Bare.plymouth"), plymouthFile(themesDir + QStringLiteral("/Bare")));
+    writeFile(copy + QStringLiteral("/lock.png"), "png");
+    ImportResult result = importThemes(*m_library, copy, referenceRoot, referenceHome);
+    QCOMPARE(result.themes.size(), 1);
+    QCOMPARE(result.themes[0].verdict, Verdict::Broken);
+    QVERIFY(result.themes[0].report.contains(
+        QStringLiteral("two-step shows no splash without lock.png, entry.png and bullet.png; this theme lacks entry.png and bullet.png.")));
+    writeFile(copy + QStringLiteral("/entry.png"), "png");
+    writeFile(copy + QStringLiteral("/bullet.png"), "png");
+    QCOMPARE(importThemes(*m_library, copy, referenceRoot, referenceHome).themes.value(0).verdict, Verdict::Works);
+
+    // Without ImageDir, two-step looks for "(null)/lock.png".
+    writeFile(copy + QStringLiteral("/Bare.plymouth"), "[Plymouth Theme]\nName=Bare\nModuleName=two-step\n");
+    result = importThemes(*m_library, copy, referenceRoot, referenceHome);
+    QCOMPARE(result.themes.value(0).verdict, Verdict::Broken);
+    QVERIFY(result.themes[0].report.contains(QStringLiteral("A two-step theme needs an ImageDir.")));
+
+    // A theme applied in place loads its images from ImageDir, here another theme's folder.
+    const QString root = m_tmp->filePath(QStringLiteral("root"));
+    writeFile(root + pluginDir + QStringLiteral("/two-step.so"), "so");
+    const QString shared = root + themesDir + QStringLiteral("/shared");
+    writeFile(shared + QStringLiteral("/lock.png"), "png");
+    writeFile(shared + QStringLiteral("/entry.png"), "png");
+    writeFile(shared + QStringLiteral("/bullet.png"), "png");
+    const QString pointer = root + themesDir + QStringLiteral("/pointer");
+    writeFile(pointer + QStringLiteral("/pointer.plymouth"), plymouthFile(themesDir + QStringLiteral("//shared")));
+    result = importThemes(*m_library, pointer, root, referenceHome);
+    QCOMPARE(result.themes.size(), 1);
+    QCOMPARE(result.themes[0].installedId, QStringLiteral("pointer"));
+    QCOMPARE(result.themes[0].verdict, Verdict::Warnings);
+
+    QVERIFY(QFile::remove(shared + QStringLiteral("/bullet.png")));
+    result = importThemes(*m_library, pointer, root, referenceHome);
+    QCOMPARE(result.themes[0].verdict, Verdict::Broken);
+    QVERIFY(result.themes[0].report.contains(
+        QStringLiteral("two-step shows no splash without lock.png, entry.png and bullet.png; /usr/share/plymouth/themes/shared lacks bullet.png.")));
 }
 
 void TestImporter::removeMovesToTrash()

@@ -10,7 +10,6 @@ namespace {
 
 const QString plymouthThemesDir = QStringLiteral("/usr/share/plymouth/themes/");
 constexpr qint64 grubThemeCap = 64 << 20;
-constexpr qint64 plymouthThemeCap = 15 << 20; // copied into every initrd (SPEC.md §4.6)
 constexpr int themeFileCap = 4096;
 
 // From GRUB 2.14's gfxmenu module (theme_loader.c): anything else is an error at boot.

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <QSize>
+
+#include "genplymouth.h"
 #include "library.h"
 #include "request.h"
 #include "target.h"
@@ -49,6 +52,7 @@ struct PlanContext {
     // Boot splash changes: rebuild every kernel's initrd, or only the newest one's.
     // Applies default to the setting, restores to all (INTERVIEW.md, 2026-11-06).
     bool allKernels = true;
+    QSize screen = builtScreen; // boot splash designs are built for it
 };
 
 inline const QString defaultGfxmode = QStringLiteral("2560x1440,1920x1080,1280x720,auto");
@@ -60,6 +64,9 @@ Plan planTarget(const PlanContext &context, const Target &target, const QString 
 Target originalTarget(const Library &library);
 // Per stage, the state the newest history entry touching it left behind.
 Target lastApplied(const Library &library);
+// Stages last applied from a design that builds differently now (a new version, or a
+// shared logo or palette changed): stage → design id. "Update available" (SPEC.md §3).
+QMap<Stage, QString> designUpdates(const Library &library);
 // Ekpo theme copies (ekpo-*) that history still needs once newTarget is applied: the
 // helper removes the others (SPEC.md §4.9).
 QStringList keptThemes(const Library &library, const Target &newTarget);

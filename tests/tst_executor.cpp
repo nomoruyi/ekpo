@@ -32,6 +32,9 @@ private Q_SLOTS:
     void newestKernelOnlyThenRestoreAll();
     void historyLimitPrunesCopiesAndBuilds();
     void welcomeBackAfterReinstall();
+    void designAppliesAsPlasmaSplash();
+    void designAppliesAsBootSplash();
+    void sharedChangeMeansUpdate();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -384,5 +387,107 @@ void TestExecutor::welcomeBackAfterReinstall()
     QCOMPARE(m_library->original(Stage::BootSplash)->value(QStringLiteral("theme")).toString(), QStringLiteral("fallout"));
 }
 
-EKPO_TEST_MAIN(TestExecutor)
+
+void TestExecutor::designAppliesAsPlasmaSplash()
+{
+    QString error;
+    const auto logo = m_library->addAsset(QStringLiteral(FIXTURES_DIR "/assets/logo.png"), Asset::Kind::Image, QStringLiteral("Logo"), error);
+    QVERIFY2(logo, qPrintable(error));
+    Design design;
+    design.stage = Stage::PlasmaSplash;
+    design.name = QStringLiteral("Dawn");
+    design.content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}},
+                      {QStringLiteral("elements"), QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("asset"), logo->hash},
+                                                                          {QStringLiteral("x"), 40}, {QStringLiteral("y"), 40}, {QStringLiteral("width"), 20}, {QStringLiteral("height"), 20}}}}};
+    QVERIFY(m_library->saveDesign(design, error));
+    const Mask mask{{}, QStringLiteral("Dawn"), {{Stage::PlasmaSplash, Slot{Slot::Kind::Design, design.id}}}};
+
+    const Plan first = plan(mask);
+    QVERIFY2(first.canApply(), qPrintable(first.problems.join(QLatin1Char('\n'))));
+    QCOMPARE(first.target.plasmaSplash->theme, QStringLiteral("ekpo-dawn-v1"));
+    QCOMPARE(first.target.plasmaSplash->label, QStringLiteral("Dawn"));
+    QVERIFY2(execute(first, &error), qPrintable(error));
+    const QString v1 = m_home + QStringLiteral("/.local/share/plasma/look-and-feel/ekpo-dawn-v1");
+    QVERIFY(QFile::exists(v1 + QStringLiteral("/contents/splash/Splash.qml")));
+    QVERIFY(QFile::exists(v1 + QStringLiteral("/contents/splash/images/") + logo->hash + QStringLiteral(".png")));
+    QCOMPARE(ksplash("Theme"), QStringLiteral("ekpo-dawn-v1"));
+
+    // Applying it unchanged again is no change; an edited version gets its own package.
+    QVERIFY(plan(mask).stages.isEmpty());
+    design.content.insert(QStringLiteral("fadeIn"), 300);
+    QVERIFY(m_library->saveDesign(design, error));
+    const Plan second = plan(mask);
+    QVERIFY2(second.canApply(), qPrintable(second.problems.join(QLatin1Char('\n'))));
+    QCOMPARE(second.target.plasmaSplash->theme, QStringLiteral("ekpo-dawn-v2"));
+    QVERIFY2(execute(second, &error), qPrintable(error));
+    QCOMPARE(ksplash("Theme"), QStringLiteral("ekpo-dawn-v2"));
+    QVERIFY(QFile::exists(v1)); // history entry 1 still needs it
+
+    // A Mask whose design is gone can't be applied.
+    const Plan missing = plan(Mask{{}, QStringLiteral("Gone"), {{Stage::PlasmaSplash, Slot{Slot::Kind::Design, QStringLiteral("nope")}}}});
+    QVERIFY(!missing.canApply());
+    QVERIFY(missing.problems.first().contains(QLatin1String("design")));
+}
+
+void TestExecutor::designAppliesAsBootSplash()
+{
+    Design design;
+    design.stage = Stage::BootSplash;
+    design.name = QStringLiteral("Night");
+    design.content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}},
+                      {QStringLiteral("hideMessages"), true},
+                      {QStringLiteral("elements"), QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("color"), QStringLiteral("#ffffff")},
+                                                                          {QStringLiteral("x"), 48.5}, {QStringLiteral("y"), 60}, {QStringLiteral("width"), 3}, {QStringLiteral("height"), 5}}}}};
+    QString error;
+    QVERIFY(m_library->saveDesign(design, error));
+    const Mask mask{{}, QStringLiteral("Night"), {{Stage::BootSplash, Slot{Slot::Kind::Design, design.id}}}};
+
+    const Plan first = plan(mask);
+    QVERIFY2(first.canApply(), qPrintable(first.problems.join(QLatin1Char('\n'))));
+    QCOMPARE(first.target.bootSplash->theme, QStringLiteral("ekpo-night-v1"));
+    QCOMPARE(first.target.bootSplash->daemonTheme, QStringLiteral("ekpo-night-v1"));
+    QVERIFY2(execute(first, &error), qPrintable(error));
+    const QString dir = at(QStringLiteral("/usr/share/plymouth/themes/ekpo-night-v1/"));
+    for (const char *file : {"ekpo-night-v1.plymouth", "background.png", "throbber-0060.png", "lock.png", "entry.png", "bullet.png"})
+        QVERIFY2(QFile::exists(dir + QLatin1String(file)), file);
+    const SystemState state = probe();
+    QCOMPARE(state.plymouthAlternative, QStringLiteral("/usr/share/plymouth/themes/ekpo-night-v1/ekpo-night-v1.plymouth"));
+    QCOMPARE(state.plymouthDaemonTheme, QStringLiteral("ekpo-night-v1"));
+
+    // The same design again is no change (the build is the same, byte for byte).
+    QVERIFY(plan(mask).stages.isEmpty());
+}
+
+void TestExecutor::sharedChangeMeansUpdate()
+{
+    QString error;
+    SharedElement palette{{}, SharedElement::Kind::Palette, QStringLiteral("Night"), {},
+                          {{QStringLiteral("background"), QStringLiteral("#102030")}, {QStringLiteral("accent"), QStringLiteral("#ff8800")}, {QStringLiteral("text"), QStringLiteral("#ffffff")}}};
+    QVERIFY(m_library->saveSharedElement(palette, error));
+    Design design;
+    design.stage = Stage::PlasmaSplash;
+    design.name = QStringLiteral("Dusk");
+    design.content = {{QStringLiteral("palette"), palette.id},
+                      {QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("@background")}}},
+                      {QStringLiteral("elements"), QJsonArray()}};
+    QVERIFY(m_library->saveDesign(design, error));
+    const Mask mask{{}, QStringLiteral("Dusk"), {{Stage::PlasmaSplash, Slot{Slot::Kind::Design, design.id}}}};
+    QVERIFY2(execute(plan(mask), &error), qPrintable(error));
+    QVERIFY(designUpdates(*m_library).isEmpty());
+
+    // Saving the design again unchanged is no update; a palette change is.
+    QVERIFY(m_library->saveDesign(design, error));
+    QVERIFY(designUpdates(*m_library).isEmpty());
+    palette.colours.insert(QStringLiteral("background"), QStringLiteral("#000000"));
+    QVERIFY(m_library->saveSharedElement(palette, error));
+    QCOMPARE(designUpdates(*m_library), (QMap<Stage, QString>{{Stage::PlasmaSplash, design.id}}));
+
+    // Applying it again brings the look up to date.
+    const Plan update = plan(mask);
+    QCOMPARE(update.target.plasmaSplash->theme, QStringLiteral("ekpo-dusk-v2"));
+    QVERIFY2(execute(update, &error), qPrintable(error));
+    QVERIFY(designUpdates(*m_library).isEmpty());
+}
+
+EKPO_GUI_TEST_MAIN(TestExecutor)
 #include "tst_executor.moc"

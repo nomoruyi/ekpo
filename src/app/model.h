@@ -41,11 +41,11 @@ struct ImportedTheme {
 
 QString verdictKey(ImportedTheme::Verdict verdict); // "works", "warnings", "repaired", "broken"
 
-// One slot of a Mask (SPEC.md §4.8). M2 adds designs as a third kind.
+// One slot of a Mask (SPEC.md §4.8).
 struct Slot {
-    enum class Kind { LeaveAsIs, Import };
+    enum class Kind { LeaveAsIs, Import, Design };
     Kind kind = Kind::LeaveAsIs;
-    QString ref; // import id when kind == Import
+    QString ref; // import or design id
 
     QJsonObject toJson() const;
     static std::optional<Slot> fromJson(const QJsonObject &json);
@@ -71,6 +71,56 @@ struct HistoryEntry {
     QJsonObject toJson() const;
     static std::optional<HistoryEntry> fromJson(int number, const QJsonObject &json);
 };
+
+// A design made in one of Ekpo's editors (SPEC.md §4.4). Each save is a version;
+// the content is defined by that stage's editor and generator, the library stores
+// it as given.
+struct Design {
+    QString id; // folder name in designs/, assigned on first save or draft
+    Stage stage = Stage::PlasmaSplash;
+    QString name;
+    int version = 0; // the saved version; 0 = never saved
+    QDateTime savedAt;
+    QJsonObject content;
+
+    QJsonObject toJson() const;
+    static std::optional<Design> fromJson(const QString &id, const QJsonObject &json);
+};
+
+// A file stored once in the library and referenced by designs (SPEC.md §3), with
+// where it came from and its licence.
+struct Asset {
+    enum class Kind { Image, Video, Font, Licence };
+
+    QString hash; // content hash; the file is assets/<hash>.<suffix>
+    QString suffix; // lower case, may be empty
+    Kind kind = Kind::Image;
+    QString name;
+    QString source; // the file it was copied from
+    QString licence; // hash of the licence text asset; empty if none was found
+    QDateTime addedAt;
+
+    QJsonObject toJson() const;
+    static std::optional<Asset> fromJson(const QString &hash, const QJsonObject &json);
+};
+
+// A logo or palette designs link to (SPEC.md §3): changing it changes every design
+// that uses it; looks already applied change when they are applied again.
+struct SharedElement {
+    enum class Kind { Logo, Palette };
+
+    QString id; // assigned on first save
+    Kind kind = Kind::Logo;
+    QString name;
+    QString asset; // a logo's image asset
+    QMap<QString, QString> colours; // a palette's: paletteKeys → "#rrggbb"
+
+    QJsonObject toJson() const;
+    static std::optional<SharedElement> fromJson(const QString &id, const QJsonObject &json);
+};
+
+// A design's colour "@accent" is its palette's accent colour, and so on.
+inline const QStringList paletteKeys = {QStringLiteral("background"), QStringLiteral("accent"), QStringLiteral("text")};
 
 // App preferences (SPEC.md §4.13). Machine boot options live in history, not here.
 struct Settings {

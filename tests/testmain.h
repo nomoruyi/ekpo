@@ -16,3 +16,19 @@
         TestClass test;                                                                            \
         return QTest::qExec(&test, argc, argv);                                                    \
     }
+
+#ifdef QT_GUI_LIB
+#include <QGuiApplication>
+
+// The same for tests that need a GUI application (QML, images); run them with
+// QT_QPA_PLATFORM=offscreen.
+#define EKPO_GUI_TEST_MAIN(TestClass)                                                          \
+    int main(int argc, char *argv[])                                                               \
+    {                                                                                              \
+        prctl(PR_SET_DUMPABLE, 0);                                                                 \
+        QGuiApplication app(argc, argv);                                                           \
+        QTest::failOnWarning();                                                                    \
+        TestClass test;                                                                            \
+        return QTest::qExec(&test, argc, argv);                                                    \
+    }
+#endif

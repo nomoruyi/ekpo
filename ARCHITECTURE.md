@@ -66,12 +66,12 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
 |---|---|
 | `library` | Plain-file store, format version + migrations, versions on save, crash draft, trash via `QFile::moveToTrash`, export (design/Mask packages, whole-library archive) |
 | `model` | `GrubDesign`, `PlymouthDesign`, `SplashDesign`, `Mask`, `Asset`, `HistoryEntry`; JSON in/out |
-| `gen` | `grub` (theme.txt, 9-slice images, `.pf2` via `grub-mkfont`, entry-width fit), `plymouth` (two-step/script files, frames, size meter), `ksplash` (`metadata.json`, `Splash.qml`), `pf2` reader (glyph widths and bitmaps for fit check and preview), `media` (ffmpeg via `QProcess`: video → palette PNG frames, video → silent MP4, first-frame still) |
+| `gen` | `grub` (theme.txt, 9-slice images, `.pf2` via `grub-mkfont`, entry-width fit; built for one resolution, fonts and pixel values scaled by screen height), `plymouth` (two-step/script files, frames, size meter), `ksplash` (`metadata.json`, `Splash.qml`), `pf2` reader (glyph widths and bitmaps for fit check and preview), `media` (ffmpeg via `QProcess`: video → palette PNG frames, video → silent MP4, first-frame still) |
 | `importer` | Find theme root, copy verbatim, report + verdict, normalized install copy when needed |
-| `probe` | Read-only state: toolchain, alternative (`update-alternatives --query`), `plymouthd.conf`, effective GRUB values (sources `/etc/default/grub` + `grub.d/*.cfg` as the user, like grub-mkconfig does), `ksplashrc` (KConfig), kernels and initrd dates, `/proc/cmdline`, installed themes, leftover journal, free space |
+| `probe` | Read-only state: toolchain, alternative (`update-alternatives --query`), `plymouthd.conf`, effective GRUB values (sources `/etc/default/grub` + `grub.d/*.cfg` as the user, like grub-mkconfig does), `ksplashrc` (KConfig), kernels and initrd dates, `/proc/cmdline`, installed themes, leftover journal, free space, primary screen mode, the mode GRUB booted in (`/sys/kernel/boot_params` `screen_info`) |
 | `planner` | Mask or restore → `Plan`: per-stage from/to, file diffs, commands, checks, estimates; Original capture on first change of a stage |
 | `executor` | Plasma step (copy package, write `ksplashrc` via KConfig), helper call with progress, Plasma rollback if the helper fails, history entry, after-reboot check (stores `/proc/sys/kernel/random/boot_id`) |
-| `ui` | QML + Kirigami pages per `notes/wireframes-round8.md`; C++ models exposed with `QML_ELEMENT` |
+| `ui` | QML + Kirigami pages per `notes/wireframes-round8.md`; C++ models exposed with `QML_ELEMENT`. The editor's state lives in `DesignEditor` (C++): undo/redo as snapshots (a drag is one step), the crash draft 0.5 s after the last change, the preview package in a temp folder (assets linked, not copied), warnings at 1440p/1080p/720p |
 | `cli` | `status`, `apply`, `restore` on the same planner and executor |
 
 **Previews:** GRUB is drawn by the app with real `.pf2` glyphs over the sample menu; Plymouth is drawn by a QML scene from the design; the Plasma splash preview loads the generated `Splash.qml` itself in a `Loader`, plus *Run real splash* via `ksplashqml --test --window`.
@@ -86,6 +86,7 @@ On start, a leftover journal (crash, power loss) blocks every operation except `
   designs/<uuid>/design.json   current; versions/<n>.json; draft.json (crash recovery)
   imports/<uuid>/import.json   metadata + report; files/ (verbatim copy)
   assets/<sha256>.<ext>        content-addressed masters; assets.json (names, licences, sources)
+  shared.json                  shared logos and palettes that designs link (resolved before building)
   masks/<uuid>.json
   builds/<sha256>/             built packages, kept while a history entry needs them
   history/<n>/entry.json       desired + resulting state, backups from the helper; RESTORE.txt
@@ -137,6 +138,16 @@ dev/            env.sh (HOME, XDG_*, TMPDIR → .dev/), sandbox root builder
 10. Polkit policy, `.deb` via CPack; owner's first real applies (GRUB only → Plymouth only → Mask), with a Timeshift snapshot and live USB ready.
 
 Spikes for SPEC §10 run before M2 (reading Plymouth 24 sources and measuring frame sizes need no system changes).
+
+## 9a. Build order for M2 (proposed 2026-11-06)
+
+1. Library format 2: `designs/` (version per save, crash draft) and `assets/` (content-addressed masters, `assets.json` with name, licence, source); migration from format 1; system fonts copied in with their licence file.
+2. `gen ksplash` from a `SplashDesign` (background, image, text, spinner) with golden files; a design becomes a stage source like an import, so it reaches the existing build, review and apply path.
+3. Editor shell on the Plasma splash: element list · canvas · properties, % positions, snapping and nudging, 1440p/1080p/720p switch, warnings bar, undo/redo, Ctrl+S versions, crash draft; preview loads the generated `Splash.qml`; *Run real splash*.
+4. `media`: video → silent MP4 and video → palette PNG frames through ffmpeg with progress and cancel; MP4 element in the Plasma splash.
+5. `gen plymouth`: two-step (background, logo, throbber up to 2 s, progress bar, static text as images, `SuppressMessages`) and the script module for longer loops, with golden files.
+6. Plymouth designer in the editor shell: QML preview, animation from frames or video, file-size and decoded-memory meters.
+7. Starters tinted with the Plasma accent colour; linked shared elements (logo, palette) with "update available" on Masks that use them.
 
 ## 10. Decisions for the owner
 

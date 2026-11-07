@@ -166,8 +166,29 @@ void checkPlymouth(Finding &f, const QString &rootDir)
         f.add(Verdict::Broken, QStringLiteral("It needs the Plymouth module \"%1\", which isn't installed.").arg(module));
 
     const KConfigGroup section = config.group(module);
-    if (const QString imageDir = section.readEntry("ImageDir"); !imageDir.isEmpty())
+    const QString imageDir = section.readEntry("ImageDir");
+    if (!imageDir.isEmpty())
         checkPlymouthPath(f, QStringLiteral("ImageDir"), imageDir, false, rootDir);
+    if (module == QLatin1String("two-step") && imageDir.isEmpty()) {
+        f.add(Verdict::Broken, QStringLiteral("A two-step theme needs an ImageDir."));
+    } else if (module == QLatin1String("two-step")) {
+        // Without these, show_splash_screen() or the entry fails and Plymouth falls back
+        // to text. Applied in place, two-step reads ImageDir; a copy gets ImageDir
+        // rewritten to its own folder (normalizedPlymouth in planner.cpp).
+        const bool inPlace = !f.theme.installedId.isEmpty();
+        const QDir images(inPlace ? rootDir + QDir::cleanPath(imageDir) : f.root);
+        QStringList missing;
+        for (const QString &name : {QStringLiteral("lock.png"), QStringLiteral("entry.png"), QStringLiteral("bullet.png")}) {
+            if (!images.exists(name))
+                missing << name;
+        }
+        if (!missing.isEmpty()) {
+            const QString last = missing.takeLast();
+            const QString list = missing.isEmpty() ? last : missing.join(QStringLiteral(", ")) + QStringLiteral(" and ") + last;
+            f.add(Verdict::Broken, QStringLiteral("two-step shows no splash without lock.png, entry.png and bullet.png; %1 lacks %2.")
+                                       .arg(inPlace ? QDir::cleanPath(imageDir) : QStringLiteral("this theme"), list));
+        }
+    }
     if (module == QLatin1String("script")) {
         const QString scriptFile = section.readEntry("ScriptFile");
         if (scriptFile.isEmpty())

@@ -1,6 +1,8 @@
 #include "planner.h"
 
 #include "configtext.h"
+#include "genksplash.h"
+#include "genplymouth.h"
 #include "validate.h"
 
 #include <QDir>
@@ -123,6 +125,14 @@ QString pluginId(const QList<PayloadFile> &files)
     return {};
 }
 
+// ksplashrc Engine= for a QML splash: keep what is set (empty means Plasma's
+// default, KSplashQML) unless splashes are switched off.
+QString qmlEngine(const Target &before)
+{
+    const QString engine = before.plasmaSplash->engine;
+    return engine.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0 ? QStringLiteral("KSplashQML") : engine;
+}
+
 } // namespace
 
 Plan planMask(const PlanContext &context, const Mask &mask)
@@ -137,6 +147,57 @@ Plan planMask(const PlanContext &context, const Mask &mask)
     QStringList problems;
     QStringList notes;
     for (auto it = mask.stageSlots.cbegin(); it != mask.stageSlots.cend(); ++it) {
+        if (it.value().kind == Slot::Kind::Design) {
+            QString error;
+            const auto saved = context.library.design(it.value().ref, 0, error);
+            if (!saved || saved->stage != it.key()) {
+                problems << QStringLiteral("The Mask refers to a design that is no longer in the library.");
+                continue;
+            }
+            // Built with its shared logos and palette as they are now (SPEC.md §3).
+            const std::optional<Design> design = context.library.resolved(*saved, problems);
+            const QString stamp = Library::stamp(*design);
+            if (design->stage == Stage::BootMenu) {
+                // ponytail: the boot menu designer and its generator arrive with M3.
+                problems << QStringLiteral("%1: designs for this stage can't be built yet.").arg(design->name);
+                continue;
+            }
+            if (design->stage == Stage::BootSplash) {
+                // Built once; each candidate id only renames the .plymouth file and its paths.
+                QStringList buildProblems;
+                const QString builtAs = QStringLiteral("ekpo-design-v1");
+                const QList<PayloadFile> built = buildPlymouthSplash(*design, builtAs, context.library, context.screen, buildProblems);
+                problems << buildProblems;
+                const auto [id, build] = pickVersion(root + plymouthThemesDir, design->name, [&](const QString &id) { return normalizedPlymouth(built, builtAs, id); });
+                BootSplashTarget splash;
+                splash.label = design->name;
+                splash.theme = id;
+                splash.daemonTheme = id;
+                splash.build = Library::buildHash(build);
+                splash.design = design->id;
+                splash.stamp = stamp;
+                builds.insert(splash.build, build);
+                target.bootSplash = splash;
+                continue;
+            }
+            // A new versioned package whenever the files differ, so every history entry stays restorable.
+            QStringList buildProblems; // the same for every candidate id: keep the last call's
+            const auto [id, build] = pickVersion(context.homeDir + userLookAndFeel, design->name, [&](const QString &id) {
+                buildProblems.clear();
+                return buildPlasmaSplash(*design, id, context.library, buildProblems);
+            });
+            problems << buildProblems;
+            PlasmaSplashTarget plasma;
+            plasma.label = design->name;
+            plasma.engine = qmlEngine(before);
+            plasma.theme = id;
+            plasma.build = Library::buildHash(build);
+            plasma.design = design->id;
+            plasma.stamp = stamp;
+            builds.insert(plasma.build, build);
+            target.plasmaSplash = plasma;
+            continue;
+        }
         if (it.value().kind != Slot::Kind::Import)
             continue;
         const auto found = std::find_if(imports.cbegin(), imports.cend(), [&](const ImportedTheme &t) { return t.id == it.value().ref; });
@@ -191,7 +252,7 @@ Plan planMask(const PlanContext &context, const Mask &mask)
         case Stage::PlasmaSplash: {
             PlasmaSplashTarget plasma;
             plasma.label = theme.name;
-            plasma.engine = before.plasmaSplash->engine.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0 ? QStringLiteral("KSplashQML") : before.plasmaSplash->engine;
+            plasma.engine = qmlEngine(before);
             if (!theme.installedId.isEmpty()) {
                 plasma.theme = theme.installedId;
             } else {
@@ -213,6 +274,27 @@ Plan planMask(const PlanContext &context, const Mask &mask)
     if (target.isEmpty() && problems.isEmpty())
         plan.problems << QStringLiteral("The Mask leaves every stage as it is.");
     return plan;
+}
+
+QMap<Stage, QString> designUpdates(const Library &library)
+{
+    QMap<Stage, QString> updates;
+    const Target last = lastApplied(library);
+    const auto check = [&](Stage stage, const QString &id, const QString &stamp) {
+        QString error;
+        QStringList problems;
+        if (id.isEmpty())
+            return;
+        // ponytail: a changed stamp whose build comes out the same (a key the generator
+        // ignores) still says "update available"; build and compare if that shows up.
+        if (const auto design = library.design(id, 0, error); design && Library::stamp(library.resolved(*design, problems)) != stamp)
+            updates.insert(stage, design->id);
+    };
+    if (last.bootSplash)
+        check(Stage::BootSplash, last.bootSplash->design, last.bootSplash->stamp);
+    if (last.plasmaSplash)
+        check(Stage::PlasmaSplash, last.plasmaSplash->design, last.plasmaSplash->stamp);
+    return updates;
 }
 
 Plan planTarget(const PlanContext &context, const Target &wanted, const QString &title, const QMap<QString, QList<PayloadFile>> &newBuilds)

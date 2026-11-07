@@ -209,3 +209,10 @@ Supersedes round 6 Q2 ("rebuild all installed kernels"). Boot splash applies reb
 The owner installed 0.1.1 and applied, on the real system: a GRUB theme (crossgrub, through Ekpo's drop-in), a Plymouth copy (WindozeXP, newest kernel only), a Plasma splash (Penrose) and a Mask; all worked as intended. WindozeXP doesn't fill the screen: it's an XP-era script theme with fixed-size 4:3 images, which only an editor could scale. `ekpo status` listed the deliberately older initrds under "needs attention"; fixed in 0.2.0 (shown as a note).
 
 0.2.0 closes the remaining M1 gaps: cleanup of unused theme copies and builds, "Restore Original and remove Ekpo's files" (Settings, `ekpo remove-files`), library location and history size, "welcome back" after a reinstall, the About page with a system report, one window at a time, and notifications.
+
+## GRUB font sizes (2026-11-06)
+
+Resolves SPEC.md §10 Q4. Options offered: one font set for all resolutions; theme variants per resolution chosen at boot through `/boot/grub/custom.cfg` (sourced by the stock `41_custom`); building for the monitor's resolution at apply time; rendering static text as images.
+
+- **Decided (owner):** build at apply time. Each apply builds the boot menu for the primary screen's current mode (changeable on the review page), with fonts and `theme.txt` pixel values scaled for it, and pins `GRUB_GFXMODE=<W×H>,auto` in `zz-ekpo.cfg`. After a monitor change the Overview offers "Rebuild for <W×H>". Imported themes keep `2560x1440,1920x1080,1280x720,auto`.
+- *(Claude, read-only):* `/sys/kernel/boot_params/data` is world-readable and holds the framebuffer the boot loader left (`screen_info`: `lfb_width`/`lfb_height` at offsets 0x12/0x14, `orig_video_isVGA` 0x70 = EFI); this boot shows 2560×1440×32. With `gfxpayload=keep` that is GRUB's mode, so Ekpo can tell when the firmware didn't offer the pinned mode and GRUB fell back to `auto`. Round 8 Q1's per-resolution font override stays, as an override of the scaled size.

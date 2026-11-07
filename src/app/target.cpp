@@ -18,16 +18,28 @@ QJsonObject bootMenuJson(const BootMenuTarget &t)
     return o;
 }
 
+// Which design a stage was built from, when it was.
+QJsonObject withDesign(QJsonObject o, const QString &design, const QString &stamp)
+{
+    if (!design.isEmpty()) {
+        o.insert(QStringLiteral("design"), design);
+        o.insert(QStringLiteral("stamp"), stamp);
+    }
+    return o;
+}
+
 QJsonObject bootSplashJson(const BootSplashTarget &t)
 {
-    return {{QStringLiteral("mode"), t.mode}, {QStringLiteral("theme"), t.theme}, {QStringLiteral("daemonTheme"), t.daemonTheme},
-            {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label},
-            {QStringLiteral("initrds"), t.allKernels ? QStringLiteral("all") : QStringLiteral("newest")}};
+    return withDesign({{QStringLiteral("mode"), t.mode}, {QStringLiteral("theme"), t.theme}, {QStringLiteral("daemonTheme"), t.daemonTheme},
+                       {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label},
+                       {QStringLiteral("initrds"), t.allKernels ? QStringLiteral("all") : QStringLiteral("newest")}},
+                      t.design, t.stamp);
 }
 
 QJsonObject plasmaSplashJson(const PlasmaSplashTarget &t)
 {
-    return {{QStringLiteral("theme"), t.theme}, {QStringLiteral("engine"), t.engine}, {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label}};
+    return withDesign({{QStringLiteral("theme"), t.theme}, {QStringLiteral("engine"), t.engine}, {QStringLiteral("build"), t.build}, {QStringLiteral("label"), t.label}},
+                      t.design, t.stamp);
 }
 
 QString str(const QJsonObject &o, const char *key)
@@ -73,11 +85,11 @@ Target Target::fromJson(const QJsonObject &json)
     if (const QJsonValue v = json.value(stageKey(Stage::BootSplash)); v.isObject()) {
         const QJsonObject o = v.toObject();
         t.bootSplash = BootSplashTarget{str(o, "mode"), str(o, "theme"), str(o, "daemonTheme"), str(o, "build"), str(o, "label"),
-                                        str(o, "initrds") != QLatin1String("newest")};
+                                        str(o, "initrds") != QLatin1String("newest"), str(o, "design"), str(o, "stamp")};
     }
     if (const QJsonValue v = json.value(stageKey(Stage::PlasmaSplash)); v.isObject()) {
         const QJsonObject o = v.toObject();
-        t.plasmaSplash = PlasmaSplashTarget{str(o, "theme"), str(o, "engine"), str(o, "build"), str(o, "label")};
+        t.plasmaSplash = PlasmaSplashTarget{str(o, "theme"), str(o, "engine"), str(o, "build"), str(o, "label"), str(o, "design"), str(o, "stamp")};
     }
     return t;
 }
@@ -123,7 +135,7 @@ Target currentTarget(const SystemState &state, const QString &rootDir)
     }
     t.bootSplash = splash;
 
-    PlasmaSplashTarget plasma{state.splashTheme, state.splashEngine, {}, state.splashTheme};
+    PlasmaSplashTarget plasma{state.splashTheme, state.splashEngine, {}, state.splashTheme, {}, {}};
     for (const SystemState::SplashPackage &p : state.splashPackages) {
         if (p.id == state.splashTheme)
             plasma.label = p.name;

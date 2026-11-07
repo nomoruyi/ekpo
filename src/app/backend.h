@@ -1,5 +1,6 @@
 #pragma once
 
+#include "designeditor.h"
 #include "executor.h"
 #include "library.h"
 #include "planner.h"
@@ -27,6 +28,8 @@ class Backend : public QObject
     Q_PROPERTY(QVariantList stageCards READ stageCards NOTIFY changed)
     Q_PROPERTY(QVariantMap system READ system NOTIFY changed)
     Q_PROPERTY(QVariantList imports READ imports NOTIFY changed)
+    Q_PROPERTY(QVariantList designs READ designs NOTIFY changed)
+    Q_PROPERTY(DesignEditor *editor READ editor CONSTANT)
     Q_PROPERTY(QVariantList installed READ installed NOTIFY changed)
     Q_PROPERTY(QVariantList history READ history NOTIFY changed)
     Q_PROPERTY(bool originalAvailable READ originalAvailable NOTIFY changed)
@@ -34,7 +37,7 @@ class Backend : public QObject
     Q_PROPERTY(QVariantMap plan READ plan NOTIFY planChanged)
     Q_PROPERTY(bool applying READ applying NOTIFY applyingChanged)
     Q_PROPERTY(QVariantMap pendingCheck READ pendingCheck NOTIFY changed)
-    Q_PROPERTY(QVariantList masks READ masks NOTIFY changed)
+    Q_PROPERTY(QVariantList masks READ masks NOTIFY changed) // {id, name, slots, update: a design in it changed since it was applied}
     Q_PROPERTY(bool showIntro READ showIntro NOTIFY changed)
     Q_PROPERTY(bool rebuildAllKernels READ rebuildAllKernels NOTIFY changed)
     Q_PROPERTY(bool atOriginal READ atOriginal NOTIFY changed)
@@ -49,6 +52,9 @@ public:
     QVariantList stageCards() const { return m_stageCards; }
     QVariantMap system() const { return m_system; }
     QVariantList imports() const { return m_imports; }
+    // Saved designs and unsaved drafts (version 0): {id, name, stage, version, hasDraft}.
+    QVariantList designs() const { return m_designs; }
+    DesignEditor *editor() { return &m_editor; }
     QVariantList installed() const { return m_installed; }
     QVariantList history() const { return m_history; }
     bool originalAvailable() const;
@@ -101,6 +107,8 @@ public:
 
     // Each prepares the plan property for the review page.
     Q_INVOKABLE void planApplyImport(const QString &id);
+    Q_INVOKABLE void planApplyDesign(const QString &id);
+    Q_INVOKABLE QString removeDesign(const QString &id); // empty on success
     Q_INVOKABLE void planRestoreEntry(int number);
     Q_INVOKABLE void planRestoreOriginal();
     Q_INVOKABLE void applyPlan();
@@ -126,11 +134,13 @@ private:
     QString m_homeDir;
     std::optional<Library> m_library;
     QString m_libraryError;
+    DesignEditor m_editor; // after m_library: it writes its draft on destruction
     SystemState m_state;
 
     QVariantList m_stageCards;
     QVariantMap m_system;
     QVariantList m_imports;
+    QVariantList m_designs;
     QVariantList m_installed;
     QVariantList m_history;
     QVariantMap m_pendingCheck;
