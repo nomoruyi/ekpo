@@ -10,6 +10,19 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSysInfo>
+
+QStringList systemBasics(const QString &rootDir)
+{
+    QString osName;
+    QFile osRelease(rootDir + QStringLiteral("/etc/os-release"));
+    if (osRelease.open(QIODevice::ReadOnly)) {
+        static const QRegularExpression pretty(QStringLiteral("^PRETTY_NAME=\"?([^\"\\n]*)"), QRegularExpression::MultilineOption);
+        osName = pretty.match(QString::fromUtf8(osRelease.readAll())).captured(1);
+    }
+    return {QStringLiteral("Ekpo %1").arg(QCoreApplication::applicationVersion()),
+            QStringLiteral("System: %1, kernel %2").arg(osName.isEmpty() ? QSysInfo::prettyProductName() : osName, QSysInfo::kernelVersion())};
+}
 
 QUrl issueUrl(const QString &title, const QString &body)
 {

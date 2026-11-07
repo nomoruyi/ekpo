@@ -1,5 +1,6 @@
 #include "bugreport.h"
 #include "cli.h"
+#include "executor.h"
 #include "library.h"
 
 #include <QGuiApplication>
@@ -12,11 +13,18 @@
 #include <QQuickWindow>
 #include <QTimer>
 
+#include <cstdio>
 #include <sys/prctl.h>
 #include <unistd.h>
 
 int main(int argc, char *argv[])
 {
+    // Dev builds: a fake root set without dev/env.sh would reach the real system.
+    if (const QString error = sandboxSetupError(); !error.isEmpty()) {
+        std::fprintf(stderr, "ekpo: %s\n", qPrintable(error));
+        return 2;
+    }
+
     // Dev and test runs (dev/env.sh): no core dumps, so a crash can't make
     // systemd-coredump and DrKonqi write outside the repo.
     if (qEnvironmentVariableIsSet("EKPO_DEV"))

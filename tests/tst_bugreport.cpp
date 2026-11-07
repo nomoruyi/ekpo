@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSysInfo>
 #include <QTemporaryDir>
 #include <QUrlQuery>
 
@@ -30,6 +31,7 @@ private Q_SLOTS:
     void savesMarkdownAndScreenshot();
     void keepsRecentMessages();
     void readsHelperLogUnderFakeRoot();
+    void systemBasicsFromOsRelease();
 };
 
 void TestBugReport::encodesIssueLink()
@@ -106,6 +108,20 @@ void TestBugReport::readsHelperLogUnderFakeRoot()
     QCOMPARE(lines.size(), 20);
     QCOMPARE(lines.first(), QStringLiteral("line 6"));
     QCOMPARE(lines.last(), QStringLiteral("line 25"));
+}
+
+// The two lines a report always has, even without the extended system info.
+void TestBugReport::systemBasicsFromOsRelease()
+{
+    QTemporaryDir root;
+    QVERIFY(QDir(root.path()).mkpath(QStringLiteral("etc")));
+    QFile osRelease(root.filePath(QStringLiteral("etc/os-release")));
+    QVERIFY(osRelease.open(QIODevice::WriteOnly));
+    osRelease.write("NAME=\"Ubuntu\"\nPRETTY_NAME=\"Ubuntu 26.04.1 LTS\"\nVERSION_ID=\"26.04\"\n");
+    osRelease.close();
+    QCoreApplication::setApplicationVersion(QStringLiteral("9.8.7"));
+    QCOMPARE(systemBasics(root.path()),
+             (QStringList{QStringLiteral("Ekpo 9.8.7"), QStringLiteral("System: Ubuntu 26.04.1 LTS, kernel %1").arg(QSysInfo::kernelVersion())}));
 }
 
 EKPO_GUI_TEST_MAIN(TestBugReport)

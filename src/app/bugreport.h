@@ -22,6 +22,10 @@ QString localReportsDir();
 // null); returns the .md path, or an empty string and error.
 QString saveReport(const QString &dir, const QString &title, const QString &body, const QImage &screenshot, QString &error);
 
+// The lines every report's System section starts with: Ekpo's version, and the OS
+// (PRETTY_NAME from <rootDir>/etc/os-release) with the running kernel.
+QStringList systemBasics(const QString &rootDir);
+
 // The last Qt messages of this run (kept from installMessageLog() on), oldest first.
 void installMessageLog();
 QStringList recentMessages();

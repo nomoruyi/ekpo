@@ -31,6 +31,10 @@ struct AppEnvironment {
     HelperLauncher launcher;
 };
 AppEnvironment detectEnvironment();
+// Dev builds: a fake root (EKPO_SYSTEM_ROOT, EKPO_SYSTEM_HOME) only counts with
+// EKPO_DEV, so without it Ekpo would act on the real system instead. Returns the
+// error to stop with, or nothing. Always empty in release builds.
+QString sandboxSetupError();
 
 // Moves the Plasma splash packages Ekpo copied (history entries with a build) to
 // the trash, except activeTheme. Returns their ids.

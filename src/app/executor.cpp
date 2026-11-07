@@ -91,6 +91,16 @@ AppEnvironment detectEnvironment()
     return env;
 }
 
+QString sandboxSetupError()
+{
+#ifdef EKPO_SANDBOX
+    if (!qEnvironmentVariableIsSet("EKPO_DEV") && (qEnvironmentVariableIsSet("EKPO_SYSTEM_ROOT") || qEnvironmentVariableIsSet("EKPO_SYSTEM_HOME")))
+        return QStringLiteral("EKPO_SYSTEM_ROOT or EKPO_SYSTEM_HOME is set but EKPO_DEV isn't, so Ekpo would use the real "
+                              "system instead of the fake root. Run \"source dev/env.sh\" in the same command first.");
+#endif
+    return {};
+}
+
 Executor::Executor(Library &library, const QString &homeDir, const HelperLauncher &launcher, QObject *parent)
     : QObject(parent)
     , m_library(library)

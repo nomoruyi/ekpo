@@ -768,21 +768,14 @@ void Backend::startFresh()
     refresh();
 }
 
-QString Backend::systemReport()
+QString Backend::systemReport(bool extended)
 {
-    refresh();
     const QString root = m_rootDir == QLatin1String("/") ? QString() : m_rootDir;
-    QString osName;
-    QFile osRelease(root + QStringLiteral("/etc/os-release"));
-    if (osRelease.open(QIODevice::ReadOnly)) {
-        static const QRegularExpression pretty(QStringLiteral("^PRETTY_NAME=\"?([^\"\\n]*)"), QRegularExpression::MultilineOption);
-        osName = pretty.match(QString::fromUtf8(osRelease.readAll())).captured(1);
-    }
+    QStringList lines = systemBasics(root);
+    if (!extended)
+        return lines.join(QLatin1Char('\n'));
+    refresh();
     const Target current = currentTarget(m_state, m_rootDir);
-    QStringList lines{
-        QStringLiteral("Ekpo %1").arg(QCoreApplication::applicationVersion()),
-        QStringLiteral("System: %1, kernel %2").arg(osName.isEmpty() ? QSysInfo::prettyProductName() : osName, QSysInfo::kernelVersion()),
-    };
     QStringList packages;
     for (const QString &p : {QStringLiteral("grub2-common"), QStringLiteral("plymouth"), QStringLiteral("initramfs-tools"), QStringLiteral("dracut"),
                              QStringLiteral("plasma-workspace")}) {

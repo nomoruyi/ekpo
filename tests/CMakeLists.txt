@@ -26,6 +26,20 @@ add_test(NAME smoke_main_window COMMAND ekpo)
 set_tests_properties(smoke_main_window PROPERTIES ENVIRONMENT
     "${DEV_ENV};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/main.png")
 
+# A fake root without EKPO_DEV must stop the app instead of falling back to the real
+# system. EKPO_DEV is unset explicitly: ctest inherits it from dev/env.sh. (status
+# only reads, so even a broken guard can't change anything.)
+set(NO_DEV_ENV ${DEV_ENV})
+list(FILTER NO_DEV_ENV EXCLUDE REGEX "^EKPO_DEV=")
+add_test(NAME sandbox_needs_dev COMMAND ekpo status)
+set_tests_properties(sandbox_needs_dev PROPERTIES ENVIRONMENT_MODIFICATION "EKPO_DEV=unset:"
+    PASS_REGULAR_EXPRESSION "EKPO_DEV isn't" ENVIRONMENT
+    "${NO_DEV_ENV};EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home")
+add_test(NAME sandbox_needs_dev_gui COMMAND ekpo)
+set_tests_properties(sandbox_needs_dev_gui PROPERTIES ENVIRONMENT_MODIFICATION "EKPO_DEV=unset:"
+    TIMEOUT 30 PASS_REGULAR_EXPRESSION "EKPO_DEV isn't" ENVIRONMENT
+    "${NO_DEV_ENV};QT_QPA_PLATFORM=offscreen;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home")
+
 # Sandbox screenshots of the stage pages: the reference fixture as the system and a
 # copy of tests/fixtures/library (three Boot Splash imports) as the library.
 set(SAMPLE_DATA ${CMAKE_BINARY_DIR}/sample-data)

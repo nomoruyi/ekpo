@@ -20,11 +20,26 @@ Kirigami.Dialog {
         message = "";
         titleField.text = "";
         withScreenshot.checked = screenshot !== "";
+        extendedSystem.checked = false;
+        withLog.checked = false;
         bodyArea.text = [qsTr("## What happened"), "", "", qsTr("## Steps to reproduce"), "1. ", "", qsTr("## What I expected"), "", "",
-                         qsTr("## Where"), where, "", qsTr("## System"), "```", Backend.systemReport(), "```", "",
-                         qsTr("## Log"), "```", Backend.recentLog(), "```"].join("\n");
+                         qsTr("## Where"), where, "", ""].join("\n") + generatedSections();
         open();
         titleField.forceActiveFocus();
+    }
+    // The System and Log sections at the end of the text, as the checkboxes ask. The
+    // version, OS and kernel are always there; the rest only for bugs that need it.
+    function generatedSections() {
+        const parts = [qsTr("## System"), "```", Backend.systemReport(extendedSystem.checked), "```"];
+        if (withLog.checked)
+            parts.push("", qsTr("## Log"), "```", Backend.recentLog(), "```");
+        return parts.join("\n");
+    }
+    // A checkbox changed: rewrite those sections and keep everything above them.
+    function updateSections() {
+        const text = bodyArea.text;
+        const at = text.lastIndexOf("\n" + qsTr("## System") + "\n");
+        bodyArea.text = (at >= 0 ? text.slice(0, at + 1) : text.replace(/\s*$/, "\n\n")) + generatedSections();
     }
     function showMessage(text, type) {
         messageType = type;
@@ -119,6 +134,16 @@ Kirigami.Dialog {
                     visible: withScreenshot.checked
                     opacity: 0.7
                     text: qsTr("GitHub takes no images in a link, so Ekpo puts the screenshot on the clipboard: paste it into the issue text with Ctrl+V.")
+                }
+                QQC2.CheckBox {
+                    id: extendedSystem
+                    text: qsTr("Extended system info: boot setup, packages, kernels, library")
+                    onToggled: dialog.updateSections()
+                }
+                QQC2.CheckBox {
+                    id: withLog
+                    text: qsTr("Logs: Ekpo's last messages and the helper's last lines")
+                    onToggled: dialog.updateSections()
                 }
             }
         }

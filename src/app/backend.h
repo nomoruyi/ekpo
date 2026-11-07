@@ -86,7 +86,7 @@ public:
     Q_INVOKABLE void startFresh();
 
     // For the About page: versions and the current state as plain text.
-    Q_INVOKABLE QString systemReport();
+    Q_INVOKABLE QString systemReport(bool extended = true); // not extended: only Ekpo's version, the OS and the kernel
     Q_INVOKABLE void copyToClipboard(const QString &text);
     // A desktop notification (org.freedesktop.Notifications), for applies that end
     // while the window is in the background.
