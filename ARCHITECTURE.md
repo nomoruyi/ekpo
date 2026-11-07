@@ -2,7 +2,7 @@
 
 Status: **approved by the owner** (2026-11-05). Implements `SPEC.md` (approved). Stack from round 7: C++ / Qt 6.10 Quick + Kirigami 6.24, CMake 4 + Ninja, QtTest.
 
-## 1. Processes
+## 1. Processes 
 
 ```
  ┌──────────────────────────── user session (unprivileged) ───────────────────────────┐
