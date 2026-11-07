@@ -1,0 +1,32 @@
+{
+    "stage": "plasmaSplash",
+    "name": "Dawn",
+    "version": 1,
+    "savedAt": "2026-11-06T18:00:00Z",
+    "content": {
+        "background": {
+            "color": "#102030"
+        },
+        "fadeIn": 400,
+        "elements": [
+            {
+                "type": "text",
+                "text": "Good morning",
+                "size": 5,
+                "color": "#ffeedd",
+                "x": 10,
+                "y": 40,
+                "width": 80,
+                "height": 10
+            },
+            {
+                "type": "spinner",
+                "color": "#ffeedd",
+                "x": 47.5,
+                "y": 60,
+                "width": 5,
+                "height": 5
+            }
+        ]
+    }
+}

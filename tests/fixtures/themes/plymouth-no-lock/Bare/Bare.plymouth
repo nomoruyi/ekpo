@@ -1,0 +1,6 @@
+[Plymouth Theme]
+Name=Bare Fixture
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/Bare

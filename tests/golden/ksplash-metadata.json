@@ -1,0 +1,16 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "nomoruyi"
+            }
+        ],
+        "Description": "Plasma splash made with Ekpo",
+        "Id": "ekpo-dawn-v2",
+        "License": "MIT",
+        "Name": "Dawn",
+        "Version": "3"
+    },
+    "X-Plasma-APIVersion": "2"
+}

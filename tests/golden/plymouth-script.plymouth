@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Night Sky
+Description=Boot splash made with Ekpo
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ekpo-night-v1
+ScriptFile=/usr/share/plymouth/themes/ekpo-night-v1/splash.script
