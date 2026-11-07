@@ -4,6 +4,7 @@
 #include "updater.h"
 #include "library.h"
 
+#include <QApplication>
 #include <QGuiApplication>
 #include <QCryptographicHash>
 #include <QDeadlineTimer>
@@ -45,7 +46,10 @@ int main(int argc, char *argv[])
     }
 
     installMessageLog(); // the last messages go into bug reports
-    QGuiApplication app(argc, argv);
+    // A widgets application, though the window is QML: KDE's platform theme offers its
+    // own file and colour dialogs only to those, and Qt Quick's dialogs fall back to
+    // their plainer QML versions otherwise.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("ekpo"));
     app.setApplicationDisplayName(QStringLiteral("Ekpo"));
     app.setApplicationVersion(QStringLiteral(PROJECT_VERSION));
