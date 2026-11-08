@@ -1,4 +1,4 @@
-qt_add_library(ekpo_core STATIC bugreport.cpp cli.cpp executor.cpp gencommon.cpp gengrub.cpp genksplash.cpp genplymouth.cpp importer.cpp library.cpp media.cpp model.cpp pf2.cpp planner.cpp probe.cpp target.cpp updater.cpp exporter.cpp)
+qt_add_library(ekpo_core STATIC bugreport.cpp cli.cpp executor.cpp gencommon.cpp gengrub.cpp genksplash.cpp genplymouth.cpp importer.cpp library.cpp media.cpp model.cpp pf2.cpp planner.cpp probe.cpp target.cpp updater.cpp exporter.cpp playback.cpp)
 target_compile_definitions(ekpo_core PRIVATE EKPO_HELPER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/ekpo/ekpo-helper")
 # Sandbox mode (EKPO_DEV + EKPO_SYSTEM_ROOT): the test helper and its stub commands.
 # Packages are built with -DEKPO_SANDBOX=OFF (top-level option), so the installed
@@ -17,7 +17,7 @@ target_compile_definitions(ekpo PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
 qt_add_qml_module(ekpo
     URI Ekpo
     SOURCES backend.cpp backend.h designeditor.cpp designeditor.h
-    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml qml/SettingsPage.qml qml/AboutPage.qml qml/EditorPage.qml qml/PlymouthPreview.qml qml/BugReportDialog.qml qml/ReportBugAction.qml qml/UpdateDialog.qml qml/DecimalField.qml qml/ColorPicker.qml qml/VideoSegment.qml qml/AssetsPage.qml qml/ExportDialog.qml
+    QML_FILES qml/Main.qml qml/OverviewPage.qml qml/StagePage.qml qml/StatusLine.qml qml/ReviewPage.qml qml/HistoryPage.qml qml/MasksPage.qml qml/IntroDialog.qml qml/SettingsPage.qml qml/AboutPage.qml qml/EditorPage.qml qml/PlymouthPreview.qml qml/BugReportDialog.qml qml/ReportBugAction.qml qml/UpdateDialog.qml qml/DecimalField.qml qml/ColorPicker.qml qml/VideoSegment.qml qml/AssetsPage.qml qml/ExportDialog.qml qml/BootPlayer.qml
 )
 target_link_libraries(ekpo PRIVATE ekpo_core Qt6::DBus Qt6::Gui Qt6::Network Qt6::Quick Qt6::QuickControls2 Qt6::Widgets) # Widgets: KDE's native dialogs (main.cpp)
 # The import scan only matters for static Qt builds; with the distro's shared Qt it

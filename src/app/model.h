@@ -47,6 +47,7 @@ struct Slot {
     Kind kind = Kind::LeaveAsIs;
     QString ref; // import or design id
 
+    bool operator==(const Slot &) const = default;
     QJsonObject toJson() const;
     static std::optional<Slot> fromJson(const QJsonObject &json);
 };
@@ -132,6 +133,7 @@ struct Settings {
     bool rebuildAllKernels = false; // default of the review's switch for boot splash applies
     bool checkUpdates = true; // ask GitHub for a newer release at start (SPEC.md §4.14)
     int previewResolution = 1440; // the editor opens at it: 1440, 1080 or 720 (SPEC.md §4.13)
+    QStringList seenKernels; // installed kernels Ekpo told about (SPEC.md §4.6)
 
     QJsonObject toJson() const;
     static Settings fromJson(const QJsonObject &json);

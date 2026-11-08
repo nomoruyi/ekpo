@@ -6,6 +6,7 @@
 #include <functional>
 #include <QImage>
 #include <QJsonArray>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
@@ -20,6 +21,8 @@ private Q_SLOTS:
     void menuWidensForLongEntries();
     void tooLongForAnyWidth();
     void selectionStyles();
+    void progressStyles();
+    void textEffects();
     void findsClippedEntries();
     void rendersPreview();
     void gradientBackground();
@@ -113,7 +116,9 @@ void TestGenGrub::matchesGoldenAndValidates()
         paths << f.path;
     // One .pf2 per size: menu 31 px, countdown 23 px, help line 20 px.
     QCOMPARE(paths, (QStringList{QStringLiteral("f1-20.pf2"), QStringLiteral("f1-23.pf2"), QStringLiteral("f1-31.pf2"), QStringLiteral("icons/kubuntu.png"),
-                                 QStringLiteral("image-1.png"), QStringLiteral("select_c.png"), QStringLiteral("select_e.png"), QStringLiteral("select_n.png"),
+                                 QStringLiteral("image-1.png"), QStringLiteral("item_c.png"), QStringLiteral("item_e.png"), QStringLiteral("item_n.png"),
+                                 QStringLiteral("item_ne.png"), QStringLiteral("item_nw.png"), QStringLiteral("item_s.png"), QStringLiteral("item_se.png"),
+                                 QStringLiteral("item_sw.png"), QStringLiteral("item_w.png"), QStringLiteral("select_c.png"), QStringLiteral("select_e.png"), QStringLiteral("select_n.png"),
                                  QStringLiteral("select_ne.png"), QStringLiteral("select_nw.png"), QStringLiteral("select_s.png"), QStringLiteral("select_se.png"),
                                  QStringLiteral("select_sw.png"), QStringLiteral("select_w.png"), QStringLiteral("theme.txt")}));
     QVERIFY(layout.fits);
@@ -153,7 +158,7 @@ void TestGenGrub::tooLongForAnyWidth()
 
 void TestGenGrub::selectionStyles()
 {
-    for (const char *style : {"flat", "rounded", "glow"}) {
+    for (const char *style : {"flat", "rounded", "glow", "outline", "underline", "bar"}) {
         Design d = design();
         QJsonArray elements = d.content.value(QStringLiteral("elements")).toArray();
         QJsonObject menu = elements[1].toObject();
@@ -169,12 +174,106 @@ void TestGenGrub::selectionStyles()
         QCOMPARE(centre.size(), QSize(1, 1));
         QCOMPARE(QImage::fromData(fileData(files, QStringLiteral("select_w.png"))).height(), 1);
         QCOMPARE(corner.width(), QImage::fromData(fileData(files, QStringLiteral("select_e.png"))).width());
-        QCOMPARE(centre.pixelColor(0, 0).red(), 255);
-        if (QLatin1String(style) == QLatin1String("flat"))
+        // The other entries' boxes: as big, and clear.
+        const QImage itemCorner = QImage::fromData(fileData(files, QStringLiteral("item_nw.png")));
+        QCOMPARE(itemCorner.size(), corner.size());
+        QCOMPARE(qAlpha(itemCorner.pixel(0, 0)), 0);
+        const QLatin1String name(style);
+        if (name == QLatin1String("outline") || name == QLatin1String("underline")) {
+            QCOMPARE(qAlpha(centre.pixel(0, 0)), 0); // no fill
+            const QImage edge = QImage::fromData(fileData(files, name == QLatin1String("outline") ? QStringLiteral("select_n.png") : QStringLiteral("select_s.png")));
+            QVERIFY(edge.pixelColor(0, 1).red() > 200 && qAlpha(edge.pixel(0, 1)) > 200); // the line along the edge
+        } else {
+            QCOMPARE(centre.pixelColor(0, 0).red(), 255);
+        }
+        if (name == QLatin1String("flat"))
             QCOMPARE(corner.size(), QSize(1, 1));
-        else // rounded and glow: the outermost corner pixel stays clear
+        else if (name == QLatin1String("bar")) // full colour on the left, faint elsewhere
+            QVERIFY(qAlpha(QImage::fromData(fileData(files, QStringLiteral("select_w.png"))).pixel(0, 0)) == 255 && qAlpha(centre.pixel(0, 0)) < 128);
+        else if (name != QLatin1String("underline")) // the outermost corner pixel stays clear
             QVERIFY(corner.width() > 1 && qAlpha(corner.pixel(0, 0)) < 128);
     }
+}
+
+void TestGenGrub::progressStyles()
+{
+    // The countdown bar (element 3) as a ring of dots, and with round ends.
+    for (const char *style : {"ring", "rounded"}) {
+        Design d = design();
+        QJsonArray elements = d.content.value(QStringLiteral("elements")).toArray();
+        QJsonObject bar = elements[3].toObject();
+        QCOMPARE(bar.value(QStringLiteral("type")).toString(), QStringLiteral("progress"));
+        bar.insert(QStringLiteral("style"), QLatin1String(style));
+        bar.insert(QStringLiteral("height"), 10);
+        elements[3] = bar;
+        d.content.insert(QStringLiteral("elements"), elements);
+        QStringList problems;
+        const QList<PayloadFile> files = buildBootMenu(d, *m_library, m_screen, entries(), problems);
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        const QString theme = QString::fromUtf8(fileData(files, QStringLiteral("theme.txt")));
+        QCOMPARE(validateTheme(ThemeTarget::Grub, QStringLiteral("ekpo-night-v1"), files), QStringList());
+        const QImage image = renderBootMenu(files, m_screen, entries());
+        if (const QString save = qEnvironmentVariable("EKPO_SAVE_PREVIEW"); !save.isEmpty())
+            image.save(QString(save).replace(QLatin1String(".png"), QStringLiteral("-%1.png").arg(QLatin1String(style))));
+        if (QLatin1String(style) == QLatin1String("ring")) {
+            QVERIFY(theme.contains(QLatin1String("+ circular_progress {\n    id = \"__timeout__\"")));
+            QVERIFY(theme.contains(QLatin1String("ticks_disappear = true")));
+            QVERIFY(!theme.contains(QLatin1String("progress_bar")));
+            const QImage tick = QImage::fromData(fileData(files, QStringLiteral("progress-1-tick.png")));
+            QCOMPARE(tick.pixelColor(tick.width() / 2, tick.height() / 2), QColor(QStringLiteral("#3daee9")));
+            // Half the time gone: the dots right of the top are gone, those on the left stay.
+            static const QRegularExpression place(QStringLiteral("circular_progress \\{[^}]*left = (\\d+)\\n    top = (\\d+)\\n    width = (\\d+)"));
+            const auto m = place.match(theme);
+            QVERIFY(m.hasMatch());
+            const int left = m.captured(1).toInt(), top = m.captured(2).toInt(), side = m.captured(3).toInt();
+            const int radius = side / 2 - tick.width() / 2 - 1;
+            const auto dotAt = [&](int x) {
+                for (int y = top + side / 2 - 2 * tick.height(); y <= top + side / 2 + 2 * tick.height(); ++y)
+                    if (image.pixelColor(x, y) == QColor(QStringLiteral("#3daee9")))
+                        return true;
+                return false;
+            };
+            QVERIFY(dotAt(left + side / 2 - radius));
+            QVERIFY(!dotAt(left + side / 2 + radius));
+        } else {
+            QVERIFY(theme.contains(QLatin1String("bar_style = \"progress-1-track_*.png\"")));
+            QVERIFY(theme.contains(QLatin1String("highlight_overlay = true")));
+            const QImage corner = QImage::fromData(fileData(files, QStringLiteral("progress-1-fill_nw.png")));
+            QVERIFY(corner.width() > 1 && qAlpha(corner.pixel(0, 0)) < 128); // round
+        }
+    }
+}
+
+void TestGenGrub::textEffects()
+{
+    // GRUB's labels are plain: text with an outline is drawn into background.png.
+    Design d = design();
+    QJsonArray elements = d.content.value(QStringLiteral("elements")).toArray();
+    QJsonObject help = elements[4].toObject();
+    QCOMPARE(help.value(QStringLiteral("type")).toString(), QStringLiteral("text"));
+    help.insert(QStringLiteral("outline"), QStringLiteral("#ff0000"));
+    help.insert(QStringLiteral("size"), 4);
+    elements[4] = help;
+    d.content.insert(QStringLiteral("elements"), elements);
+    QStringList problems;
+    const QList<PayloadFile> files = buildBootMenu(d, *m_library, m_screen, entries(), problems);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    const QString theme = QString::fromUtf8(fileData(files, QStringLiteral("theme.txt")));
+    QVERIFY(!theme.contains(QLatin1String("Enter: start")));
+    QVERIFY(theme.contains(QLatin1String("desktop-image: \"background.png\"")));
+    QCOMPARE(validateTheme(ThemeTarget::Grub, QStringLiteral("ekpo-night-v1"), files), QStringList());
+    const QImage background = QImage::fromData(fileData(files, QStringLiteral("background.png")));
+    QCOMPARE(background.size(), m_screen);
+    QCOMPARE(background.pixelColor(5, 5), QColor(QStringLiteral("#102030")));
+    int red = 0, white = 0;
+    for (int y = int(1440 * 0.92); y < int(1440 * 0.96); ++y)
+        for (int x = 256; x < 2304; ++x) {
+            const QColor c = background.pixelColor(x, y);
+            red += c.red() > 200 && c.green() < 80;
+            white += c.lightness() > 230;
+        }
+    QVERIFY(red > 50);
+    QVERIFY(white > 50);
 }
 
 void TestGenGrub::findsClippedEntries()
@@ -198,8 +297,9 @@ void TestGenGrub::rendersPreview()
         image.save(save);
     QCOMPARE(image.size(), m_screen);
     QCOMPARE(image.pixelColor(5, 5), QColor(QStringLiteral("#102030"))); // desktop-color
-    // The first entry is selected: the selection's colour fills its row's middle.
-    const int firstRow = layout.menu.y() + 10 + 55 / 2;
+    // The first entry is selected: the selection's colour fills its row's middle, below
+    // the box's top border (14 px for a 55 px rounded entry).
+    const int firstRow = layout.menu.y() + 10 + 14 + 55 / 2;
     QCOMPARE(image.pixelColor(layout.menu.right() - 40, firstRow), QColor(QStringLiteral("#3daee9")));
     // Text in the item colour somewhere on the second row (not selected).
     bool text = false;

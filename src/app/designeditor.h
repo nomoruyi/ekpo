@@ -36,7 +36,7 @@ class DesignEditor : public QObject
     Q_PROPERTY(bool recovered READ recovered NOTIFY changed) // opened from the crash draft
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY changed)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY changed)
-    Q_PROPERTY(QVariantList versions READ versions NOTIFY changed) // {version, savedAt}
+    Q_PROPERTY(QVariantList versions READ versions NOTIFY changed) // {version, savedAt, thumbnail}
     Q_PROPERTY(QVariantMap assets READ assets NOTIFY changed) // hash → {name, kind, url}
     // Shared logos and palettes (SPEC.md §3): id → {kind: "logo"|"palette", name, asset,
     // colours: {background, accent, text}, uses: designs that link it}
@@ -104,6 +104,10 @@ public:
     // A new, never saved copy of a design's current version, links included.
     Q_INVOKABLE QString duplicate(const QString &id);
     Q_INVOKABLE QString save(); // the next version; empty on success
+    // Where the picture of the version just saved goes (QML grabs the canvas), and the
+    // call after it is written, so Versions… shows it.
+    Q_INVOKABLE QString thumbnailFile() const;
+    Q_INVOKABLE void thumbnailSaved();
     Q_INVOKABLE void close(); // keeps the draft of unsaved changes; cancels a video conversion
     // Drops unsaved changes and the draft; a design that was never saved closes.
     Q_INVOKABLE void discard();
@@ -126,6 +130,14 @@ public:
     // everything else). Returns the new index.
     Q_INVOKABLE int addElement(const QString &type, const QVariantMap &values = {});
     Q_INVOKABLE void removeElement(int index);
+    // A copy right after it, a little lower and to the right; the new index, or -1
+    // (a boot menu has one menu). Ctrl+D in the editor.
+    Q_INVOKABLE int duplicateElement(int index);
+    // The element's look without its content or place: colours, font, size, alignment,
+    // styles and effects. Pasted onto the same type all of it applies, onto another only
+    // what every type shares (colour, font, size, alignment, text effects).
+    Q_INVOKABLE QVariantMap elementStyle(int index) const;
+    Q_INVOKABLE void pasteStyle(int index, const QVariantMap &style);
     Q_INVOKABLE void moveElement(int from, int to);
     // Replaces the content and name with a saved version's, as one undoable edit.
     Q_INVOKABLE void restoreVersion(int version);
@@ -167,6 +179,8 @@ public:
     // linkPalette("") unlinks (palette colours become the design's own).
     Q_INVOKABLE QString newPalette(const QString &name);
     Q_INVOKABLE void linkPalette(const QString &id);
+    // A palette from an image's main colours (gencommon.h), linked to the open design.
+    Q_INVOKABLE QString newPaletteFromImage(const QUrl &file);
     // Deletes a palette; the open design keeps its colours as its own. Refused while
     // another design, a saved version or a draft links it. Empty on success.
     Q_INVOKABLE QString deletePalette(const QString &id);

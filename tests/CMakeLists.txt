@@ -103,6 +103,11 @@ add_test(NAME smoke_export COMMAND ekpo)
 set_tests_properties(smoke_export PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EXPORT=mask:00000000-0000-0000-0000-0000000000a1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/export.png")
 
+# Play the Boot for the sample Mask: the player over the window, on its boot menu.
+add_test(NAME smoke_play COMMAND ekpo)
+set_tests_properties(smoke_play PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_PLAY=mask:00000000-0000-0000-0000-0000000000a1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/play.png")
+
 # Report a Bug from the Overview: the dialog with its screenshot preview.
 add_test(NAME smoke_bug_report COMMAND ekpo)
 set_tests_properties(smoke_bug_report PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT

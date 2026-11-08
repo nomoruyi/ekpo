@@ -391,7 +391,7 @@ Plan planTarget(const PlanContext &context, const Target &wanted, const QString 
         plan.stages << stage;
     }
 
-    if (wanted.bootSplash && !wanted.bootSplash->sameState(*plan.before.bootSplash)) {
+    if (wanted.bootSplash && (context.rebuildSplash || !wanted.bootSplash->sameState(*plan.before.bootSplash))) {
         const BootSplashTarget &splash = *wanted.bootSplash;
         PlannedStage stage{Stage::BootSplash, plan.before.bootSplash->label, splash.label, {}, {}};
         request.plymouth = Request::Plymouth{splash.mode, splash.theme, splash.daemonTheme, context.allKernels};
@@ -551,13 +551,15 @@ QList<Stage> driftedStages(const Library &library, const Target &current)
     return drifted;
 }
 
-QStringList keptThemes(const Library &library, const Target &newTarget)
+QStringList keptThemes(const Library &library, const std::optional<Target> &newTarget)
 {
     QStringList errors;
     const QList<HistoryEntry> history = library.history(errors); // newest first
-    QList<Target> targets{newTarget};
-    // The new entry pushes the oldest out once history is full.
-    for (qsizetype i = 0; i < history.size() && i < library.settings().historySize - 1; ++i)
+    QList<Target> targets;
+    if (newTarget)
+        targets << *newTarget;
+    // A new entry pushes the oldest out once history is full.
+    for (qsizetype i = 0; i < history.size() && i < library.settings().historySize - (newTarget ? 1 : 0); ++i)
         targets << Target::fromJson(history[i].state.value(QStringLiteral("target")).toObject());
     QStringList kept;
     for (const Target &t : targets) {
@@ -569,6 +571,19 @@ QStringList keptThemes(const Library &library, const Target &newTarget)
         }
     }
     return kept;
+}
+
+QStringList oldSystemCopies(const Library &library, const QString &rootDir, const Target &current)
+{
+    QStringList kept = keptThemes(library, std::nullopt);
+    kept << (current.bootMenu ? current.bootMenu->theme : QString()) << (current.bootSplash ? current.bootSplash->theme : QString())
+         << (current.bootSplash ? current.bootSplash->daemonTheme : QString());
+    QStringList old;
+    for (const QString &id : installedEkpoCopies(rootDir)) {
+        if (!kept.contains(id) && !old.contains(id))
+            old << id;
+    }
+    return old;
 }
 
 QStringList installedEkpoCopies(const QString &rootDir)
@@ -593,4 +608,31 @@ bool looksLikeFreshSystem(const PlanContext &context)
         return false;
     const QList<Stage> drifted = driftedStages(context.library, currentTarget(context.state, context.rootDir));
     return drifted.contains(Stage::BootMenu) || drifted.contains(Stage::BootSplash);
+}
+
+QMap<Stage, Slot> slotsFromTarget(const Library &library, const Target &target)
+{
+    QStringList errors;
+    const QList<ImportedTheme> imports = library.imports(errors);
+    const auto slotFor = [&](Stage stage, const QString &design, const QString &theme, const QString &label) -> std::optional<Slot> {
+        QString error;
+        if (!design.isEmpty() && library.design(design, 0, error))
+            return Slot{Slot::Kind::Design, design};
+        for (const ImportedTheme &t : imports) {
+            if (t.stage == stage && ((!t.installedId.isEmpty() && t.installedId == theme) || t.name == label))
+                return Slot{Slot::Kind::Import, t.id};
+        }
+        return std::nullopt;
+    };
+    QMap<Stage, Slot> result;
+    if (target.bootMenu && !target.bootMenu->original)
+        if (const auto slot = slotFor(Stage::BootMenu, target.bootMenu->design, target.bootMenu->theme, target.bootMenu->label))
+            result.insert(Stage::BootMenu, *slot);
+    if (target.bootSplash)
+        if (const auto slot = slotFor(Stage::BootSplash, target.bootSplash->design, target.bootSplash->theme, target.bootSplash->label))
+            result.insert(Stage::BootSplash, *slot);
+    if (target.plasmaSplash)
+        if (const auto slot = slotFor(Stage::PlasmaSplash, target.plasmaSplash->design, target.plasmaSplash->theme, target.plasmaSplash->label))
+            result.insert(Stage::PlasmaSplash, *slot);
+    return result;
 }

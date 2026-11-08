@@ -1,6 +1,7 @@
 #include "executor.h"
 #include "golden.h"
 #include "importer.h"
+#include "playback.h"
 #include "sysinfo.h"
 #include "testmain.h"
 
@@ -37,6 +38,7 @@ private Q_SLOTS:
     void designAppliesAsBootSplash();
     void sharedChangeMeansUpdate();
     void designAppliesAsBootMenu();
+    void playsTheBoot();
 
 private:
     QString at(const QString &abs) const { return m_root + abs; }
@@ -185,6 +187,8 @@ void TestExecutor::appliesAndRestoresOriginal()
     const auto history = m_library->history(errors);
     QCOMPARE(history.size(), 1);
     QVERIFY(!history.first().state.value(QStringLiteral("menuEntries")).toArray().isEmpty());
+    // "New Mask from What's Applied" gives the same slots back.
+    QCOMPARE(slotsFromTarget(*m_library, Target::fromJson(history.first().state.value(QStringLiteral("target")).toObject())), mask.stageSlots);
 
     // Restoring Original puts every stage back.
     const SystemState state = probe();
@@ -193,6 +197,9 @@ void TestExecutor::appliesAndRestoresOriginal()
     QVERIFY2(execute(restore, &error, &number), qPrintable(error));
     QCOMPARE(number, 2);
     QVERIFY(!QFile::exists(at(QStringLiteral("/etc/default/grub.d/zz-ekpo.cfg"))));
+    // Original's boot splash is Fallout, which is imported; GRUB's own settings aren't a theme Ekpo set.
+    QCOMPARE(slotsFromTarget(*m_library, Target::fromJson(m_library->history(errors).first().state.value(QStringLiteral("target")).toObject())),
+             (QMap<Stage, Slot>{{Stage::BootSplash, Slot{Slot::Kind::Import, m_fallout}}}));
     const auto alt = readAlternative(m_root, QStringLiteral("default.plymouth"));
     QCOMPARE(alt->mode, QStringLiteral("manual"));
     QCOMPARE(alt->value, QStringLiteral("/usr/share/plymouth/themes/fallout/fallout.plymouth"));
@@ -240,6 +247,21 @@ void TestExecutor::activeThemeIsNoChange()
     const Plan p = plan(Mask{{}, QStringLiteral("Same"), {{Stage::BootSplash, Slot{Slot::Kind::Import, m_fallout}}}});
     QVERIFY(p.stages.isEmpty());
     QVERIFY(!p.canApply());
+
+    // Unless the initrds should get it again (a new kernel's, say): the same selection, rebuilt.
+    const SystemState state = probe();
+    PlanContext context{*m_library, state, m_root, m_home};
+    context.rebuildSplash = true;
+    Target target;
+    target.bootSplash = currentTarget(state, m_root).bootSplash;
+    const Plan rebuild = planTarget(context, target, QStringLiteral("Rebuild"));
+    QVERIFY2(rebuild.canApply(), qPrintable(rebuild.problems.join(QLatin1Char('\n'))));
+    QCOMPARE(rebuild.stages.size(), 1);
+    QVERIFY(rebuild.commands.contains(QStringLiteral("update-initramfs -u -k all")));
+    QVERIFY(rebuild.payload.isEmpty()); // nothing new to install
+    QString error;
+    QVERIFY2(execute(rebuild, &error), qPrintable(error));
+    QCOMPARE(currentTarget(probe(), m_root).bootSplash->theme, QStringLiteral("fallout"));
 }
 
 void TestExecutor::asksAfterRebootAndSeesOutsideChanges()
@@ -345,6 +367,12 @@ void TestExecutor::historyLimitPrunesCopiesAndBuilds()
     QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-vortex-ubuntu-v1"))));
     QVERIFY(QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-fixture-v1"))));
     QCOMPARE(QDir(m_library->path() + QStringLiteral("/builds")).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 2);
+
+    // A copy left over (say, a prune that failed) is an old copy; those in use aren't.
+    const Target current = currentTarget(probe(), m_root);
+    QVERIFY(oldSystemCopies(*m_library, m_root, current).isEmpty());
+    QVERIFY(QDir().mkpath(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-stale-v1"))));
+    QCOMPARE(oldSystemCopies(*m_library, m_root, current), QStringList{QStringLiteral("ekpo-stale-v1")});
 }
 
 void TestExecutor::welcomeBackAfterReinstall()
@@ -424,6 +452,19 @@ void TestExecutor::designAppliesAsPlasmaSplash()
     QVERIFY2(execute(second, &error), qPrintable(error));
     QCOMPARE(ksplash("Theme"), QStringLiteral("ekpo-dawn-v2"));
     QVERIFY(QFile::exists(v1)); // history entry 1 still needs it
+    QVERIFY(oldPlasmaCopies(*m_library, m_home).isEmpty());
+
+    // Once no history entry needs them, the next apply moves the old copies to the trash.
+    Settings settings = m_library->settings();
+    settings.historySize = 1;
+    QVERIFY(m_library->saveSettings(settings, error));
+    design.content.insert(QStringLiteral("fadeIn"), 600);
+    QVERIFY(m_library->saveDesign(design, error));
+    QVERIFY2(execute(plan(mask), &error), qPrintable(error));
+    QCOMPARE(ksplash("Theme"), QStringLiteral("ekpo-dawn-v3"));
+    QVERIFY(!QFile::exists(v1));
+    QVERIFY(!QFile::exists(m_home + QStringLiteral("/.local/share/plasma/look-and-feel/ekpo-dawn-v2")));
+    QVERIFY(QFile::exists(m_home + QStringLiteral("/.local/share/plasma/look-and-feel/ekpo-dawn-v3")));
 
     // A Mask whose design is gone can't be applied.
     const Plan missing = plan(Mask{{}, QStringLiteral("Gone"), {{Stage::PlasmaSplash, Slot{Slot::Kind::Design, QStringLiteral("nope")}}}});
@@ -548,6 +589,45 @@ void TestExecutor::designAppliesAsBootMenu()
     const Plan imported = plan(Mask{{}, QStringLiteral("Hollow"), {{Stage::BootMenu, Slot{Slot::Kind::Import, m_hollow}}}});
     QCOMPARE(imported.target.bootMenu->gfxmode, defaultGfxmode);
     QVERIFY(imported.screen.isEmpty());
+}
+
+void TestExecutor::playsTheBoot()
+{
+    // The applied look: the reference system's GRUB theme and Plymouth theme, Breeze.
+    QTemporaryDir out;
+    const SystemState state = probe();
+    QVariantList steps = playbackSteps(*m_library, state, m_root, m_home, {}, out.path());
+    QCOMPARE(steps.size(), 3);
+    QCOMPARE(steps[0].toMap().value(QStringLiteral("stage")).toString(), QStringLiteral("bootMenu"));
+    QCOMPARE(steps[1].toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("none")); // not a splash Ekpo made
+    QVERIFY(!steps[1].toMap().value(QStringLiteral("note")).toString().isEmpty());
+    QCOMPARE(steps[2].toMap().value(QStringLiteral("stage")).toString(), QStringLiteral("plasmaSplash"));
+
+    // A Mask of designs: each stage drawn as Ekpo previews it; the boot menu stays as applied.
+    Design splash;
+    splash.stage = Stage::BootSplash;
+    splash.name = QStringLiteral("Night");
+    splash.content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}},
+                      {QStringLiteral("elements"), QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("x"), 48.5},
+                                                                          {QStringLiteral("y"), 60}, {QStringLiteral("width"), 3}, {QStringLiteral("height"), 5}}}}};
+    Design plasma;
+    plasma.stage = Stage::PlasmaSplash;
+    plasma.name = QStringLiteral("Dawn");
+    plasma.content = {{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#102030")}}}, {QStringLiteral("elements"), QJsonArray()}};
+    QString error;
+    QVERIFY(m_library->saveDesign(splash, error));
+    QVERIFY(m_library->saveDesign(plasma, error));
+    steps = playbackSteps(*m_library, state, m_root, m_home,
+                          {{Stage::BootMenu, Slot{}}, {Stage::BootSplash, Slot{Slot::Kind::Design, splash.id}}, {Stage::PlasmaSplash, Slot{Slot::Kind::Design, plasma.id}}},
+                          out.path());
+    const QVariantMap boot = steps[1].toMap(), desktop = steps[2].toMap();
+    QCOMPARE(boot.value(QStringLiteral("kind")).toString(), QStringLiteral("plymouth"));
+    QCOMPARE(boot.value(QStringLiteral("label")).toString(), QStringLiteral("Night"));
+    const QVariantMap layout = boot.value(QStringLiteral("layout")).toMap();
+    QVERIFY(QFile::exists(layout.value(QStringLiteral("background")).toUrl().toLocalFile()));
+    QCOMPARE(layout.value(QStringLiteral("frames")).toList().size(), 60);
+    QCOMPARE(desktop.value(QStringLiteral("kind")).toString(), QStringLiteral("qml"));
+    QVERIFY(QFile::exists(desktop.value(QStringLiteral("source")).toUrl().toLocalFile()));
 }
 
 EKPO_GUI_TEST_MAIN(TestExecutor)

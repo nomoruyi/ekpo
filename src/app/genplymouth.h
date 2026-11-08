@@ -21,25 +21,46 @@
 //                in degrees as in CSS (180, the default, top to bottom; gencommon.h),
 //                image: <asset hash, optional; covers the screen>}
 //   elements: [
-//     {type: "image", asset, x, y, width, height}                       (aspect ratio kept)
+//     {type: "image", asset, animation: "" (still) | gencommon.h's imageAnimations,
+//      x, y, width, height}                                             (aspect ratio kept)
 //     {type: "text", text, font: <asset hash, optional>, size: % of screen height,
 //      color, align: "left" | "center" | "right", x, y, width, height}
-//     {type: "spinner", color, x, y, width, height}                     } one animation,
+//     {type: "spinner", color, style, speed, asset (style "image"), x, y, width, height}  } one
+//                                                                      } animation,
 //     {type: "frames", frames: [<image asset>, …], seconds, x, y, width, height}  } centred in its box
-//     {type: "progress", color, background, x, y, width, height}        at most one
+//     {type: "progress", color, background, style: "flat" (default) | "rounded" | "glow"
+//      | "segmented", x, y, width, height}                               at most one
 //   ]
 //   hideMessages: status messages at boot, shutdown and reboot (password prompts
 //                 always show)
 //
-// Module: two-step, whose throbber always loops in 2.0 s; the script module when a
-// frames animation loops in any other time (notes/spikes-2026-11-06.md). Frames are
-// drawn at their own size, shrunk to fit their box if larger.
+// Module: two-step, whose throbber always loops in 2.0 s and whose bar is flat; the
+// script module when a frames animation loops in any other time (notes/spikes-2026-11-06.md)
+// or the bar has a style or an image moves. Frames are drawn at their own size, shrunk
+// to fit their box if larger.
 
 // Boot splash themes are built for this screen. ponytail: this machine's mode; the
 // probe reads the primary screen's with M3 (SPEC.md §4.5).
 inline constexpr QSize builtScreen{2560, 1440};
 // What Plymouth may hold in memory before it shows: every frame, decoded (SPEC.md §4.6).
 inline constexpr qint64 plymouthMemoryBudget = qint64(300) << 20;
+
+// How a styled progress bar is put together (the script module draws it from images).
+struct ProgressShape {
+    int caps = 0; // rounded, glow: the width of each end; the middle is stretched
+    int margin = 0; // glow: how far it reaches beyond the bar
+    int segments = 0; // segmented: how many, each this wide, this far apart
+    int segmentWidth = 0;
+    int gap = 0;
+};
+
+// An image the script module moves (gencommon.h), drawn at its own size.
+struct PlymouthImage {
+    QString file;
+    QPointF centre; // fractions of the screen
+    QSize size;
+    QString animation;
+};
 
 // What Plymouth will draw, for the editor's preview and meters.
 struct PlymouthLayout {
@@ -51,6 +72,9 @@ struct PlymouthLayout {
     std::optional<QRect> progress; // pixels on the built screen
     QColor progressColour;
     QColor progressBackground;
+    QString progressStyle; // flat, rounded, glow, segmented
+    ProgressShape progressShape;
+    QList<PlymouthImage> images;
     bool hideMessages = false;
     qint64 bytes = 0; // all files: counts against the 15 MB cap
     qint64 decodedBytes = 0; // background and frames as Plymouth holds them in memory

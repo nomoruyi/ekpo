@@ -104,6 +104,7 @@ private Q_SLOTS:
     void rebuildsOnlyTheNewestKernel();
     void newestOnlyRollbackTouchesOnlyThatKernel();
     void prunesCopiesHistoryNoLongerNeeds();
+    void prunesWithoutApplying();
     void reappliesSameVersion();
     void failedRebuildRollsBack();
     void sameIdDifferentContentRollsBack();
@@ -345,6 +346,26 @@ void TestHelper::prunesCopiesHistoryNoLongerNeeds()
     QVERIFY(!QFileInfo::exists(at(QStringLiteral("/usr/share/plymouth/themes/ekpo-dots-v1"))));
     QVERIFY(!alternativeState().contains(QLatin1String("ekpo-dots-v1")));
     QVERIFY(QFileInfo::exists(at(QStringLiteral("/boot/grub/themes/ekpo-day-v1")))); // still selected
+}
+
+void TestHelper::prunesWithoutApplying()
+{
+    // Two GRUB copies, the newer selected; prune alone removes the older one, keeps
+    // the selected one although keep doesn't name it, and touches nothing else.
+    QCOMPARE(run(input(grubRequest(), grubFiles())).exitCode, 0);
+    QCOMPARE(run(input(grubRequest(QStringLiteral("ekpo-day-v1")), grubFiles(QStringLiteral("ekpo-day-v1")))).exitCode, 0);
+    const auto before = snapshot();
+    const qsizetype grubRuns = readAll(at(QStringLiteral("/var/log/ekpo-helper.log"))).count("update-grub");
+    Request prune;
+    prune.operation = Request::Operation::Prune;
+    prune.keep = QStringList();
+    const Run r = run(input(prune));
+    QVERIFY2(r.exitCode == 0, qPrintable(r.result.value(QStringLiteral("error")).toString()));
+    QCOMPARE(r.result.value(QStringLiteral("details")).toObject().value(QStringLiteral("pruned")).toArray(), QJsonArray{grubId});
+    QVERIFY(QFileInfo::exists(at(QStringLiteral("/boot/grub/themes/ekpo-day-v1"))));
+    for (const QString &path : changedPaths(before, snapshot()))
+        QVERIFY2(path.startsWith(QLatin1String("boot/grub/themes/ekpo-night-v1/")), qPrintable(path));
+    QCOMPARE(readAll(at(QStringLiteral("/var/log/ekpo-helper.log"))).count("update-grub"), grubRuns); // no grub.cfg rebuild
 }
 
 void TestHelper::reappliesSameVersion()

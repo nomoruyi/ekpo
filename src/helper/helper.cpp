@@ -90,6 +90,7 @@ public:
 
     HelperResult apply(const Request &request, const QMap<QString, QList<PayloadFile>> &themes);
     QStringList prune(const Request &request, const QStringList &keep);
+    HelperResult pruneOnly(const QStringList &keep);
     HelperResult recover();
     HelperResult uninstall();
 
@@ -526,6 +527,19 @@ QStringList Helper::prune(const Request &request, const QStringList &keep)
     return removed;
 }
 
+// "Remove Old Theme Copies": the same pruning without an apply.
+HelperResult Helper::pruneOnly(const QStringList &keep)
+{
+    log(QStringLiteral("prune: keeping %1").arg(keep.join(QLatin1Char(' '))));
+    QStringList removed;
+    try {
+        removed = prune({}, keep);
+    } catch (const StepError &e) {
+        return {Outcome::Rejected, e.message, {}};
+    }
+    return {Outcome::Done, {}, {{QStringLiteral("pruned"), QJsonArray::fromStringList(removed)}}};
+}
+
 // Removes what Ekpo installed. The app restores Original first, so nothing of Ekpo's
 // may still be selected.
 HelperResult Helper::uninstall()
@@ -571,6 +585,10 @@ HelperResult runRequest(const HelperEnv &env, const Request &request, const QMap
     switch (request.operation) {
     case Request::Operation::Recover:
         return helper.recover();
+    case Request::Operation::Prune:
+        if (leftover)
+            return {Outcome::Rejected, QStringLiteral("An earlier apply was interrupted; recover first."), {}};
+        return helper.pruneOnly(*request.keep);
     case Request::Operation::Apply:
     case Request::Operation::Uninstall:
         if (leftover)

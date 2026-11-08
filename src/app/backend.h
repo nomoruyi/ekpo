@@ -10,6 +10,7 @@
 
 #include <QImage>
 #include <QObject>
+#include <QTemporaryDir>
 #include <QQmlEngine>
 #include <QUrl>
 #include <QVariantList>
@@ -47,6 +48,10 @@ class Backend : public QObject
     Q_PROPERTY(QString libraryPath READ libraryPath NOTIFY changed)
     Q_PROPERTY(int historySize READ historySize NOTIFY changed)
     Q_PROPERTY(int ekpoCopies READ ekpoCopies NOTIFY changed)
+    Q_PROPERTY(QStringList oldCopies READ oldCopies NOTIFY changed) // "Remove Old Theme Copies"
+    // Kernels installed since Ekpo last told: {versions, outdated: an initrd lacks the
+    // selected splash}; empty if none.
+    Q_PROPERTY(QVariantMap kernelNotice READ kernelNotice NOTIFY changed)
     Q_PROPERTY(bool welcomeBack READ welcomeBack NOTIFY changed)
     Q_PROPERTY(QString bugReportsDir READ bugReportsDir CONSTANT) // empty: no local reports (packages)
     // {canCheck, checking, checked, checkError, available, version, notes, busy, text, fraction, error, installed}
@@ -87,6 +92,14 @@ public:
     // Removing Ekpo from the system (SPEC.md §5): Restore Original first, then this.
     bool atOriginal() const { return m_atOriginal; }
     int ekpoCopies() const { return m_ekpoCopies; }
+    QStringList oldCopies() const { return m_oldSystemCopies + m_oldPlasmaCopies; }
+    QVariantMap kernelNotice() const { return m_kernelNotice; }
+    Q_INVOKABLE void acknowledgeKernels();
+    // Packs the selected boot splash into every initrd again.
+    Q_INVOKABLE void planRebuildSplash();
+    // "Play the Boot" (playback.h): the stages of a Mask, or with an empty id the look
+    // applied now, built for the player.
+    Q_INVOKABLE QVariantList bootPlayback(const QString &maskId);
     Q_INVOKABLE void removeEkpoFiles();
 
     // After a reinstall (SPEC.md §4.2).
@@ -117,8 +130,12 @@ public:
     Q_INVOKABLE void reloadAssets();
     Q_INVOKABLE QVariantMap addAssetFiles(const QList<QUrl> &files); // {added, errors}
     Q_INVOKABLE QString renameItem(const QString &key, const QString &name); // empty on success
+    Q_INVOKABLE QString paletteFromImage(const QUrl &file); // a new palette (gencommon.h); empty on success
     Q_INVOKABLE QString removeItem(const QString &key); // to the trash; refused while used
     Q_INVOKABLE QVariantMap removeUnused(); // {removed, errors}
+    // Undo for the last "Move to Trash" (SPEC.md §4.13): trashed() offers it, Main.qml
+    // shows it with an Undo button. Empty on success.
+    Q_INVOKABLE QString undoRemoval();
 
     // Export (SPEC.md §4.13). planExport prepares one for the export dialog: {folder,
     // thirdParty: [{kind, name, source, licence, free}], problems, needsScreen, screen,
@@ -147,6 +164,9 @@ public:
 
     // Masks (SPEC.md §4.8). Empty refs leave a stage as it is.
     Q_INVOKABLE QString saveMask(const QString &id, const QString &name, const QString &bootMenu, const QString &bootSplash, const QString &plasmaSplash);
+    // A Mask of what Ekpo last applied: each stage's design or imported theme; stages
+    // whose look isn't in the library are left as they are. Empty on success.
+    Q_INVOKABLE QString maskFromApplied();
     Q_INVOKABLE QString removeMask(const QString &id);
     Q_INVOKABLE void planApplyMask(const QString &id);
 
@@ -171,6 +191,9 @@ public:
     Q_INVOKABLE void planReapplyStage(const QString &stage);
     Q_INVOKABLE void planTimeout(int seconds);
     Q_INVOKABLE void recover(); // rolls back an interrupted apply
+    // Removes the old copies: Plasma's to the trash now, the system's through the helper.
+    // True when the helper runs (applyFinished follows).
+    Q_INVOKABLE bool removeOldCopies();
     // The after-reboot question.
     Q_INVOKABLE void keepCheck();
     Q_INVOKABLE void planRevertCheck();
@@ -184,6 +207,7 @@ Q_SIGNALS:
     void bugReportRequested(); // a page's Report a Bug button; Main.qml opens the dialog
     void updateChanged();
     void assetsChanged();
+    void trashed(const QString &text);
 
 private:
     QString m_rootDir = QStringLiteral("/");
@@ -204,6 +228,10 @@ private:
     QVariantList m_masks;
     bool m_atOriginal = true;
     int m_ekpoCopies = 0;
+    QStringList m_oldSystemCopies;
+    QStringList m_oldPlasmaCopies;
+    QVariantMap m_kernelNotice;
+    QTemporaryDir m_playbackDir;
     bool m_removingFiles = false;
     bool m_welcomeBack = false;
 
@@ -223,4 +251,8 @@ private:
     QVariantMap m_update;
     QVariantList m_assetList;
     ExportPlan m_export;
+    std::function<QString()> m_undo; // of the last removal
+
+    void offerUndo(const QString &text, std::function<QString()> undo);
+    QString removeOne(const QString &key, std::function<QString()> &undo); // an asset or shared element
 };

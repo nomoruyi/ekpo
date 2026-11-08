@@ -11,7 +11,7 @@
 // one JSON line, followed by the payload. Every field is checked on parsing;
 // unknown keys are errors.
 struct Request {
-    enum class Operation { Apply, Recover, Uninstall };
+    enum class Operation { Apply, Recover, Uninstall, Prune };
 
     struct Theme {
         QString id; // payload files are sent as <id>/<path>
@@ -33,9 +33,9 @@ struct Request {
 
     Operation operation = Operation::Apply;
     QList<Theme> themes;
-    // Apply only: Ekpo's theme folders (ekpo-*) still needed by history. After a
-    // successful apply the helper removes the others that aren't in use. Absent:
-    // remove nothing.
+    // Apply and prune: Ekpo's theme folders (ekpo-*) still needed by history. After a
+    // successful apply, or for prune alone, the helper removes the others that aren't
+    // in use. Absent (apply): remove nothing.
     std::optional<QStringList> keep;
     std::optional<Grub> grub;
     std::optional<Plymouth> plymouth;

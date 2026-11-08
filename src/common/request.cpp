@@ -89,12 +89,40 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         r.operation = Request::Operation::Recover;
     else if (op == QLatin1String("uninstall"))
         r.operation = Request::Operation::Uninstall;
+    else if (op == QLatin1String("prune"))
+        r.operation = Request::Operation::Prune;
     else {
         error = QStringLiteral("request: unknown operation \"%1\"").arg(op);
         return std::nullopt;
     }
 
+    const auto readKeep = [&]() -> bool {
+        const QJsonValue keep = o.value(QStringLiteral("keep"));
+        QStringList ids;
+        for (const QJsonValue &v : keep.toArray()) {
+            if (!v.isString() || !validPayloadThemeId(v.toString())) {
+                error = QStringLiteral("request: keep holds an invalid theme id");
+                return false;
+            }
+            ids << v.toString();
+        }
+        if (!keep.isArray() || ids.size() > 512) {
+            error = QStringLiteral("request: keep must be a list of at most 512 theme ids");
+            return false;
+        }
+        r.keep = ids;
+        return true;
+    };
     const bool hasChanges = o.contains(QStringLiteral("themes")) || o.contains(QStringLiteral("grub")) || o.contains(QStringLiteral("plymouth")) || o.contains(QStringLiteral("keep"));
+    if (r.operation == Request::Operation::Prune) { // only which copies to keep
+        if (o.contains(QStringLiteral("themes")) || o.contains(QStringLiteral("grub")) || o.contains(QStringLiteral("plymouth")) || !o.contains(QStringLiteral("keep"))) {
+            error = QStringLiteral("request: prune takes only keep");
+            return std::nullopt;
+        }
+        if (!readKeep())
+            return std::nullopt;
+        return r;
+    }
     if (r.operation != Request::Operation::Apply) {
         if (hasChanges) {
             error = QStringLiteral("request: %1 takes no themes or changes").arg(op);
@@ -205,22 +233,8 @@ std::optional<Request> parseRequest(const QByteArray &json, QString &error)
         error = QStringLiteral("request: apply needs a grub or plymouth change");
         return std::nullopt;
     }
-    if (o.contains(QStringLiteral("keep"))) {
-        const QJsonValue keep = o.value(QStringLiteral("keep"));
-        QStringList ids;
-        for (const QJsonValue &v : keep.toArray()) {
-            if (!v.isString() || !validPayloadThemeId(v.toString())) {
-                error = QStringLiteral("request: keep holds an invalid theme id");
-                return std::nullopt;
-            }
-            ids << v.toString();
-        }
-        if (!keep.isArray() || ids.size() > 512) {
-            error = QStringLiteral("request: keep must be a list of at most 512 theme ids");
-            return std::nullopt;
-        }
-        r.keep = ids;
-    }
+    if (o.contains(QStringLiteral("keep")) && !readKeep())
+        return std::nullopt;
     for (const Request::Theme &t : std::as_const(r.themes)) {
         const bool used = (r.grub && r.grub->theme == t.id) || (r.plymouth && (r.plymouth->theme == t.id || r.plymouth->daemonTheme == t.id));
         if (!used) {
@@ -237,6 +251,7 @@ QByteArray serializeRequest(const Request &r)
         {Request::Operation::Apply, QStringLiteral("apply")},
         {Request::Operation::Recover, QStringLiteral("recover")},
         {Request::Operation::Uninstall, QStringLiteral("uninstall")},
+        {Request::Operation::Prune, QStringLiteral("prune")},
     };
     QJsonObject o{{QStringLiteral("format"), 1}, {QStringLiteral("operation"), ops.value(r.operation)}};
     if (!r.themes.isEmpty()) {

@@ -1,5 +1,7 @@
 #include "library.h"
 
+#include <functional>
+
 #include <KConfig>
 #include <KConfigGroup>
 
@@ -13,6 +15,7 @@
 #include <QProcess>
 #include <QSaveFile>
 #include <QSet>
+#include <QUrl>
 #include <QStandardPaths>
 #include <QUuid>
 
@@ -403,6 +406,11 @@ QList<Design> Library::drafts(QStringList &errors) const
     return readDesigns(m_path, QStringLiteral("draft.json"), errors);
 }
 
+QString Library::designThumbnail(const QString &id, int version) const
+{
+    return designDir(m_path, id) + QStringLiteral("/versions/%1.png").arg(version);
+}
+
 std::optional<Design> Library::design(const QString &id, int version, QString &error) const
 {
     const QString file = version == 0 ? QStringLiteral("/design.json") : QStringLiteral("/versions/%1.json").arg(version);
@@ -533,6 +541,24 @@ bool Library::saveSharedElement(SharedElement &element, QString &error)
     return true;
 }
 
+bool Library::savePalette(SharedElement &palette, QString &error)
+{
+    QStringList errors;
+    const QList<SharedElement> existing = sharedElements(errors);
+    const auto same = std::find_if(existing.cbegin(), existing.cend(), [&](const SharedElement &e) {
+        return e.kind == SharedElement::Kind::Palette && e.colours == palette.colours;
+    });
+    if (same != existing.cend()) {
+        palette = *same;
+        return true;
+    }
+    const QString base = palette.name;
+    const auto taken = [&] { return std::any_of(existing.cbegin(), existing.cend(), [&](const SharedElement &e) { return e.name == palette.name; }); };
+    for (int n = 2; taken(); ++n)
+        palette.name = QStringLiteral("%1 %2").arg(base).arg(n);
+    return saveSharedElement(palette, error);
+}
+
 bool Library::removeSharedElement(const QString &id, QString &error)
 {
     const auto json = readJson(sharedFile(m_path), error);
@@ -559,9 +585,12 @@ Design Library::resolved(const Design &design, QStringList &problems) const
         else
             palette = *it;
     }
-    // Only colours: a text may well start with "@".
-    const auto colours = [&](QJsonObject o) {
-        for (const QString &key : {QStringLiteral("color"), QStringLiteral("color2"), QStringLiteral("background")}) {
+    // Only colours: a text may well start with "@". A menu's selection box has its own.
+    const std::function<QJsonObject(QJsonObject)> colours = [&](QJsonObject o) {
+        if (o.value(QStringLiteral("selection")).isObject())
+            o.insert(QStringLiteral("selection"), colours(o.value(QStringLiteral("selection")).toObject()));
+        for (const QString &key : {QStringLiteral("color"), QStringLiteral("color2"), QStringLiteral("background"), QStringLiteral("selectedColor"),
+                                   QStringLiteral("shadow"), QStringLiteral("outline"), QStringLiteral("glow")}) {
             const QString value = o.value(key).toString();
             if (!value.startsWith(QLatin1Char('@')))
                 continue;
@@ -688,7 +717,50 @@ bool Library::renameAsset(const QString &hash, const QString &name, QString &err
     return writeJson(assetsManifest(m_path), entries, error);
 }
 
-bool Library::removeAsset(const QString &hash, QString &error)
+bool restoreFromTrash(const QString &trashed, QString &error)
+{
+    const QFileInfo item(trashed);
+    QFile info(item.dir().path() + QStringLiteral("/../info/") + item.fileName() + QStringLiteral(".trashinfo"));
+    QString original;
+    if (info.open(QIODevice::ReadOnly)) {
+        for (const QByteArray &line : info.readAll().split('\n'))
+            if (line.startsWith("Path="))
+                original = QUrl::fromPercentEncoding(line.mid(5).trimmed());
+        info.close();
+    }
+    if (original.isEmpty() || !item.exists()) {
+        error = QStringLiteral("%1 is no longer in the trash.").arg(item.fileName());
+        return false;
+    }
+    if (QFileInfo::exists(original)) {
+        error = QStringLiteral("%1 exists again; nothing was put back.").arg(original);
+        return false;
+    }
+    QDir().mkpath(QFileInfo(original).path());
+    if (!QDir().rename(trashed, original)) {
+        error = QStringLiteral("Can't put %1 back.").arg(original);
+        return false;
+    }
+    info.remove();
+    return true;
+}
+
+bool Library::restoreAsset(const Asset &asset, const QString &trashed, QString &error)
+{
+    if (!trashed.isEmpty() && !restoreFromTrash(trashed, error))
+        return false;
+    QJsonObject entries;
+    if (QFile::exists(assetsManifest(m_path))) {
+        const auto json = readJson(assetsManifest(m_path), error);
+        if (!json)
+            return false;
+        entries = *json;
+    }
+    entries.insert(asset.hash, asset.toJson());
+    return writeJson(assetsManifest(m_path), entries, error);
+}
+
+bool Library::removeAsset(const QString &hash, QString &error, QString *trashedPath)
 {
     const auto json = readJson(assetsManifest(m_path), error);
     if (!json)
@@ -699,10 +771,13 @@ bool Library::removeAsset(const QString &hash, QString &error)
         error = QStringLiteral("The library has no asset %1.").arg(hash);
         return false;
     }
-    if (QFile::exists(assetPath(*asset)) && !QFile::moveToTrash(assetPath(*asset))) {
+    QString inTrash;
+    if (QFile::exists(assetPath(*asset)) && !QFile::moveToTrash(assetPath(*asset), &inTrash)) {
         error = QStringLiteral("Can't move %1 to the trash.").arg(assetPath(*asset));
         return false;
     }
+    if (trashedPath)
+        *trashedPath = inTrash;
     entries.remove(hash);
     return writeJson(assetsManifest(m_path), entries, error);
 }

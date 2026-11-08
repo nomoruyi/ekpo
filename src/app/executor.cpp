@@ -165,8 +165,13 @@ void Executor::removeEkpoFiles()
     runPlainOperation(Request::Operation::Uninstall, tr("Asking for permission to remove Ekpo's themes"));
 }
 
-// A helper operation without plan or history: recover or uninstall.
-void Executor::runPlainOperation(Request::Operation operation, const QString &message)
+void Executor::pruneCopies(const QStringList &keep)
+{
+    runPlainOperation(Request::Operation::Prune, tr("Asking for permission to remove old theme copies"), keep);
+}
+
+// A helper operation without plan or history: recover, uninstall or prune.
+void Executor::runPlainOperation(Request::Operation operation, const QString &message, const std::optional<QStringList> &keep)
 {
     if (m_running)
         return;
@@ -179,6 +184,7 @@ void Executor::runPlainOperation(Request::Operation operation, const QString &me
     Q_EMIT progress(message);
     Request request;
     request.operation = operation;
+    request.keep = keep;
     startHelper(serializeRequest(request) + '\n');
 }
 
@@ -324,8 +330,10 @@ void Executor::succeed(const QJsonArray &menuEntries)
     }
     QString error;
     const bool saved = m_library.addHistoryEntry(entry, error, {{QStringLiteral("RESTORE.txt"), restoreText(m_plan)}});
-    if (saved)
+    if (saved) {
         m_library.pruneBuilds();
+        trashOldPlasmaCopies(m_library, m_homeDir); // as the helper prunes the system copies
+    }
     // Boot stages only show after a reboot: ask then whether they worked (SPEC.md §4.9).
     if (saved && (m_plan.target.bootMenu || m_plan.target.bootSplash))
         m_library.setPendingCheck({{QStringLiteral("number"), entry.number}, {QStringLiteral("title"), m_plan.title}, {QStringLiteral("bootId"), currentBootId()}}, error);
@@ -337,6 +345,33 @@ void Executor::fail(const QString &error)
 {
     m_running = false;
     Q_EMIT finished(false, error, 0);
+}
+
+QStringList oldPlasmaCopies(const Library &library, const QString &homeDir)
+{
+    QStringList errors, kept;
+    for (const HistoryEntry &e : library.history(errors)) {
+        const Target target = Target::fromJson(e.state.value(QStringLiteral("target")).toObject());
+        if (target.plasmaSplash)
+            kept << target.plasmaSplash->theme;
+    }
+    kept << KConfig(homeDir + QStringLiteral("/.config/ksplashrc"), KConfig::SimpleConfig).group(QStringLiteral("KSplash")).readEntry("Theme");
+    QStringList old;
+    for (const QString &id : QDir(homeDir + userLookAndFeel).entryList({QStringLiteral("ekpo-*")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
+        if (!kept.contains(id))
+            old << id;
+    }
+    return old;
+}
+
+QStringList trashOldPlasmaCopies(const Library &library, const QString &homeDir)
+{
+    QStringList removed;
+    for (const QString &id : oldPlasmaCopies(library, homeDir)) {
+        if (QFile::moveToTrash(homeDir + userLookAndFeel + id))
+            removed << id;
+    }
+    return removed;
 }
 
 QStringList removePlasmaCopies(const Library &library, const QString &homeDir, const QString &activeTheme)

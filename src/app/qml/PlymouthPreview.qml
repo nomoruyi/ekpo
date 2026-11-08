@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 
 // What Plymouth draws for a boot splash built by genplymouth (SPEC.md §4.6), on a
@@ -21,6 +23,72 @@ Item {
         fillMode: Image.Stretch // ScaleBackgroundImage / Image.Scale: no aspect ratio
         smooth: true
     }
+    // Moving images, as splash.script moves them (gencommon.h).
+    Repeater {
+        model: preview.layout.images ?? []
+        delegate: Image {
+            id: moving
+
+            required property var modelData
+            readonly property string animation: modelData.animation
+
+            source: modelData.source
+            width: modelData.width
+            height: modelData.height
+            x: modelData.centreX * preview.width - width / 2
+            y: modelData.centreY * preview.height - height / 2
+            transform: Translate {
+                id: slide
+            }
+
+            SequentialAnimation {
+                running: moving.animation === "fade" || moving.animation === "slide"
+                ParallelAnimation {
+                    NumberAnimation {
+                        target: moving
+                        property: "opacity"
+                        from: 0
+                        to: 1
+                        duration: moving.animation === "fade" ? 1000 : 800
+                    }
+                    NumberAnimation {
+                        target: slide
+                        property: "y"
+                        from: moving.animation === "slide" ? preview.height * 0.05 : 0
+                        to: 0
+                        duration: 800
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+            SequentialAnimation {
+                running: moving.animation === "breathe" || moving.animation === "pulse"
+                loops: Animation.Infinite
+                NumberAnimation {
+                    target: moving
+                    property: moving.animation === "pulse" ? "scale" : "opacity"
+                    from: 1
+                    to: moving.animation === "pulse" ? 0.92 : 0.4
+                    duration: moving.animation === "pulse" ? 750 : 1500
+                    easing.type: Easing.InOutSine
+                }
+                NumberAnimation {
+                    target: moving
+                    property: moving.animation === "pulse" ? "scale" : "opacity"
+                    to: 1
+                    duration: moving.animation === "pulse" ? 750 : 1500
+                    easing.type: Easing.InOutSine
+                }
+            }
+            RotationAnimator on rotation {
+                running: moving.animation === "spin"
+                from: 0
+                to: 360
+                duration: 4000
+                loops: Animation.Infinite
+            }
+        }
+    }
     Image {
         id: animation
         visible: preview.frames.length > 0
@@ -37,6 +105,8 @@ Item {
         onTriggered: preview.frame = (preview.frame + 1) % preview.frames.length
     }
     Item {
+        id: barItem
+
         visible: preview.bar !== null
         width: preview.bar?.width ?? 0
         height: preview.bar?.height ?? 0
@@ -47,14 +117,53 @@ Item {
         y: preview.layout.module === "script" ? (preview.bar?.y ?? 0) / preview.layout.builtHeight * preview.height
                                               : (preview.bar?.y ?? 0) / Math.max(1, preview.layout.builtHeight - height) * (preview.height - height)
 
+        readonly property string style: preview.bar?.style ?? "flat"
+        readonly property int filled: Math.floor(width * preview.progress)
+
         Rectangle {
+            visible: parent.style === "flat"
             anchors.fill: parent
             color: preview.bar?.background ?? "transparent"
         }
         Rectangle {
-            width: parent.width * preview.progress
+            visible: parent.style === "flat"
+            width: parent.filled
             height: parent.height
             color: preview.bar?.color ?? "transparent"
+        }
+        // Styled: the script module's images, put together as splash.script does.
+        Image {
+            visible: parent.style !== "flat"
+            source: visible ? preview.bar.box : ""
+        }
+        Repeater {
+            objectName: "segments"
+            model: parent.style === "segmented" ? preview.bar.segments : 0
+            delegate: Image {
+                required property int index
+                visible: index < Math.floor(preview.bar.segments * preview.progress)
+                x: index * (preview.bar.segmentWidth + preview.bar.gap)
+                source: preview.bar.segment
+            }
+        }
+        Row {
+            objectName: "fill"
+            readonly property bool shown: parent.style === "rounded" || parent.style === "glow"
+            visible: shown && parent.filled > 2 * (preview.bar?.caps ?? 0)
+            x: -(preview.bar?.margin ?? 0)
+            y: -(preview.bar?.margin ?? 0)
+
+            Image {
+                source: parent.shown ? preview.bar.left : ""
+            }
+            Image {
+                source: parent.shown ? preview.bar.middle : ""
+                width: Math.max(1, barItem.filled - 2 * (preview.bar?.caps ?? 0))
+                fillMode: Image.Stretch
+            }
+            Image {
+                source: parent.shown ? preview.bar.right : ""
+            }
         }
     }
     NumberAnimation on progress {

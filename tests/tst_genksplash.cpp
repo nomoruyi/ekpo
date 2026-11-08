@@ -1,3 +1,4 @@
+#include "gencommon.h"
 #include "genksplash.h"
 #include "golden.h"
 #include "testmain.h"
@@ -5,6 +6,7 @@
 #include <algorithm>
 
 #include <functional>
+#include <QQuickItem>
 #include <QQuickView>
 #include <QDir>
 #include <QFile>
@@ -26,6 +28,11 @@ private Q_SLOTS:
     void reportsProblems();
     void linksAssetsForPreview();
     void gradientAngle();
+    void spinnerStyles();
+    void progressStyles();
+    void textEffects();
+    void imageAnimations();
+    void backgroundEffects();
 
 private:
     // A video, background image, logo, two texts (one with a bundled font), a spinner.
@@ -250,4 +257,200 @@ void TestGenKSplash::gradientAngle()
 }
 
 EKPO_GUI_TEST_MAIN(TestGenKSplash)
+void TestGenKSplash::spinnerStyles()
+{
+    // Every style draws on its Canvas (or turns its image) without a QML warning.
+    for (const QString &style : ::spinnerStyles) {
+        QJsonObject spinner{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("style"), style}, {QStringLiteral("speed"), QStringLiteral("fast")},
+                            {QStringLiteral("color"), QStringLiteral("#ffffff")}, {QStringLiteral("x"), 25}, {QStringLiteral("y"), 25},
+                            {QStringLiteral("width"), 50}, {QStringLiteral("height"), 50}};
+        if (style == QLatin1String("image"))
+            spinner.insert(QStringLiteral("asset"), m_logo);
+        Design d;
+        d.name = QStringLiteral("Spin");
+        d.stage = Stage::PlasmaSplash;
+        d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}},
+                                {QStringLiteral("elements"), QJsonArray{spinner}}};
+        QStringList problems;
+        const QString package = m_tmp->filePath(QStringLiteral("spinner-") + style);
+        for (const PayloadFile &f : buildPlasmaSplash(d, QStringLiteral("ekpo-spin-v1"), *m_library, problems)) {
+            QSaveFile out(package + QLatin1Char('/') + f.path);
+            QVERIFY(QDir().mkpath(QFileInfo(out.fileName()).path()));
+            QVERIFY(out.open(QIODevice::WriteOnly) && out.write(f.data) == f.data.size() && out.commit());
+        }
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        QQuickView view;
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.resize(400, 400);
+        view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+        QVERIFY2(view.status() == QQuickView::Ready, qPrintable(style));
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        const auto drawn = [&] {
+            const QImage image = view.grabWindow();
+            int count = 0;
+            for (int y = 100; y < 300; ++y)
+                for (int x = 100; x < 300; ++x)
+                    count += image.pixelColor(x, y) != QColor(Qt::black);
+            return count;
+        };
+        QTRY_VERIFY2(drawn() > 100, qPrintable(style));
+    }
+}
+
+void TestGenKSplash::progressStyles()
+{
+    // Halfway through Plasma's start, every style fills about half its bar.
+    for (const char *style : {"flat", "rounded", "glow", "segmented"}) {
+        const QJsonObject bar{{QStringLiteral("type"), QStringLiteral("progress")}, {QStringLiteral("style"), QLatin1String(style)}, {QStringLiteral("shimmer"), true},
+                              {QStringLiteral("color"), QStringLiteral("#ff0000")}, {QStringLiteral("background"), QStringLiteral("#0000ff")},
+                              {QStringLiteral("x"), 10}, {QStringLiteral("y"), 45}, {QStringLiteral("width"), 80}, {QStringLiteral("height"), 10}};
+        Design d;
+        d.name = QStringLiteral("Bar");
+        d.stage = Stage::PlasmaSplash;
+        d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}},
+                                {QStringLiteral("elements"), QJsonArray{bar}}};
+        QStringList problems;
+        const QString package = m_tmp->filePath(QStringLiteral("bar-%1").arg(QLatin1String(style)));
+        for (const PayloadFile &f : buildPlasmaSplash(d, QStringLiteral("ekpo-bar-v1"), *m_library, problems)) {
+            QSaveFile out(package + QLatin1Char('/') + f.path);
+            QVERIFY(QDir().mkpath(QFileInfo(out.fileName()).path()));
+            QVERIFY(out.open(QIODevice::WriteOnly) && out.write(f.data) == f.data.size() && out.commit());
+        }
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        QQuickView view;
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.resize(400, 200);
+        view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+        QVERIFY2(view.status() == QQuickView::Ready, style);
+        QVERIFY(view.rootObject()->setProperty("stage", 3));
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        const auto red = [](const QColor &c) { return c.red() > 200 && c.blue() < 120; };
+        // Red on the left (x 70 of the bar's 40–360), blue on the right.
+        QTRY_VERIFY2(red(view.grabWindow().pixelColor(70, 100)), style);
+        QVERIFY2(view.grabWindow().pixelColor(330, 100).blue() > 200, style);
+    }
+}
+
+void TestGenKSplash::textEffects()
+{
+    // Black text with a red glow, a green shadow and a blue outline, on white.
+    const QJsonObject text{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), QStringLiteral("IIII")}, {QStringLiteral("size"), 20},
+                           {QStringLiteral("color"), QStringLiteral("#000000")}, {QStringLiteral("glow"), QStringLiteral("#ff0000")},
+                           {QStringLiteral("shadow"), QStringLiteral("#00ff00")}, {QStringLiteral("outline"), QStringLiteral("#0000ff")},
+                           {QStringLiteral("x"), 0}, {QStringLiteral("y"), 25}, {QStringLiteral("width"), 100}, {QStringLiteral("height"), 50}};
+    Design d;
+    d.name = QStringLiteral("Glow");
+    d.stage = Stage::PlasmaSplash;
+    d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#ffffff")}}},
+                            {QStringLiteral("elements"), QJsonArray{text}}};
+    QStringList problems;
+    const QList<PayloadFile> files = buildPlasmaSplash(d, QStringLiteral("ekpo-glow-v1"), *m_library, problems);
+    QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+    const QString qml = QString::fromUtf8(fileData(files, QStringLiteral("contents/splash/Splash.qml")));
+    QVERIFY(qml.contains(QLatin1String("// Plain QtQuick:")));
+    const QString package = m_tmp->filePath(QStringLiteral("glow"));
+    for (const PayloadFile &f : files) {
+        QSaveFile out(package + QLatin1Char('/') + f.path);
+        QVERIFY(QDir().mkpath(QFileInfo(out.fileName()).path()));
+        QVERIFY(out.open(QIODevice::WriteOnly) && out.write(f.data) == f.data.size() && out.commit());
+    }
+    QQuickView view;
+    view.setResizeMode(QQuickView::SizeRootObjectToView);
+    view.resize(400, 200);
+    view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+    QCOMPARE(view.status(), QQuickView::Ready);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    const auto seen = [&](const std::function<bool(const QColor &)> &match) {
+        const QImage image = view.grabWindow();
+        for (int y = 0; y < image.height(); ++y)
+            for (int x = 0; x < image.width(); ++x)
+                if (match(image.pixelColor(x, y)))
+                    return true;
+        return false;
+    };
+    if (const QString save = qEnvironmentVariable("EKPO_SAVE_PREVIEW"); !save.isEmpty()) {
+        QTest::qWait(300);
+        view.grabWindow().save(save);
+    }
+    QTRY_VERIFY(seen([](const QColor &c) { return c.red() > 200 && c.green() < 150 && c.blue() < 150; })); // glow
+    QVERIFY(seen([](const QColor &c) { return c.green() > 200 && c.red() < 100 && c.blue() < 100; })); // shadow
+    QVERIFY(seen([](const QColor &c) { return c.blue() > 200 && c.red() < 100 && c.green() < 100; })); // outline
+    QVERIFY(seen([](const QColor &c) { return c.lightness() < 30; })); // the text itself
+}
+
+void TestGenKSplash::imageAnimations()
+{
+    // Every animation loads and shows the image soon.
+    for (const QString &animation : ::imageAnimations) {
+        const QJsonObject image{{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("asset"), m_logo}, {QStringLiteral("animation"), animation},
+                                {QStringLiteral("x"), 25}, {QStringLiteral("y"), 25}, {QStringLiteral("width"), 50}, {QStringLiteral("height"), 50}};
+        Design d;
+        d.name = QStringLiteral("Move");
+        d.stage = Stage::PlasmaSplash;
+        d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}}},
+                                {QStringLiteral("elements"), QJsonArray{image}}};
+        QStringList problems;
+        const QString package = m_tmp->filePath(QStringLiteral("move-") + animation);
+        for (const PayloadFile &f : buildPlasmaSplash(d, QStringLiteral("ekpo-move-v1"), *m_library, problems)) {
+            QSaveFile out(package + QLatin1Char('/') + f.path);
+            QVERIFY(QDir().mkpath(QFileInfo(out.fileName()).path()));
+            QVERIFY(out.open(QIODevice::WriteOnly) && out.write(f.data) == f.data.size() && out.commit());
+        }
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        QQuickView view;
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.resize(400, 400);
+        view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+        QVERIFY2(view.status() == QQuickView::Ready, qPrintable(animation));
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QTRY_VERIFY2(view.grabWindow().pixelColor(200, 200) != QColor(Qt::black), qPrintable(animation));
+    }
+}
+
+void TestGenKSplash::backgroundEffects()
+{
+    // Motion over the image, particles, vignette and grain: plain QtQuick and two generated images.
+    for (const char *particles : {"snow", "stars"}) {
+        Design d;
+        d.name = QStringLiteral("Night");
+        d.stage = Stage::PlasmaSplash;
+        d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}, {QStringLiteral("image"), m_logo},
+                                                                           {QStringLiteral("motion"), true}, {QStringLiteral("particles"), QLatin1String(particles)},
+                                                                           {QStringLiteral("vignette"), true}, {QStringLiteral("grain"), true}}},
+                                {QStringLiteral("elements"), QJsonArray()}};
+        QStringList problems;
+        const QList<PayloadFile> files = buildPlasmaSplash(d, QStringLiteral("ekpo-night-v1"), *m_library, problems);
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join(QLatin1Char('\n'))));
+        const QImage vignette = QImage::fromData(fileData(files, QStringLiteral("contents/splash/images/vignette.png")));
+        QCOMPARE(qAlpha(vignette.pixel(240, 135)), 0); // clear in the middle
+        QVERIFY(qAlpha(vignette.pixel(0, 0)) > 120); // dark in the corners
+        QCOMPARE(QImage::fromData(fileData(files, QStringLiteral("contents/splash/images/grain.png"))).size(), QSize(256, 256));
+        const QString package = m_tmp->filePath(QStringLiteral("background-%1").arg(QLatin1String(particles)));
+        for (const PayloadFile &f : files) {
+            QSaveFile out(package + QLatin1Char('/') + f.path);
+            QVERIFY(QDir().mkpath(QFileInfo(out.fileName()).path()));
+            QVERIFY(out.open(QIODevice::WriteOnly) && out.write(f.data) == f.data.size() && out.commit());
+        }
+        QQuickView view;
+        view.setResizeMode(QQuickView::SizeRootObjectToView);
+        view.resize(400, 300);
+        view.setSource(QUrl::fromLocalFile(package + QStringLiteral("/contents/splash/Splash.qml")));
+        QVERIFY2(view.status() == QQuickView::Ready, particles);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QTest::qWait(200); // the grain jitters, the snow falls: no warnings meanwhile
+    }
+    Design d;
+    d.stage = Stage::PlasmaSplash;
+    d.content = QJsonObject{{QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}, {QStringLiteral("particles"), QStringLiteral("rain")}}},
+                            {QStringLiteral("elements"), QJsonArray()}};
+    QStringList problems;
+    buildPlasmaSplash(d, QStringLiteral("ekpo-night-v1"), *m_library, problems);
+    QCOMPARE(problems, QStringList{QStringLiteral("The background has unknown particles “rain”.")});
+}
+
 #include "tst_genksplash.moc"

@@ -1,7 +1,9 @@
 #include "backend.h"
 #include "bugreport.h"
+#include "gencommon.h"
 
 #include "importer.h"
+#include "playback.h"
 #include "sysinfo.h"
 
 #include <QBuffer>
@@ -106,7 +108,10 @@ QVariantMap bootSplashCard(const SystemState &s, bool lastApplyNewestOnly)
         lines << line(QStringLiteral("ok"), Backend::tr("All %1 initrds carry this splash.").arg(withInitrd));
 
     lines << line(QStringLiteral("info"), s.plymouthAlternativeMode == QLatin1String("manual") ? Backend::tr("Selected manually.") : Backend::tr("Chosen automatically (highest priority)."));
-    return card(Stage::BootSplash, current, lines);
+    QVariantMap c = card(Stage::BootSplash, current, lines);
+    if (outdated > 0 && !lastApplyNewestOnly)
+        c.insert(QStringLiteral("rebuildSplash"), true);
+    return c;
 }
 
 QVariantMap plasmaSplashCard(const SystemState &s)
@@ -299,6 +304,22 @@ QVariantMap Backend::addAssetFiles(const QList<QUrl> &files)
     return {{QStringLiteral("added"), added}, {QStringLiteral("errors"), errors}};
 }
 
+QString Backend::paletteFromImage(const QUrl &file)
+{
+    if (!m_library)
+        return m_libraryError;
+    const QString path = file.toLocalFile();
+    const QImage image(path);
+    if (image.isNull())
+        return tr("%1 isn't an image Ekpo can read.").arg(QFileInfo(path).fileName());
+    SharedElement palette{{}, SharedElement::Kind::Palette, tr("Palette of %1").arg(QFileInfo(path).completeBaseName()), {}, ::paletteFromImage(image)};
+    QString error;
+    if (!m_library->savePalette(palette, error))
+        return error;
+    reloadAssets();
+    return {};
+}
+
 QString Backend::renameItem(const QString &key, const QString &name)
 {
     if (!m_library)
@@ -322,7 +343,48 @@ QString Backend::renameItem(const QString &key, const QString &name)
     return {};
 }
 
+void Backend::offerUndo(const QString &text, std::function<QString()> undo)
+{
+    m_undo = std::move(undo);
+    Q_EMIT trashed(text);
+}
+
+QString Backend::undoRemoval()
+{
+    const std::function<QString()> undo = std::exchange(m_undo, {});
+    if (!undo)
+        return tr("There is nothing to undo.");
+    const QString error = undo();
+    refresh();
+    reloadAssets();
+    return error;
+}
+
+namespace {
+std::function<QString()> fromTrash(const QString &trashed)
+{
+    return [trashed] {
+        QString error;
+        return trashed.isEmpty() || restoreFromTrash(trashed, error) ? QString() : error;
+    };
+}
+} // namespace
+
 QString Backend::removeItem(const QString &key)
+{
+    QString name;
+    for (const QVariant &v : std::as_const(m_assetList))
+        if (v.toMap().value(QStringLiteral("key")) == key)
+            name = v.toMap().value(QStringLiteral("name")).toString();
+    std::function<QString()> undo;
+    if (const QString error = removeOne(key, undo); !error.isEmpty())
+        return error;
+    reloadAssets();
+    offerUndo(tr("\u201c%1\u201d moved to the trash.").arg(name), undo);
+    return {};
+}
+
+QString Backend::removeOne(const QString &key, std::function<QString()> &undo)
 {
     if (!m_library)
         return m_libraryError;
@@ -335,24 +397,44 @@ QString Backend::removeItem(const QString &key)
         return tr("Still used by %1.").arg(names.mid(0, 3).join(QStringLiteral(", ")) + (names.size() > 3 ? tr(" and %n more", "", int(names.size() - 3)) : QString()));
     }
     QString error;
-    bool shared = false;
-    for (const SharedElement &e : m_library->sharedElements(errors))
-        shared = shared || e.id == key;
-    if (shared) {
+    for (const SharedElement &e : m_library->sharedElements(errors)) {
+        if (e.id != key)
+            continue;
         if (!m_library->removeSharedElement(key, error))
             return error;
-    } else {
-        QString licence;
-        for (const Asset &a : m_library->assets(errors))
-            if (a.hash == key)
-                licence = a.licence;
-        if (!m_library->removeAsset(key, error))
-            return error;
-        // A font's licence text goes with it, unless another font has the same one.
-        if (!licence.isEmpty() && m_library->uses(errors).value(licence).isEmpty())
-            m_library->removeAsset(licence, error);
+        undo = [this, e] {
+            SharedElement again = e;
+            QString error;
+            return m_library && m_library->saveSharedElement(again, error) ? QString() : error;
+        };
+        return {};
     }
-    reloadAssets();
+    std::optional<Asset> asset, licence;
+    const QList<Asset> assets = m_library->assets(errors);
+    for (const Asset &a : assets)
+        if (a.hash == key)
+            asset = a;
+    if (!asset)
+        return tr("The library has no such asset.");
+    QString trashed, licenceTrashed;
+    if (!m_library->removeAsset(key, error, &trashed))
+        return error;
+    // A font's licence text goes with it, unless another font has the same one.
+    if (!asset->licence.isEmpty() && m_library->uses(errors).value(asset->licence).isEmpty()) {
+        for (const Asset &a : assets)
+            if (a.hash == asset->licence)
+                licence = a;
+        if (licence && !m_library->removeAsset(licence->hash, error, &licenceTrashed))
+            licence.reset();
+    }
+    undo = [this, asset, trashed, licence, licenceTrashed] {
+        QString error;
+        if (!m_library || !m_library->restoreAsset(*asset, trashed, error))
+            return error.isEmpty() ? m_libraryError : error;
+        if (licence && !m_library->restoreAsset(*licence, licenceTrashed, error))
+            return error;
+        return QString();
+    };
     return {};
 }
 
@@ -360,17 +442,29 @@ QVariantMap Backend::removeUnused()
 {
     int removed = 0;
     QStringList errors;
+    QList<std::function<QString()>> undos;
     const QVariantList items = m_assetList;
     for (const QVariant &v : items) {
         const QVariantMap item = v.toMap();
         if (!item.value(QStringLiteral("uses")).toStringList().isEmpty())
             continue;
-        if (const QString error = removeItem(item.value(QStringLiteral("key")).toString()); error.isEmpty())
+        std::function<QString()> undo;
+        if (const QString error = removeOne(item.value(QStringLiteral("key")).toString(), undo); error.isEmpty()) {
             ++removed;
-        else
+            undos << undo;
+        } else {
             errors << error;
+        }
     }
     reloadAssets();
+    if (removed > 0)
+        offerUndo(tr("%n unused item(s) moved to the trash.", "", removed), [undos] {
+            QStringList errors;
+            for (const auto &undo : undos)
+                if (const QString error = undo(); !error.isEmpty())
+                    errors << error;
+            return errors.join(QLatin1Char('\n'));
+        });
     return {{QStringLiteral("removed"), removed}, {QStringLiteral("errors"), errors}};
 }
 
@@ -545,6 +639,29 @@ void Backend::refresh()
         if (m_welcomeBack)
             m_library->clearPendingCheck(); // a question about the old system makes no sense now
         m_ekpoCopies = int(installedEkpoCopies(m_rootDir).size());
+        m_oldSystemCopies = oldSystemCopies(*m_library, m_rootDir, current);
+        m_oldPlasmaCopies = oldPlasmaCopies(*m_library, m_homeDir);
+
+        // New kernels: apt builds their initrds, which normally carry the selected splash.
+        m_kernelNotice.clear();
+        QStringList installed, fresh;
+        bool outdated = false;
+        for (const SystemState::Kernel &k : m_state.kernels)
+            installed << k.version;
+        if (m_library->settings().seenKernels.isEmpty() && !installed.isEmpty()) {
+            Settings settings = m_library->settings(); // the first start: nothing new to tell
+            settings.seenKernels = installed;
+            QString error;
+            m_library->saveSettings(settings, error);
+        }
+        for (const SystemState::Kernel &k : m_state.kernels) {
+            if (m_library->settings().seenKernels.contains(k.version))
+                continue;
+            fresh << k.version;
+            outdated = outdated || !k.hasInitrd || (m_state.plymouthSelectedAt.isValid() && k.initrdModified < m_state.plymouthSelectedAt);
+        }
+        if (!fresh.isEmpty())
+            m_kernelNotice = {{QStringLiteral("versions"), fresh}, {QStringLiteral("outdated"), outdated}};
 
         // Ask after a reboot whether the last boot-stage apply worked.
         m_pendingCheck.clear();
@@ -722,9 +839,15 @@ QString Backend::removeImport(const QString &id)
             }
         }
     }
-    if (!m_library || !m_library->removeImport(id, error))
+    QString name, trashed;
+    if (m_library)
+        for (const ImportedTheme &t : m_library->imports(errors))
+            if (t.id == id)
+                name = t.name;
+    if (!m_library || !m_library->removeImport(id, error, &trashed))
         return error.isEmpty() ? m_libraryError : error;
     refresh();
+    offerUndo(tr("\u201c%1\u201d moved to the trash.").arg(name), fromTrash(trashed));
     return {};
 }
 
@@ -820,10 +943,16 @@ QString Backend::removeDesign(const QString &id)
                 return tr("Used by the Mask \u201c%1\u201d; remove it from there first.").arg(mask.name);
         }
     }
-    QString error;
-    if (!m_library->removeDesign(id, error))
+    QString name, error, trashed;
+    if (const auto design = m_library->design(id, 0, error))
+        name = design->name;
+    for (const Design &d : m_library->drafts(errors))
+        if (d.id == id && name.isEmpty())
+            name = d.name;
+    if (!m_library->removeDesign(id, error, &trashed))
         return error;
     refresh();
+    offerUndo(tr("\u201c%1\u201d moved to the trash.").arg(name), fromTrash(trashed));
     return {};
 }
 
@@ -911,6 +1040,69 @@ void Backend::recover()
     Q_EMIT applyingChanged();
 }
 
+bool Backend::removeOldCopies()
+{
+    if (!m_library || !m_executor || m_executor->isRunning())
+        return false;
+    trashOldPlasmaCopies(*m_library, m_homeDir);
+    if (m_oldSystemCopies.isEmpty()) {
+        refresh();
+        return false;
+    }
+    // What the helper keeps: what history needs (it checks itself what is selected).
+    m_executor->pruneCopies(keptThemes(*m_library, std::nullopt));
+    Q_EMIT applyingChanged();
+    return true;
+}
+
+void Backend::acknowledgeKernels()
+{
+    if (!m_library)
+        return;
+    Settings settings = m_library->settings();
+    settings.seenKernels.clear();
+    for (const SystemState::Kernel &k : m_state.kernels)
+        settings.seenKernels << k.version;
+    QString error;
+    m_library->saveSettings(settings, error);
+    refresh();
+}
+
+void Backend::planRebuildSplash()
+{
+    if (!m_library)
+        return;
+    refresh();
+    const Target current = currentTarget(m_state, m_rootDir);
+    if (!current.bootSplash)
+        return;
+    Target target;
+    target.bootSplash = current.bootSplash;
+    preparePlan(
+        [target, title = tr("Rebuild the boot splash into every initrd")](const PlanContext &c) {
+            PlanContext forced = c;
+            forced.rebuildSplash = true;
+            return planTarget(forced, target, title);
+        },
+        true);
+}
+
+QVariantList Backend::bootPlayback(const QString &maskId)
+{
+    if (!m_library || !m_playbackDir.isValid())
+        return {};
+    refresh();
+    QMap<Stage, Slot> chosen;
+    QStringList errors;
+    for (const Mask &mask : m_library->masks(errors)) {
+        if (mask.id == maskId)
+            chosen = mask.stageSlots;
+    }
+    // A new folder each time: the player's images would come from Qt's cache otherwise.
+    static int run = 0;
+    return playbackSteps(*m_library, m_state, m_rootDir, m_homeDir, chosen, m_playbackDir.filePath(QString::number(++run)));
+}
+
 void Backend::keepCheck()
 {
     if (m_library)
@@ -973,12 +1165,39 @@ QString Backend::saveMask(const QString &id, const QString &name, const QString 
     return {};
 }
 
+QString Backend::maskFromApplied()
+{
+    if (!m_library)
+        return m_libraryError;
+    QStringList errors;
+    const QList<HistoryEntry> history = m_library->history(errors);
+    if (history.isEmpty())
+        return tr("Ekpo hasn't applied anything yet.");
+    // What the newest entry applied knows the designs and imports (the system doesn't).
+    Mask mask;
+    mask.name = tr("Applied on %1").arg(QLocale().toString(QDate::currentDate(), QLocale::ShortFormat));
+    mask.stageSlots = slotsFromTarget(*m_library, Target::fromJson(history.first().state.value(QStringLiteral("target")).toObject()));
+    if (mask.stageSlots.isEmpty())
+        return tr("What's applied isn't in the library: import or design it first.");
+    QString error;
+    if (!m_library->saveMask(mask, error))
+        return error;
+    refresh();
+    return {};
+}
+
 QString Backend::removeMask(const QString &id)
 {
-    QString error;
-    if (!m_library || !m_library->removeMask(id, error))
+    QString error, name, trashed;
+    QStringList errors;
+    if (m_library)
+        for (const Mask &m : m_library->masks(errors))
+            if (m.id == id)
+                name = m.name;
+    if (!m_library || !m_library->removeMask(id, error, &trashed))
         return error.isEmpty() ? m_libraryError : error;
     refresh();
+    offerUndo(tr("The Mask \u201c%1\u201d moved to the trash.").arg(name), fromTrash(trashed));
     return {};
 }
 
@@ -1062,6 +1281,7 @@ QString Backend::setLibraryLocation(const QUrl &folder)
         return error;
     m_executor.reset();
     m_library = std::move(library);
+    m_undo = {}; // it belongs to the other library
     createExecutor();
     refresh();
     return {};

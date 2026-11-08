@@ -12,6 +12,10 @@
 // in designs.
 QSet<QString> stringsIn(const QJsonValue &value);
 
+// Puts back a file or folder QFile::moveToTrash moved, where its .trashinfo says it
+// came from, and drops the .trashinfo (Undo after "Move to Trash").
+bool restoreFromTrash(const QString &trashed, QString &error);
+
 // The plain-file library (ARCHITECTURE.md §5): library.json, imports/, designs/,
 // assets/, masks/, builds/, history/.
 class Library
@@ -55,6 +59,8 @@ public:
     // The design as saved in version (0 = the current one).
     std::optional<Design> design(const QString &id, int version, QString &error) const;
     QList<int> designVersions(const QString &id) const; // ascending
+    // A picture of a version (versions/<n>.png), saved by the editor; may not exist.
+    QString designThumbnail(const QString &id, int version) const;
     // Saves the next version (all are kept), assigns id, version and savedAt, and
     // clears the draft.
     bool saveDesign(Design &design, QString &error);
@@ -69,6 +75,9 @@ public:
     QList<SharedElement> sharedElements(QStringList &errors) const;
     bool saveSharedElement(SharedElement &element, QString &error); // assigns the id
     bool removeSharedElement(const QString &id, QString &error);
+    // A palette: one with the same colours is reused (issue #2), else it is saved under
+    // a free name ("Palette of Dawn 2"). palette gets the id it ends up with.
+    bool savePalette(SharedElement &palette, QString &error);
     // The design with its shared elements put in, which is what the generators build:
     // an element with "shared" gets that logo's asset, a colour "@accent" (and so on)
     // the linked palette's ("palette" in the content). Missing ones go to problems.
@@ -89,7 +98,9 @@ public:
     bool renameAsset(const QString &hash, const QString &name, QString &error);
     // Moves the file to the trash and forgets the asset. Check uses() first: a design
     // that still shows it would lose it.
-    bool removeAsset(const QString &hash, QString &error);
+    bool removeAsset(const QString &hash, QString &error, QString *trashedPath = nullptr);
+    // Undo for removeAsset: the file back from the trash and its entry again.
+    bool restoreAsset(const Asset &asset, const QString &trashed, QString &error);
 
     // Who uses an asset or a shared element, by asset hash or shared id: every saved
     // version and draft of every design that names it, the shared logos that show an

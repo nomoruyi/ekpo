@@ -11,6 +11,7 @@ Kirigami.ScrollablePage {
     id: page
 
     signal review
+    signal play(string maskId, string title) // "Play the Boot"
 
     readonly property var stages: [
         { key: "bootMenu", title: qsTr("Boot menu") },
@@ -27,6 +28,11 @@ Kirigami.ScrollablePage {
             text: qsTr("New Mask…")
             icon.name: "list-add"
             onTriggered: maskDialog.edit(null)
+        },
+        Kirigami.Action {
+            text: qsTr("New Mask from What's Applied")
+            icon.name: "document-new-from-template"
+            onTriggered: page.message = Backend.maskFromApplied()
         },
         ReportBugAction {}
     ]
@@ -101,6 +107,14 @@ Kirigami.ScrollablePage {
                         QQC2.ToolTip.text: text
                         QQC2.ToolTip.visible: hovered
                         onClicked: maskDialog.edit(maskCard.modelData)
+                    }
+                    QQC2.ToolButton {
+                        icon.name: "media-playback-start"
+                        text: qsTr("Play the Boot")
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: page.play(maskCard.modelData.id, maskCard.modelData.name)
                     }
                     QQC2.ToolButton {
                         icon.name: "document-export"

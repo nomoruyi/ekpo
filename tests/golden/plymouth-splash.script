@@ -19,12 +19,20 @@ global.anim_sprite = Sprite(global.frames[0]);
 global.anim_sprite.SetPosition(Window.GetX() + Window.GetWidth() * 0.5 - global.frames[0].GetWidth() / 2,
                                Window.GetY() + Window.GetHeight() * 0.6 - global.frames[0].GetHeight() / 2, 10);
 
-fun refresh_callback ()
+fun animation_tick ()
 {
   global.anim_tick = global.anim_tick + 1;
   if (global.anim_tick >= global.anim_ticks)
     global.anim_tick = 0;
   global.anim_sprite.SetImage(global.frames[Math.Int(global.anim_tick * global.anim_count / global.anim_ticks)]);
+}
+
+global.ticks = 0;
+
+fun refresh_callback ()
+{
+  global.ticks = global.ticks + 1;
+  animation_tick();
 }
 
 Plymouth.SetRefreshRate(50);

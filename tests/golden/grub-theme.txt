@@ -23,10 +23,11 @@ desktop-color: "#102030"
     selected_item_color = "#ffffff"
     item_height = 55
     item_padding = 10
-    item_spacing = 8
+    item_spacing = 22
     icon_width = 39
     icon_height = 39
     item_icon_space = 16
+    item_pixmap_style = "item_*.png"
     selected_item_pixmap_style = "select_*.png"
     scrollbar = false
 }

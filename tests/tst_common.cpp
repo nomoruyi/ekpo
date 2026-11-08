@@ -304,6 +304,11 @@ void TestCommon::requestRoundTrip()
     QVERIFY(!newest->plymouth->allKernels);
     QVERIFY(serializeRequest(*newest).contains("\"initrds\":\"newest\""));
     QVERIFY(parseRequest(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout"}})", error)->plymouth->allKernels);
+    const auto prune = parseRequest(R"({"format":1,"operation":"prune","keep":["ekpo-a-v1"]})", error);
+    QVERIFY2(prune, qPrintable(error));
+    QCOMPARE(prune->operation, Request::Operation::Prune);
+    QCOMPARE(*prune->keep, QStringList{QStringLiteral("ekpo-a-v1")});
+    QCOMPARE(serializeRequest(*prune), QByteArray(R"({"format":1,"keep":["ekpo-a-v1"],"operation":"prune"})"));
 }
 
 void TestCommon::requestRejects_data()
@@ -334,6 +339,9 @@ void TestCommon::requestRejects_data()
     QTest::newRow("keep with a bad id") << QByteArrayLiteral(R"({"format":1,"operation":"apply","grub":{"original":true},"keep":["../x"]})");
     QTest::newRow("keep not a list") << QByteArrayLiteral(R"({"format":1,"operation":"apply","grub":{"original":true},"keep":"ekpo-a-v1"})");
     QTest::newRow("keep on recover") << QByteArrayLiteral(R"({"format":1,"operation":"recover","keep":[]})");
+    QTest::newRow("prune without keep") << QByteArrayLiteral(R"({"format":1,"operation":"prune"})");
+    QTest::newRow("prune with changes") << QByteArrayLiteral(R"({"format":1,"operation":"prune","keep":[],"grub":{"original":true}})");
+    QTest::newRow("prune with a bad id") << QByteArrayLiteral(R"({"format":1,"operation":"prune","keep":["/boot"]})");
     QTest::newRow("bad initrd scope") << QByteArrayLiteral(R"({"format":1,"operation":"apply","plymouth":{"alternativeMode":"manual","theme":"fallout","daemonTheme":"fallout","initrds":"oldest"}})");
     QTest::newRow("oversized") << QByteArray(maxRequestBytes + 1, ' ');
 }

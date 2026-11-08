@@ -35,6 +35,11 @@ Kirigami.ApplicationWindow {
     property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
     property bool startUpdateDialog: false // EKPO_UPDATE_DIALOG (dev only): open the update dialog once a check finds one
     property string startExport: "" // EKPO_EXPORT (dev only): "design:<id>" or "mask:<id>" opens its export dialog
+    property string startPlay: "" // EKPO_PLAY (dev only): "applied" or "mask:<id>" plays the boot
+
+    function playBoot(maskId, title) {
+        bootPlayer.play(Backend.bootPlayback(maskId), title);
+    }
     property bool startTour: false // EKPO_TOUR (dev only): switch pages as clicks would, see the tour below
     property bool tourDone: false // the screenshot follows it
     property bool editing: false // the editor has the window; the sidebar is hidden
@@ -104,6 +109,15 @@ Kirigami.ApplicationWindow {
     ExportDialog {
         id: startExportDialog
     }
+    // Over everything, the sidebar included, like a boot.
+    BootPlayer {
+        id: bootPlayer
+    }
+    Timer {
+        running: root.startPlay !== ""
+        interval: 300
+        onTriggered: root.playBoot(root.startPlay.startsWith("mask:") ? root.startPlay.slice(5) : "", qsTr("Dev playback"))
+    }
     Timer {
         running: root.startExport !== ""
         interval: 300
@@ -170,6 +184,14 @@ Kirigami.ApplicationWindow {
         function onBugReportRequested() {
             root.reportBug();
         }
+        // Undo after "Move to Trash" (SPEC.md §4.13).
+        function onTrashed(text) {
+            root.showPassiveNotification(text, "long", qsTr("Undo"), () => {
+                const error = Backend.undoRemoval();
+                if (error)
+                    root.showPassiveNotification(error, "long");
+            });
+        }
         function onApplyFinished(ok, error, number) {
             if (!root.active)
                 Backend.notify(ok ? qsTr("Done") : qsTr("Nothing was changed"),
@@ -215,7 +237,7 @@ Kirigami.ApplicationWindow {
     // emits changed() on every refresh and setting change, restarting a bound timer.
     property bool startDialogsShown: false
     Timer {
-        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === "" && !root.startBugReport && root.startExport === ""
+        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === "" && !root.startBugReport && root.startExport === "" && root.startPlay === ""
         interval: 500
         onTriggered: {
             root.startDialogsShown = true;
@@ -311,6 +333,7 @@ Kirigami.ApplicationWindow {
         onReview: root.showReview()
         onIntro: introDialog.open()
         onUpdateRequested: updateDialog.open()
+        onPlay: (maskId, title) => root.playBoot(maskId, title)
     }
     AboutPage {
         id: aboutPage
@@ -327,6 +350,7 @@ Kirigami.ApplicationWindow {
         id: masksPage
         visible: false
         onReview: root.showReview()
+        onPlay: (maskId, title) => root.playBoot(maskId, title)
     }
     AssetsPage {
         id: assetsPage

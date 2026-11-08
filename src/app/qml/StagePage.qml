@@ -37,11 +37,13 @@ Kirigami.ScrollablePage {
         lastResult = error ? { names: [], errors: [error] } : null;
     }
     // Starters (SPEC.md §4.4), tinted with the Plasma accent colour.
+    // Every stage has six: Kirigami can't lay out hidden actions.
     readonly property var starters: ({
         bootMenu: [{ id: "centred", name: qsTr("Centred Menu") }, { id: "side", name: qsTr("Menu on the Left") }],
         bootSplash: [{ id: "spinner", name: qsTr("Spinner on a Gradient") }, { id: "progress", name: qsTr("Progress Bar") }],
         plasmaSplash: [{ id: "welcome", name: qsTr("Welcome and Spinner") }, { id: "accent", name: qsTr("Accent Colour") }]
-    })[stage]
+    })[stage].concat([{ id: "minimal", name: qsTr("Minimal") }, { id: "neon", name: qsTr("Neon") }, { id: "glass", name: qsTr("Glass") },
+                      { id: "retro", name: qsTr("Retro CRT") }])
     function newDesign(starter) {
         Backend.editor.create(stage, starter, Kirigami.Theme.highlightColor);
         edit();
@@ -76,6 +78,25 @@ Kirigami.ScrollablePage {
         Kirigami.Action {
             text: page.starters[1].name
             onTriggered: page.newDesign(page.starters[1].id)
+        }
+        Kirigami.Action {
+            separator: true
+        }
+        Kirigami.Action {
+            text: page.starters[2].name
+            onTriggered: page.newDesign(page.starters[2].id)
+        }
+        Kirigami.Action {
+            text: page.starters[3].name
+            onTriggered: page.newDesign(page.starters[3].id)
+        }
+        Kirigami.Action {
+            text: page.starters[4].name
+            onTriggered: page.newDesign(page.starters[4].id)
+        }
+        Kirigami.Action {
+            text: page.starters[5].name
+            onTriggered: page.newDesign(page.starters[5].id)
         }
     }
     Kirigami.Action {

@@ -58,16 +58,19 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 - Layout: element list · canvas · properties panel; resolution switch 1440p / 1080p / 720p; warnings bar.
 - The same building blocks on every stage, as far as its format allows (2026-11-07): background colour, a two-colour gradient at any angle (0–360°, issue #3) or an image; images and shared logos; text in any font; palette colours (five: background, gradient, accent, second accent, text; palettes made with three fill the new two from background and accent); a progress indicator (Plasma splash: Plasma's start; boot splash: boot progress; boot menu: the countdown); an animation from frames (both splashes). Only where the format has them: video (Plasma splash; the boot splash converts video to frames), fade-in (Plasma splash), hiding status messages (boot splash), the menu, countdown text and entry icons (boot menu). GRUB can't animate, so the boot menu has no spinner or animation.
-- Drag on the canvas with snapping (centre, edges, other elements); number fields and arrow-key nudging. Positions and sizes are stored as % of the screen.
+- Drag on the canvas with snapping (centre, edges, other elements); number fields and arrow-key nudging. Positions and sizes are stored as % of the screen. Helpers (2026-11-08): align to the screen's edges or centre, duplicate (Ctrl+D), lock an element against canvas edits, copy and paste its style (Ctrl+Shift+C/V).
+- Text effects (2026-11-08): shadow, outline and glow, each with its colour, sized from the font. The boot splash draws them into its background; a boot menu draws such text into `background.png` (GRUB's labels are plain); the Plasma splash uses copies of the text (plain QtQuick).
+- Spinners (2026-11-08): dots, arc, pulse, bars, orbit, comet or a turning image, slow, normal or fast; both splashes draw them alike. Progress bars: flat, rounded, glow or segmented (both splashes; a shimmer on the Plasma splash), and on the boot menu flat, rounded or a ring of dots. Images can fade in, slide up, breathe, pulse or spin (both splashes).
 - Explicit save (Ctrl+S); each save is a version (all kept); undo/redo per open design for the session; one crash-recovery draft.
-- New designs start from a few starters tinted with the Plasma accent colour, from blank, or by duplicating a Ekpo design.
+- New designs start from a few starters tinted with the Plasma accent colour (and on every stage Minimal, Neon, Glass and Retro CRT), from blank, or by duplicating a Ekpo design.
+- Versions… shows a thumbnail of each saved version; palettes can come from an image's main colours.
 - Videos (both splashes) take a part of a longer recording: start and length on a range over the whole video, with a silent preview that loops the part (2026-11-07), so one recording gives one clip per look. The clip's asset name says which part it is.
 - Validation at all three resolutions; problems that would break or clip the result warn, invalid output blocks the build.
 - Fonts picked from the system are copied into the library with their licence file where one exists.
 
 ### 4.5 Boot Menu designer (GRUB)
 
-- Elements: background, title or logo image, the entry list (font, colours, selected-entry style: flat colour, rounded box or glow, baked into 9-slice images), per-entry icons (small built-in monochrome set: Linux, Kubuntu-style, Windows, firmware settings, memtest; plus imports), countdown as text and/or progress bar, help line. No scrollbar.
+- Elements: background, title or logo image, the entry list (font, colours, selected-entry style: flat colour, rounded box, glow, outline, underline or a bar on the left, baked into 9-slice images; GRUB stretches their middle, so pills and arrows can't be drawn), per-entry icons (small built-in monochrome set: Linux, Kubuntu-style, Windows, firmware settings, memtest; plus imports), countdown as text and/or progress bar, help line. No scrollbar.
 - One high-resolution master per asset; Ekpo derives what each resolution needs at build time. The background and `image` components scale at boot; `.pf2` fonts don't.
 - **Built for one resolution.** Each apply builds the theme for the boot resolution: by default the current mode of the primary screen (KScreen priority 1; here 2560×1440), changeable on the review page. Font sizes and the pixel values in `theme.txt` (item height, padding, spacing) are scaled from the design by screen height, with an optional per-resolution font size override in the designer; the entry width check runs at that resolution. Positions in % need no change.
 - **Entry text is never cut off.** GRUB draws each entry on one line and clips it, so the menu width adapts: the build measures the longest expected entry (real `.pf2` glyph widths, icon and padding, headroom for longer kernel versions) and widens the menu box up to full width; if it still doesn't fit, the build warns and offers a smaller font. Expected entries come from the kernels in `/boot`, `GRUB_DISTRIBUTOR` and the menu scripts present (kernels, Advanced options, memtest, os-prober, UEFI Firmware Settings, fwupd); the helper re-checks against the real `grub.cfg` after `update-grub`.
@@ -76,7 +79,8 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 ### 4.6 Boot Splash designer (Plymouth)
 
-- Module: `two-step`; `script` when a design needs it, e.g. an animation loop longer than 2 s (two-step's throbber always loops in 2.0 s at 30 fps) or a lower frame rate.
+- Module: `two-step`; `script` when a design needs it, e.g. an animation loop longer than 2 s (two-step's throbber always loops in 2.0 s at 30 fps), a lower frame rate, a styled progress bar or a moving image.
+- A notice on the Overview when a kernel was installed since Ekpo last looked: apt builds its initrd with the selected splash; if one lacks it, **Rebuild…** packs the splash into every initrd again (also offered on the Boot Splash card when initrds are older than the selection).
 - Elements: background (scaled to the screen), logo, a centred animation (spinner, imported frames or frames converted from a video), optional progress bar, static text (rendered into images at build time, any font).
 - Live text (status messages) is always white Ubuntu (initramfs-tools packs only that font). **"Hide status messages"** checkbox per design, off by default (two-step's `SuppressMessages`, per mode); password and emergency prompts always show; Esc still shows details.
 - Shutdown and reboot use the boot look, with optional per-mode text such as "Restarting…".
@@ -87,6 +91,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 
 - Full-screen looping video: one silent MP4 played through QtMultimedia, scaled by the GPU (first frame ~30 ms after play; a first-frame still is optional). Plus image, logo and text layers, optional progress indicator, fade-in.
 - `Splash.qml` imports only QtQuick (and QtMultimedia for video); no Kirigami or Plasma modules. Fonts are bundled.
+- Background extras (2026-11-08): a slow pan and zoom over the background image, snow or stars, a vignette, film grain.
 - Preview in the editor, plus **Run real splash** (`ksplashqml --test --window <package>`).
 
 ### 4.8 Masks
@@ -101,7 +106,7 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 - **GRUB:** install the theme into a versioned folder `/boot/grub/themes/ekpo-<slug>-<ver>`; write only `/etc/default/grub.d/zz-ekpo.cfg` (`GRUB_THEME`, `GRUB_GFXMODE=<built resolution>,auto` for Ekpo designs and `2560x1440,1920x1080,1280x720,auto` for imported themes, timeout keys); run `update-grub`; verify `grub.cfg`. Warn when `zz-ekpo.cfg` overrides a value set in `/etc/default/grub`.
 - **Plymouth:** install into a versioned folder; register and select the `default.plymouth` alternative; set `plymouthd.conf` `Theme=` to match; rebuild the initrds with the detected generator: only the newest kernel's or all, chosen per review with a switch (default from Settings, off = newest only; restores always all, so a restore never leaves an unwanted splash on older kernels; older kernels keep the previous splash as a fallback); run `update-grub` too (the alternative's `default.grub` slave ends up in `grub.cfg`); verify.
 - **Plasma splash:** copy the package, set `ksplashrc` `[KSplash] Theme=`/`Engine=KSplashQML`.
-- Re-applying an edited design installs a new versioned folder, so every history entry stays restorable; folders no kept entry uses are removed after the next successful apply.
+- Re-applying an edited design installs a new versioned folder, so every history entry stays restorable; folders (and Plasma splash copies, to the trash) no kept entry uses are removed after the next successful apply. Settings → **Remove Old Theme Copies** removes leftovers without an apply (the helper's `prune` operation).
 - **After reboot:** the next time the app opens after a boot-stage apply, it asks "Did the new look work?" — *Keep* or *Revert to previous*.
 
 ### 4.10 Boot options
@@ -123,6 +128,8 @@ It replaces a hand-installed GRUB theme and the mostly broken "Get New" splashes
 ### 4.13 Library, export, settings
 
 - Deleting moves items to the desktop trash with an inline Undo.
+- **Play the Boot** (2026-11-08): the boot menu, boot splash and Plasma splash previews one after another, about as long as a boot shows each, for the look applied now (Overview) or a Mask (its card). Ekpo can only play the boot splashes it makes.
+- **New Mask from What's Applied** turns the current look into a Mask.
 - **Assets page** (2026-11-07): images, videos and fonts in the library, shared palettes and logos, filtered by type; for each a preview (font sample, palette colours), size, date, source, licence (fonts) and what uses it: designs with their saved versions and drafts, shared logos, fonts (licence texts). Add images and fonts; rename; move to the trash only what nothing uses (a saved version would lose it), one by one or "Remove Unused". Videos are added in the editor, which converts them for their splash.
 - Export a design or Mask as plain theme packages (GRUB/Plymouth `.tar.gz`, look-and-feel package). Export the whole library as one archive. Exports warn when an asset's licence forbids sharing.
 - Generated packages carry author "nomoruyi" and licence MIT, editable per design; fonts and imported art keep their own licences.

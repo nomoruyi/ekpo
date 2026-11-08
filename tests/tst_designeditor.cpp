@@ -1,4 +1,5 @@
 #include "designeditor.h"
+#include "gencommon.h"
 #include "media.h"
 #include "importer.h"
 #include "testmain.h"
@@ -11,6 +12,7 @@
 #include <QJsonArray>
 #include <QSignalSpy>
 #include <QStandardPaths>
+#include <QPainter>
 #include <QTemporaryDir>
 
 class TestDesignEditor : public QObject
@@ -37,6 +39,7 @@ private Q_SLOTS:
     void animationFromVideo();
     void warnsAboutMemory();
     void startersAreTinted();
+    void lookStartersBuild();
     void duplicates();
     void sharesLogos();
     void sharesPalettes();
@@ -44,6 +47,9 @@ private Q_SLOTS:
     void deletesPalette();
     void fiveColourPalettes();
     void videoSegments();
+    void paletteFromAnImage();
+    void versionThumbnails();
+    void duplicatesAndCopiesStyle();
     void bootMenuPreview();
     void bootMenuStarters();
     void bootMenuIcons();
@@ -493,6 +499,23 @@ void TestDesignEditor::startersAreTinted()
     QVERIFY(e.content().value(QStringLiteral("elements")).toList().isEmpty());
 }
 
+void TestDesignEditor::lookStartersBuild()
+{
+    // Minimal, Neon, Glass and Retro CRT exist for every stage and build without a problem.
+    DesignEditor &e = *m_editor;
+    e.setMenuEntries({QStringLiteral("Kubuntu"), QStringLiteral("UEFI Firmware Settings")});
+    for (const char *stage : {"bootMenu", "bootSplash", "plasmaSplash"}) {
+        for (const char *starter : {"minimal", "neon", "glass", "retro"}) {
+            e.create(QLatin1String(stage), QLatin1String(starter), QColor(QStringLiteral("#3daee9")));
+            QVERIFY2(!e.content().value(QStringLiteral("elements")).toList().isEmpty(), starter);
+            e.flushPreview();
+            QVERIFY2(e.problems().isEmpty(), qPrintable(QStringLiteral("%1 %2: %3").arg(QLatin1String(stage), QLatin1String(starter), e.problems().join(QLatin1Char('\n')))));
+            if (const QString save = qEnvironmentVariable("EKPO_SAVE_PREVIEW"); !save.isEmpty() && QLatin1String(stage) == QLatin1String("bootMenu"))
+                QImage(e.bootMenu().value(QStringLiteral("preview")).toUrl().toLocalFile()).save(QString(save).replace(QLatin1String(".png"), QLatin1Char('-') + QLatin1String(starter) + QLatin1String(".png")));
+        }
+    }
+}
+
 void TestDesignEditor::duplicates()
 {
     DesignEditor &e = *m_editor;
@@ -694,6 +717,89 @@ void TestDesignEditor::videoSegments()
     for (const Asset &a : std::as_const(assets))
         names << a.name;
     QVERIFY2(names.contains(QStringLiteral("clip (0:00.5–0:00.9) 0001")), qPrintable(names.join(QStringLiteral(" | "))));
+}
+
+// "From an Image…": background the most common colour, accent the most vivid, accent2
+// another hue, text what reads best; linked, and reused the second time.
+void TestDesignEditor::paletteFromAnImage()
+{
+    QImage image(100, 100, QImage::Format_RGB32); // 60 % dark blue, 20 % orange, 10 % teal, 10 % white
+    image.fill(QColor(QStringLiteral("#102030")));
+    QPainter painter(&image);
+    painter.fillRect(0, 0, 100, 20, QColor(QStringLiteral("#ff7a00")));
+    painter.fillRect(0, 20, 100, 10, QColor(QStringLiteral("#00c0a0")));
+    painter.fillRect(0, 30, 100, 10, Qt::white);
+    painter.end();
+    const auto near = [](const QString &actual, const char *expected) {
+        const QColor a(actual), e(QString::fromLatin1(expected));
+        return std::abs(a.red() - e.red()) < 14 && std::abs(a.green() - e.green()) < 14 && std::abs(a.blue() - e.blue()) < 14;
+    };
+    const QMap<QString, QString> colours = paletteFromImage(image);
+    QVERIFY2(near(colours.value(QStringLiteral("background")), "#102030"), qPrintable(colours.value(QStringLiteral("background"))));
+    QVERIFY2(near(colours.value(QStringLiteral("gradient")), "#ff7a00"), qPrintable(colours.value(QStringLiteral("gradient"))));
+    QVERIFY2(near(colours.value(QStringLiteral("accent")), "#ff7a00"), qPrintable(colours.value(QStringLiteral("accent"))));
+    QVERIFY2(near(colours.value(QStringLiteral("accent2")), "#00c0a0"), qPrintable(colours.value(QStringLiteral("accent2"))));
+    QVERIFY2(near(colours.value(QStringLiteral("text")), "#ffffff"), qPrintable(colours.value(QStringLiteral("text"))));
+
+    DesignEditor &e = *m_editor;
+    e.create();
+    const QString file = m_tmp->filePath(QStringLiteral("sunset.png"));
+    QVERIFY(image.save(file));
+    QCOMPARE(e.newPaletteFromImage(QUrl::fromLocalFile(file)), QString());
+    const QString id = e.content().value(QStringLiteral("palette")).toString();
+    QCOMPARE(e.shared().value(id).toMap().value(QStringLiteral("name")).toString(), QStringLiteral("Palette of sunset"));
+    QCOMPARE(e.newPaletteFromImage(QUrl::fromLocalFile(file)), QString());
+    QCOMPARE(e.shared().size(), 1);
+    QVERIFY(e.newPaletteFromImage(QUrl::fromLocalFile(m_tmp->filePath(QStringLiteral("missing.png")))).contains(QStringLiteral("isn't an image")));
+}
+
+// Versions… shows a picture of each version: QML grabs the canvas into thumbnailFile().
+void TestDesignEditor::versionThumbnails()
+{
+    DesignEditor &e = *m_editor;
+    e.create();
+    QCOMPARE(e.thumbnailFile(), QString()); // not saved yet
+    QCOMPARE(e.save(), QString());
+    QVERIFY(e.thumbnailFile().endsWith(QStringLiteral("/versions/1.png")));
+    QCOMPARE(e.versions().first().toMap().value(QStringLiteral("thumbnail")).toUrl(), QUrl()); // none yet
+    QImage picture(16, 9, QImage::Format_RGB32);
+    picture.fill(Qt::red);
+    QVERIFY(picture.save(e.thumbnailFile()));
+    e.thumbnailSaved();
+    QCOMPARE(e.versions().first().toMap().value(QStringLiteral("thumbnail")).toUrl(), QUrl::fromLocalFile(e.thumbnailFile()));
+}
+
+void TestDesignEditor::duplicatesAndCopiesStyle()
+{
+    DesignEditor &e = *m_editor;
+    e.create();
+    const int text = e.addElement(QStringLiteral("text"), {{QStringLiteral("color"), QStringLiteral("#ff0000")}, {QStringLiteral("size"), 6},
+                                                           {QStringLiteral("text"), QStringLiteral("Hello")}, {QStringLiteral("x"), 97}, {QStringLiteral("locked"), true}});
+    QCOMPARE(e.duplicateElement(text), text + 1);
+    const QVariantMap copy = elementAt(e, text + 1);
+    QCOMPARE(copy.value(QStringLiteral("text")).toString(), QStringLiteral("Hello"));
+    QCOMPARE(copy.value(QStringLiteral("x")).toDouble(), 60.0); // shifted, but kept on the screen (width 40)
+    QVERIFY(!copy.contains(QStringLiteral("locked")));
+    e.undo();
+    QCOMPARE(e.content().value(QStringLiteral("elements")).toList().size(), 1); // one undo step
+
+    // Style: onto another text all of it, onto a spinner only what they share.
+    const QVariantMap style = e.elementStyle(text);
+    QVERIFY(!style.contains(QStringLiteral("text")) && !style.contains(QStringLiteral("x")));
+    const int other = e.addElement(QStringLiteral("text"));
+    e.pasteStyle(other, style);
+    QCOMPARE(elementAt(e, other).value(QStringLiteral("size")).toDouble(), 6.0);
+    QCOMPARE(elementAt(e, other).value(QStringLiteral("text")).toString(), QStringLiteral("Text")); // its own content stays
+    const int spinner = e.addElement(QStringLiteral("spinner"));
+    e.pasteStyle(spinner, style);
+    QCOMPARE(elementAt(e, spinner).value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
+    QVERIFY(!elementAt(e, spinner).contains(QStringLiteral("align")) || elementAt(e, spinner).value(QStringLiteral("align")) == QStringLiteral("center"));
+
+    // The boot menu has exactly one menu.
+    e.create(QStringLiteral("bootMenu"), QStringLiteral("centred"));
+    for (int i = 0; i < e.content().value(QStringLiteral("elements")).toList().size(); ++i)
+        if (elementAt(e, i).value(QStringLiteral("type")) == QStringLiteral("menu"))
+            QCOMPARE(e.duplicateElement(i), -1);
 }
 
 void TestDesignEditor::bootMenuPreview()

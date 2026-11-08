@@ -55,6 +55,9 @@ struct PlanContext {
     // Applies default to the setting, restores to all (INTERVIEW.md, 2026-11-06).
     bool allKernels = true;
     QSize screen = builtScreen; // boot menu and boot splash designs are built for it
+    // Pack the wanted boot splash into the initrds even if it is selected already
+    // (initrds built before it was, a new kernel's).
+    bool rebuildSplash = false;
 };
 
 // The screen designs are built for unless the review picks another (SPEC.md §4.5):
@@ -64,6 +67,9 @@ QSize primaryScreenOr(const SystemState &state);
 inline const QString defaultGfxmode = QStringLiteral("2560x1440,1920x1080,1280x720,auto");
 
 Plan planMask(const PlanContext &context, const Mask &mask);
+// The slots of a Mask that gives what target applied: each stage's design, or the
+// imported theme it came from; a stage whose look isn't in the library stays out.
+QMap<Stage, Slot> slotsFromTarget(const Library &library, const Target &target);
 // A name as theme folders use it: lower case, a-z, 0-9 and "-", at most 32 characters.
 QString slug(const QString &name);
 // Restores and Masks both end here. builds holds files of builds not yet in the library.
@@ -86,8 +92,11 @@ struct BootMenuCheck {
 };
 BootMenuCheck checkBootMenu(const Library &library, const SystemState &state);
 // Ekpo theme copies (ekpo-*) that history still needs once newTarget is applied: the
-// helper removes the others (SPEC.md §4.9).
-QStringList keptThemes(const Library &library, const Target &newTarget);
+// helper removes the others (SPEC.md §4.9). Without newTarget: every entry's.
+QStringList keptThemes(const Library &library, const std::optional<Target> &newTarget);
+// Ekpo's system theme copies (ekpo-*) that no history entry and nothing selected now
+// needs ("Remove Old Theme Copies"); the helper checks again what is selected.
+QStringList oldSystemCopies(const Library &library, const QString &rootDir, const Target &current);
 // Ekpo's theme copies installed in the system theme folders (folder names).
 QStringList installedEkpoCopies(const QString &rootDir);
 // True when every stage Ekpo ever changed is back at Original and Ekpo's GRUB

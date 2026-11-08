@@ -35,6 +35,7 @@ private Q_SLOTS:
     void resolvesSharedElements();
     void findsUses();
     void renamesAndRemovesAssets();
+    void restoresFromTrash();
 
 private:
     static Library openFresh(const QTemporaryDir &tmp)
@@ -432,8 +433,11 @@ void TestLibrary::resolvesSharedElements()
         {QStringLiteral("background"), QJsonObject{{QStringLiteral("color"), QStringLiteral("@background")}}},
         {QStringLiteral("elements"),
          QJsonArray{QJsonObject{{QStringLiteral("type"), QStringLiteral("image")}, {QStringLiteral("shared"), logo.id}},
-                    QJsonObject{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), QStringLiteral("@home")}, {QStringLiteral("color"), QStringLiteral("@text")}},
-                    QJsonObject{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("color"), QStringLiteral("@accent")}}}},
+                    QJsonObject{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), QStringLiteral("@home")}, {QStringLiteral("color"), QStringLiteral("@text")},
+                                {QStringLiteral("glow"), QStringLiteral("@accent")}},
+                    QJsonObject{{QStringLiteral("type"), QStringLiteral("spinner")}, {QStringLiteral("color"), QStringLiteral("@accent")}},
+                    QJsonObject{{QStringLiteral("type"), QStringLiteral("menu")}, {QStringLiteral("selectedColor"), QStringLiteral("@text")},
+                                {QStringLiteral("selection"), QJsonObject{{QStringLiteral("style"), QStringLiteral("flat")}, {QStringLiteral("color"), QStringLiteral("@accent")}}}}}},
     };
     QStringList problems;
     const Design resolved = library.resolved(design, problems);
@@ -444,6 +448,10 @@ void TestLibrary::resolvesSharedElements()
     QCOMPARE(elements[1].toObject().value(QStringLiteral("text")).toString(), QStringLiteral("@home")); // only colours are palette colours
     QCOMPARE(elements[1].toObject().value(QStringLiteral("color")).toString(), QStringLiteral("#ffffff"));
     QCOMPARE(elements[2].toObject().value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
+    // Every colour key: text effects, a menu's selected text and selection box.
+    QCOMPARE(elements[1].toObject().value(QStringLiteral("glow")).toString(), QStringLiteral("#ff0000"));
+    QCOMPARE(elements[3].toObject().value(QStringLiteral("selectedColor")).toString(), QStringLiteral("#ffffff"));
+    QCOMPARE(elements[3].toObject().value(QStringLiteral("selection")).toObject().value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
 
     // The stamp follows what is built: the palette, not the version.
     const QString stamp = Library::stamp(resolved);
@@ -518,6 +526,36 @@ void TestLibrary::renamesAndRemovesAssets()
     QVERIFY2(library.removeAsset(image->hash, error), qPrintable(error));
     QVERIFY(!QFile::exists(file)); // in the trash
     QVERIFY(library.assets(errors).isEmpty());
+}
+
+// Undo after "Move to Trash": the trash's .trashinfo knows where things came from.
+void TestLibrary::restoresFromTrash()
+{
+    QTemporaryDir tmp;
+    Library library = openFresh(tmp);
+    QString error;
+    Design design;
+    design.name = QStringLiteral("Dawn");
+    design.stage = Stage::PlasmaSplash;
+    QVERIFY2(library.saveDesign(design, error), qPrintable(error));
+    QString trashed;
+    QVERIFY2(library.removeDesign(design.id, error, &trashed), qPrintable(error));
+    QStringList errors;
+    QVERIFY(library.designs(errors).isEmpty());
+    QVERIFY2(restoreFromTrash(trashed, error), qPrintable(error));
+    QCOMPARE(library.designs(errors).size(), 1);
+    QVERIFY(!QFile::exists(QFileInfo(trashed).dir().path() + QStringLiteral("/../info/") + QFileInfo(trashed).fileName() + QStringLiteral(".trashinfo")));
+    QVERIFY(!restoreFromTrash(trashed, error)); // nothing left to put back
+
+    // An asset: its file and its entry.
+    const auto image = library.addAsset(QStringLiteral(FIXTURES_DIR "/assets/logo.png"), Asset::Kind::Image, QStringLiteral("Logo"), error);
+    QVERIFY2(image, qPrintable(error));
+    QVERIFY2(library.removeAsset(image->hash, error, &trashed), qPrintable(error));
+    QVERIFY(library.assets(errors).isEmpty());
+    QVERIFY2(library.restoreAsset(*image, trashed, error), qPrintable(error));
+    QCOMPARE(library.assets(errors).size(), 1);
+    QCOMPARE(library.assets(errors).first().name, QStringLiteral("Logo"));
+    QVERIFY(QFile::exists(library.assetPath(*image)));
 }
 
 EKPO_TEST_MAIN(TestLibrary)

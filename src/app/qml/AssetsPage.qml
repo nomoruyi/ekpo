@@ -32,6 +32,11 @@ Kirigami.ScrollablePage {
             onTriggered: addDialog.open()
         },
         Kirigami.Action {
+            text: qsTr("Palette from Image…")
+            icon.name: "color-management"
+            onTriggered: paletteDialog.open()
+        },
+        Kirigami.Action {
             text: qsTr("Remove Unused…")
             icon.name: "edit-clear-all"
             enabled: Backend.assetList.some(a => a.uses.length === 0)
@@ -196,6 +201,11 @@ Kirigami.ScrollablePage {
         }
     }
 
+    FileDialog {
+        id: paletteDialog
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg *.webp *.svg)")]
+        onAccepted: page.message = Backend.paletteFromImage(selectedFile)
+    }
     FileDialog {
         id: addDialog
         fileMode: FileDialog.OpenFiles

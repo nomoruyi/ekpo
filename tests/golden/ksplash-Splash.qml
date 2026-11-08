@@ -95,29 +95,35 @@ Rectangle {
             y: root.height * 0.75
             width: root.width * 0.05
             height: root.height * 0.05
-            Item {
-                readonly property real size: Math.min(parent.width, parent.height)
+            Canvas {
+                readonly property color tint: "#80ffffff"
+                property real phase: 0
                 anchors.centerIn: parent
-                width: size
-                height: size
-                RotationAnimator on rotation {
+                width: Math.min(parent.width, parent.height)
+                height: width
+                onPhaseChanged: requestPaint()
+                NumberAnimation on phase {
                     from: 0
-                    to: 360
-                    duration: 1200
+                    to: 1
+                    duration: 1000
                     loops: Animation.Infinite
                 }
-                Repeater {
-                    model: 8
-                    Rectangle {
-                        required property int index
-                        readonly property real angle: index * Math.PI / 4
-                        width: parent.width * 0.18
-                        height: width
-                        radius: width / 2
-                        color: "#80ffffff"
-                        opacity: (index + 1) / 8
-                        x: (parent.width - width) / 2 * (1 + Math.cos(angle))
-                        y: (parent.height - height) / 2 * (1 + Math.sin(angle))
+                onPaint: {
+                    const ctx = getContext("2d");
+                    const s = Math.min(width, height), t = 2 * Math.PI * phase;
+                    const tinted = alpha => Qt.rgba(tint.r, tint.g, tint.b, tint.a * Math.max(0, Math.min(1, alpha)));
+                    const dot = (x, y, radius, alpha) => {
+                        ctx.fillStyle = tinted(alpha);
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.fill();
+                    };
+                    ctx.reset();
+                    ctx.translate(width / 2, height / 2);
+                    const d = s * 0.18;
+                    for (let i = 0; i < 8; ++i) {
+                        const a = i * Math.PI / 4 + t;
+                        dot((s - d) / 2 * Math.cos(a), (s - d) / 2 * Math.sin(a), d / 2, (i + 1) / 8);
                     }
                 }
             }
@@ -128,14 +134,19 @@ Rectangle {
             width: root.width * 0.2
             height: root.height * 0.005
             color: "#404040"
-            Rectangle {
+            radius: 0
+            Item {
                 width: parent.width * Math.min(root.stage, 6) / 6
                 height: parent.height
-                color: "#3daee9"
                 Behavior on width {
                     NumberAnimation {
                         duration: 400
                     }
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 0
+                    color: "#3daee9"
                 }
             }
         }

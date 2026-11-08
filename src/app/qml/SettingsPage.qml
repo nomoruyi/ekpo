@@ -16,6 +16,8 @@ Kirigami.ScrollablePage {
     property string removalMessage: ""
     property bool removalOk: false
     property bool removing: false
+    property bool pruning: false
+    property string pruneMessage: ""
     property string libraryMessage: ""
     property bool libraryOk: false
 
@@ -48,6 +50,11 @@ Kirigami.ScrollablePage {
     Connections {
         target: Backend
         function onApplyFinished(ok, error) {
+            if (page.pruning) {
+                page.pruning = false;
+                page.pruneMessage = ok ? qsTr("Old theme copies removed.") : qsTr("Nothing was removed: %1").arg(error);
+                return;
+            }
             if (!page.removing)
                 return;
             page.removing = false;
@@ -177,6 +184,36 @@ Kirigami.ScrollablePage {
 
         // SPEC.md §5: uninstalling the package leaves applied looks working; this
         // removes Ekpo's traces first.
+        // Copies no history entry needs; applies remove them too (SPEC.md §4.9).
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: qsTr("Old theme copies")
+        }
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+            wrapMode: Text.Wrap
+            text: Backend.oldCopies.length === 0
+                ? qsTr("None: every installed copy is in use or needed by history.")
+                : qsTr("%n copy(s) no history entry needs: %1", "", Backend.oldCopies.length).arg(Backend.oldCopies.join(", "))
+        }
+        QQC2.Button {
+            text: qsTr("Remove Old Theme Copies")
+            icon.name: "edit-clear-history"
+            enabled: Backend.oldCopies.length > 0 && !Backend.applying
+            QQC2.ToolTip.text: qsTr("Plasma splash copies go to the trash; boot menu and boot splash copies need your password.")
+            QQC2.ToolTip.visible: hovered
+            onClicked: {
+                page.pruneMessage = "";
+                page.pruning = Backend.removeOldCopies();
+                if (!page.pruning)
+                    page.pruneMessage = qsTr("Old theme copies moved to the trash.");
+            }
+        }
+        QQC2.Label {
+            visible: page.pruneMessage !== ""
+            text: page.pruneMessage
+        }
+
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
             Kirigami.FormData.label: qsTr("Remove Ekpo from this system")

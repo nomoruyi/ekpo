@@ -177,6 +177,35 @@ SPEC.md §4.13: exports are plain packages that work without Ekpo; the whole lib
 5. UI: "Export…" on design and Mask cards, "Export Library…" in Settings; the export dialog shows the screen size (boot stages), the licence list and the target file.
 6. Leftovers for v1.0: Settings' default preview resolution (SPEC.md §4.13; the editor opens at it), and removing the placeholder page no section reaches any more.
 
+## 9e. Build order for polish (chosen 2026-11-08)
+
+The owner picked F1–F8 and Q1–Q4, Q6, Q9–Q11. Splash packages stay plain QtQuick where they can: particles, vignette and grain are drawn by the generator or with plain items; only text glow needs QtQuick.Effects (the README says so). GRUB can't draw text effects, so static text with one is drawn into background.png.
+
+1. Q2: Undo after "Move to Trash" (designs, imports, Masks, assets, palettes): the trashed path is kept and an inline message offers Undo.
+2. Q6: "New Mask from What's Applied".
+3. Q3: "Palette from Image…": the five most distinct dominant colours of an image.
+4. Q10: version thumbnails, grabbed from the editor's canvas at save (`versions/<n>.png`), shown in Versions….
+5. Q4: editor helpers: align to the screen (edges and centre), Ctrl+D duplicate, lock against canvas edits, copy and paste style.
+6. F6: GRUB selection styles underline, pill and arrow (9-slice images).
+7. F5: GRUB circular countdown (`circular_progress` with centre and tick images Ekpo draws).
+8. F1: spinner styles dots (now), arc, pulse, bars, orbit, comet and a rotating image, with speed.
+9. F4: progress bar styles: rounded, segmented, glow, and a shimmer while progress is unknown.
+10. F3: text shadow, outline and glow.
+11. F2: image animations fade, breathe, pulse, slide-in and spin (Plasma splash; boot splash through the script module).
+12. F7: Plasma splash backgrounds: slow pan and zoom over the image, drifting particles (snow, stars), vignette, grain.
+13. F8: more starters per stage built from those (Minimal, Neon, Glass, Retro CRT).
+14. Q1: "Remove Old Theme Copies": installed `ekpo-*` copies no history entry, Original or the current look needs, removed through the helper (a new operation that only takes `ekpo-*` names it re-checks).
+15. Q11: a notice when a kernel Ekpo hasn't seen got installed, with Rebuild for the splash.
+16. Q9: "Play the Boot": the boot menu, boot splash and Plasma splash previews in sequence with their timing, for the applied look or a Mask.
+
+Built 2026-11-08, with these changes to the plan:
+- F6: GRUB stretches a 9-slice box's middle rows and columns, so a pill or an arrow can't be drawn; the styles are outline, underline and a bar on the left. GRUB draws a selection's borders outside the entry and moves its text down by the top border (`gui_list.c`): clear item boxes of the same size (`item_*.png`) keep every entry's text in line, entries are spaced by the border, and the preview draws it that way.
+- F5 and the boot menu's rounded bar: `circular_progress` (ticks that disappear as the time runs out) and `progress_bar` with `bar_style`/`highlight_style` pixmaps.
+- F3: the Plasma splash glows with rings of faint text copies, so it stays plain QtQuick (MultiEffect didn't draw in the offscreen tests either).
+- F4, F2 on the boot splash: styled bars and moving images switch to the script module; spinners stay two-step frames.
+- Q1: the helper already prunes its copies after each apply; the gap was Plasma splash copies, now moved to the trash after each apply too. `prune` (keep list only) is the new helper operation for leftovers.
+- Q11: kernels Ekpo told about are kept in Settings; initrds are root-only, so "carries the splash" means built after the selection changed.
+
 ## 10. Decisions for the owner
 
 1. pkexec helper with stdin payload and own framing (above), or KAuth?

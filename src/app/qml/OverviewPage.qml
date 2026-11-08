@@ -14,11 +14,18 @@ Kirigami.ScrollablePage {
     signal review
     signal intro
     signal updateRequested
+    signal play(string maskId, string title) // "Play the Boot"; empty id: what is applied now
 
     readonly property var stageTitles: ({ bootMenu: qsTr("Boot Menu"), bootSplash: qsTr("Boot Splash"), plasmaSplash: qsTr("Plasma Splash") })
 
     title: qsTr("Overview")
     actions: [
+        Kirigami.Action {
+            text: qsTr("Play the Boot")
+            icon.name: "media-playback-start"
+            tooltip: qsTr("The boot menu, boot splash and Plasma splash one after another, as Ekpo previews them")
+            onTriggered: page.play("", qsTr("What is applied now"))
+        },
         Kirigami.Action {
             text: qsTr("Introduction")
             icon.name: "help-about"
@@ -83,6 +90,32 @@ Kirigami.ScrollablePage {
             ]
         }
 
+        // A kernel installed since Ekpo last looked (SPEC.md §4.6).
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: (Backend.kernelNotice.versions ?? []).length > 0
+            type: Backend.kernelNotice.outdated === true ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
+            text: Backend.kernelNotice.outdated === true
+                ? qsTr("A new kernel (%1) was installed, and its initrd doesn't carry your boot splash yet. Rebuild to put it there.").arg((Backend.kernelNotice.versions ?? []).join(", "))
+                : qsTr("A new kernel (%1) was installed. The system built its initrd with your boot splash.").arg((Backend.kernelNotice.versions ?? []).join(", "))
+            actions: Backend.kernelNotice.outdated === true ? [rebuildSplashAction, kernelsSeenAction] : [kernelsSeenAction]
+
+            Kirigami.Action {
+                id: rebuildSplashAction
+                text: qsTr("Rebuild…")
+                icon.name: "view-refresh"
+                enabled: !Backend.applying
+                onTriggered: {
+                    Backend.planRebuildSplash();
+                    page.review();
+                }
+            }
+            Kirigami.Action {
+                id: kernelsSeenAction
+                text: qsTr("OK")
+                onTriggered: Backend.acknowledgeKernels()
+            }
+        }
         Kirigami.InlineMessage {
             Layout.fillWidth: true
             visible: Backend.system.leftoverJournal
@@ -175,6 +208,17 @@ Kirigami.ScrollablePage {
                                 enabled: !Backend.applying
                                 onClicked: {
                                     Backend.planRebuildBootMenu();
+                                    page.review();
+                                }
+                            }
+                            QQC2.Button {
+                                visible: stageCard.modelData.rebuildSplash === true
+                                text: qsTr("Rebuild Initrds…")
+                                enabled: !Backend.applying
+                                QQC2.ToolTip.text: qsTr("Pack the selected splash into every kernel's initrd")
+                                QQC2.ToolTip.visible: hovered
+                                onClicked: {
+                                    Backend.planRebuildSplash();
                                     page.review();
                                 }
                             }

@@ -39,6 +39,11 @@ QString sandboxSetupError();
 // Moves the Plasma splash packages Ekpo copied (history entries with a build) to
 // the trash, except activeTheme. Returns their ids.
 QStringList removePlasmaCopies(const Library &library, const QString &homeDir, const QString &activeTheme);
+// Ekpo's Plasma splash packages (ekpo-* in ~/.local/share/plasma/look-and-feel) that no
+// history entry needs and ksplashrc doesn't select.
+QStringList oldPlasmaCopies(const Library &library, const QString &homeDir);
+// Moves those to the trash; returns their ids.
+QStringList trashOldPlasmaCopies(const Library &library, const QString &homeDir);
 
 // Carries out a Plan (SPEC.md §4.9): stores new builds, captures Original, applies
 // the Plasma splash, runs the helper for the boot stages, and records history. If
@@ -58,6 +63,9 @@ public:
     // Removes Ekpo's theme copies and alternatives (helper "uninstall"); the
     // helper refuses while anything of Ekpo's is still selected.
     void removeEkpoFiles();
+    // "Remove Old Theme Copies": the helper removes Ekpo's system copies not in keep
+    // and not selected.
+    void pruneCopies(const QStringList &keep);
 
 Q_SIGNALS:
     void progress(const QString &text);
@@ -72,7 +80,7 @@ private:
     };
 
     void startHelper(const QByteArray &input);
-    void runPlainOperation(Request::Operation operation, const QString &message);
+    void runPlainOperation(Request::Operation operation, const QString &message, const std::optional<QStringList> &keep = std::nullopt);
     bool applyPlasma(const PlasmaSplashTarget &target, QString &error);
     void undoPlasma();
     void readHelperOutput();

@@ -20,6 +20,8 @@ Kirigami.Page {
     readonly property var elements: editor.content.elements ?? []
     readonly property var backgroundSpec: editor.content.background ?? ({})
     property int selected: -1 // -1 = the background
+    property bool grabbing: false // the canvas is being pictured: no outlines
+    property var copiedStyle: ({}) // Copy Style
     readonly property var element: selected >= 0 && selected < elements.length ? elements[selected] : null
     property int resolution: Backend.previewResolution // Settings' default
     readonly property size screenSize: Qt.size(resolution * 16 / 9, resolution)
@@ -74,10 +76,41 @@ Kirigami.Page {
     function commitFields() {
         canvas.forceActiveFocus();
     }
-    function saveDesign(): bool {
+    Shortcut {
+        sequence: "Ctrl+D"
+        enabled: page.selected >= 0
+        onActivated: page.duplicate()
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+C"
+        enabled: page.selected >= 0
+        onActivated: page.copiedStyle = page.editor.elementStyle(page.selected)
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+V"
+        enabled: page.selected >= 0 && Object.keys(page.copiedStyle).length > 0
+        onActivated: page.editor.pasteStyle(page.selected, page.copiedStyle)
+    }
+
+    // A picture of the saved version for Versions… (Q10), unless the page is leaving.
+    function saveDesign(withThumbnail = true): bool {
         commitFields();
         message = editor.save();
+        if (message === "" && withThumbnail)
+            saveThumbnail();
         return message === "";
+    }
+    function saveThumbnail() {
+        const file = editor.thumbnailFile();
+        if (file === "")
+            return;
+        grabbing = true; // without element outlines
+        if (!monitor.grabToImage(result => {
+                page.grabbing = false;
+                if (result.saveToFile(file))
+                    page.editor.thumbnailSaved();
+            }, Qt.size(384, 216)))
+            grabbing = false;
     }
     function tryLeave() {
         commitFields();
@@ -89,8 +122,22 @@ Kirigami.Page {
         }
     }
     function nudge(dx, dy) {
-        if (element)
+        if (element && !element.locked)
             editor.setElement(selected, { x: element.x + dx, y: element.y + dy });
+    }
+    // Editor helpers (Q4): align to the screen, duplicate, copy and paste style.
+    function align(edge) {
+        const e = element;
+        if (!e)
+            return;
+        const values = ({ left: { x: 0 }, centre: { x: (100 - e.width) / 2 }, right: { x: 100 - e.width },
+                          top: { y: 0 }, middle: { y: (100 - e.height) / 2 }, bottom: { y: 100 - e.height } })[edge];
+        editor.setElement(selected, values);
+    }
+    function duplicate() {
+        const index = editor.duplicateElement(selected);
+        if (index >= 0)
+            selected = index;
     }
     function megabytes(bytes) {
         return (bytes / 1048576).toFixed(1);
@@ -629,13 +676,16 @@ Kirigami.Page {
                         Kirigami.FormData.label: qsTr("Palette:")
                         QQC2.ComboBox {
                             Layout.fillWidth: true
-                            model: [qsTr("None")].concat(page.palettes.map(id => page.editor.shared[id].name)).concat([qsTr("New from This Design")])
+                            model: [qsTr("None")].concat(page.palettes.map(id => page.editor.shared[id].name))
+                                .concat([qsTr("New from This Design"), qsTr("New from an Image…")])
                             currentIndex: page.paletteId === "" ? 0 : page.palettes.indexOf(page.paletteId) + 1
                             onActivated: index => {
                                 if (index === 0)
                                     page.editor.linkPalette("");
-                                else if (index === count - 1)
+                                else if (index === count - 2)
                                     page.message = page.editor.newPalette("");
+                                else if (index === count - 1)
+                                    paletteImageDialog.open();
                                 else
                                     page.editor.linkPalette(page.palettes[index - 1]);
                             }
@@ -713,6 +763,39 @@ Kirigami.Page {
                         wrap: true
                         number: page.backgroundSpec.angle ?? 180
                         onEdited: v => page.editor.setBackground({ angle: v })
+                    }
+                    // Plasma splash: moving backgrounds (SPEC.md §4.7)
+                    QQC2.CheckBox {
+                        visible: page.selected < 0 && page.plasma
+                        enabled: (page.backgroundSpec.image ?? "") !== ""
+                        Kirigami.FormData.label: qsTr("Motion:")
+                        text: qsTr("Slow pan and zoom over the image")
+                        checked: page.backgroundSpec.motion ?? false
+                        onToggled: page.editor.setBackground({ motion: checked ? true : null })
+                    }
+                    QQC2.ComboBox {
+                        readonly property var kinds: [{ value: "", text: qsTr("None") }, { value: "snow", text: qsTr("Snow") }, { value: "stars", text: qsTr("Stars") }]
+                        visible: page.selected < 0 && page.plasma
+                        Kirigami.FormData.label: qsTr("Particles:")
+                        textRole: "text"
+                        valueRole: "value"
+                        model: kinds
+                        currentIndex: Math.max(0, kinds.findIndex(k => k.value === (page.backgroundSpec.particles ?? "")))
+                        onActivated: page.editor.setBackground({ particles: currentValue === "" ? null : currentValue })
+                    }
+                    RowLayout {
+                        visible: page.selected < 0 && page.plasma
+                        Kirigami.FormData.label: qsTr("Effects:")
+                        QQC2.CheckBox {
+                            text: qsTr("Vignette")
+                            checked: page.backgroundSpec.vignette ?? false
+                            onToggled: page.editor.setBackground({ vignette: checked ? true : null })
+                        }
+                        QQC2.CheckBox {
+                            text: qsTr("Film grain")
+                            checked: page.backgroundSpec.grain ?? false
+                            onToggled: page.editor.setBackground({ grain: checked ? true : null })
+                        }
                     }
                     QQC2.CheckBox {
                         visible: page.selected < 0 && page.boot
@@ -872,6 +955,22 @@ Kirigami.Page {
                         raw: page.element?.color ?? "#ffffff"
                         onPicked: value => page.editor.setElement(page.selected, { color: value })
                     }
+                    // Text effects (gencommon.h); a boot menu draws such text into its background.
+                    EffectRow {
+                        Kirigami.FormData.label: qsTr("Shadow:")
+                        key: "shadow"
+                        fallback: "#80000000"
+                    }
+                    EffectRow {
+                        Kirigami.FormData.label: qsTr("Outline:")
+                        key: "outline"
+                        fallback: "#000000"
+                    }
+                    EffectRow {
+                        Kirigami.FormData.label: qsTr("Glow:")
+                        key: "glow"
+                        fallback: "#ffffff"
+                    }
 
                     // Boot menu: the selected entry, and the font size at this resolution
                     ColourField {
@@ -886,8 +985,9 @@ Kirigami.Page {
                         QQC2.ComboBox {
                             textRole: "text"
                             valueRole: "value"
-                            model: [{ value: "flat", text: qsTr("Flat") }, { value: "rounded", text: qsTr("Rounded") }, { value: "glow", text: qsTr("Glow") }]
-                            currentIndex: Math.max(0, ["flat", "rounded", "glow"].indexOf(page.element?.selection?.style ?? "rounded"))
+                            model: [{ value: "flat", text: qsTr("Flat") }, { value: "rounded", text: qsTr("Rounded") }, { value: "glow", text: qsTr("Glow") },
+                                { value: "outline", text: qsTr("Outline") }, { value: "underline", text: qsTr("Underline") }, { value: "bar", text: qsTr("Bar on the Left") }]
+                            currentIndex: Math.max(0, ["flat", "rounded", "glow", "outline", "underline", "bar"].indexOf(page.element?.selection?.style ?? "rounded"))
                             onActivated: page.editor.setElement(page.selected, { selection: { style: currentValue, color: page.element?.selection?.color ?? "#40ffffff" } })
                         }
                         ColourField {
@@ -927,7 +1027,60 @@ Kirigami.Page {
                         }
                     }
 
+                    // Spinner (gencommon.h)
+                    QQC2.ComboBox {
+                        readonly property var styles: [{ value: "dots", text: qsTr("Dots") }, { value: "arc", text: qsTr("Arc") },
+                            { value: "pulse", text: qsTr("Pulse") }, { value: "bars", text: qsTr("Bars") }, { value: "orbit", text: qsTr("Orbit") },
+                            { value: "comet", text: qsTr("Comet") }, { value: "image", text: qsTr("Turning Image") }]
+                        visible: page.element?.type === "spinner"
+                        Kirigami.FormData.label: qsTr("Style:")
+                        textRole: "text"
+                        valueRole: "value"
+                        model: styles
+                        currentIndex: Math.max(0, styles.findIndex(s => s.value === (page.element?.style ?? "dots")))
+                        onActivated: {
+                            if (currentValue === "image" && !page.element?.asset) {
+                                imageDialog.purpose = "spinner";
+                                imageDialog.open();
+                            } else {
+                                page.editor.setElement(page.selected, { style: currentValue === "dots" ? null : currentValue });
+                            }
+                        }
+                    }
+                    QQC2.ComboBox {
+                        readonly property var speeds: [{ value: "slow", text: qsTr("Slow") }, { value: "normal", text: qsTr("Normal") }, { value: "fast", text: qsTr("Fast") }]
+                        visible: page.element?.type === "spinner"
+                        Kirigami.FormData.label: qsTr("Speed:")
+                        textRole: "text"
+                        valueRole: "value"
+                        model: speeds
+                        currentIndex: Math.max(0, speeds.findIndex(s => s.value === (page.element?.speed ?? "normal")))
+                        onActivated: page.editor.setElement(page.selected, { speed: currentValue === "normal" ? null : currentValue })
+                    }
+                    AssetRow {
+                        visible: page.element?.type === "spinner" && page.element?.style === "image"
+                        Kirigami.FormData.label: qsTr("Image:")
+                        asset: page.element?.asset ?? ""
+                        removable: false
+                        onChoose: {
+                            imageDialog.purpose = "spinner";
+                            imageDialog.open();
+                        }
+                    }
+
                     // Image
+                    QQC2.ComboBox {
+                        readonly property var animations: [{ value: "", text: qsTr("None") }, { value: "fade", text: qsTr("Fade In") },
+                            { value: "slide", text: qsTr("Slide Up") }, { value: "breathe", text: qsTr("Breathe") }, { value: "pulse", text: qsTr("Pulse") },
+                            { value: "spin", text: qsTr("Spin") }]
+                        visible: page.element?.type === "image" && !page.grub
+                        Kirigami.FormData.label: qsTr("Animation:")
+                        textRole: "text"
+                        valueRole: "value"
+                        model: animations
+                        currentIndex: Math.max(0, animations.findIndex(a => a.value === (page.element?.animation ?? "")))
+                        onActivated: page.editor.setElement(page.selected, { animation: currentValue === "" ? null : currentValue })
+                    }
                     AssetRow {
                         visible: page.element?.type === "image"
                         Kirigami.FormData.label: qsTr("Image:")
@@ -985,6 +1138,39 @@ Kirigami.Page {
                     }
 
                     // Boot splash: progress bar and animation
+                    QQC2.ComboBox {
+                        readonly property var styles: page.grub
+                            ? [{ value: "flat", text: qsTr("Flat") }, { value: "rounded", text: qsTr("Rounded") }, { value: "ring", text: qsTr("Ring of Dots") }]
+                            : [{ value: "flat", text: qsTr("Flat") }, { value: "rounded", text: qsTr("Rounded") }, { value: "glow", text: qsTr("Glow") },
+                               { value: "segmented", text: qsTr("Segmented") }]
+                        visible: page.element?.type === "progress"
+                        Kirigami.FormData.label: qsTr("Style:")
+                        textRole: "text"
+                        valueRole: "value"
+                        model: styles
+                        currentIndex: Math.max(0, styles.findIndex(s => s.value === (page.element?.style ?? "flat")))
+                        onActivated: {
+                            const change = { style: currentValue === "flat" ? null : currentValue };
+                            if (currentValue === "ring" && (page.element?.height ?? 0) < 4) // a bar's height makes a tiny ring
+                                Object.assign(change, { width: 6 * page.screenSize.height / page.screenSize.width, height: 6 });
+                            page.editor.setElement(page.selected, change);
+                        }
+                    }
+                    QQC2.CheckBox {
+                        visible: page.element?.type === "progress" && page.plasma
+                        enabled: page.element?.style !== "segmented"
+                        text: qsTr("Shimmer")
+                        checked: page.element?.shimmer ?? false
+                        onToggled: page.editor.setElement(page.selected, { shimmer: checked ? true : null })
+                    }
+                    QQC2.Label {
+                        visible: page.element?.type === "progress" && page.boot && (page.element?.style ?? "flat") !== "flat"
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 13
+                        wrapMode: Text.Wrap
+                        opacity: 0.7
+                        text: qsTr("Plays with Plymouth's script module (two-step only draws flat bars).")
+                    }
                     ColourField {
                         visible: page.element?.type === "progress"
                         Kirigami.FormData.label: qsTr("Background:")
@@ -1063,6 +1249,58 @@ Kirigami.Page {
                         number: page.element?.height ?? 0
                         onEdited: v => page.editor.setElement(page.selected, { height: v })
                     }
+                    RowLayout {
+                        visible: page.element !== null
+                        Kirigami.FormData.label: qsTr("Align:")
+                        spacing: 0
+                        Repeater {
+                            model: [{ edge: "left", icon: "align-horizontal-left", text: qsTr("To the Left Edge") },
+                                { edge: "centre", icon: "align-horizontal-center", text: qsTr("Centre Across") },
+                                { edge: "right", icon: "align-horizontal-right", text: qsTr("To the Right Edge") },
+                                { edge: "top", icon: "align-vertical-top", text: qsTr("To the Top") },
+                                { edge: "middle", icon: "align-vertical-center", text: qsTr("Centre Up and Down") },
+                                { edge: "bottom", icon: "align-vertical-bottom", text: qsTr("To the Bottom") }]
+                            delegate: IconButton {
+                                required property var modelData
+                                text: modelData.text
+                                icon.name: modelData.icon
+                                enabled: !(page.element?.locked ?? false)
+                                onClicked: page.align(modelData.edge)
+                            }
+                        }
+                    }
+                    QQC2.CheckBox {
+                        visible: page.element !== null
+                        Kirigami.FormData.label: qsTr("Lock:")
+                        text: qsTr("Keep it in place on the canvas")
+                        checked: page.element?.locked ?? false
+                        onToggled: page.editor.setElement(page.selected, { locked: checked ? true : null })
+                    }
+                    RowLayout {
+                        visible: page.element !== null
+                        Kirigami.FormData.label: qsTr("Style:")
+                        QQC2.Button {
+                            text: qsTr("Copy")
+                            icon.name: "edit-copy"
+                            QQC2.ToolTip.text: qsTr("Copy Style (Ctrl+Shift+C)")
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: page.copiedStyle = page.editor.elementStyle(page.selected)
+                        }
+                        QQC2.Button {
+                            text: qsTr("Paste")
+                            icon.name: "edit-paste"
+                            enabled: Object.keys(page.copiedStyle).length > 0
+                            QQC2.ToolTip.text: qsTr("Paste Style (Ctrl+Shift+V)")
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: page.editor.pasteStyle(page.selected, page.copiedStyle)
+                        }
+                        IconButton {
+                            text: qsTr("Duplicate (Ctrl+D)")
+                            icon.name: "edit-duplicate"
+                            enabled: page.element?.type !== "menu"
+                            onClicked: page.duplicate()
+                        }
+                    }
                 }
             }
         }
@@ -1111,6 +1349,24 @@ Kirigami.Page {
     }
 
     // A colour of its own, or one of the palette's ("@accent" and so on).
+    component EffectRow: RowLayout {
+        id: effectRow
+
+        required property string key
+        required property string fallback
+        readonly property bool on: page.element?.[key] !== undefined
+
+        visible: page.element?.type === "text"
+        QQC2.CheckBox {
+            checked: effectRow.on
+            onToggled: page.editor.setElement(page.selected, { [effectRow.key]: checked ? effectRow.fallback : null })
+        }
+        ColourField {
+            enabled: effectRow.on
+            raw: page.element?.[effectRow.key] ?? effectRow.fallback
+            onPicked: value => page.editor.setElement(page.selected, { [effectRow.key]: value })
+        }
+    }
     component ColourField: RowLayout {
         id: colourField
 
@@ -1182,6 +1438,8 @@ Kirigami.Page {
         id: box
 
         required property int index
+
+        visible: !page.grabbing
         readonly property var spec: page.elements[index] ?? ({})
         readonly property bool current: page.selected === index
 
@@ -1204,7 +1462,7 @@ Kirigami.Page {
 
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.SizeAllCursor
+            cursorShape: box.spec.locked ? Qt.ArrowCursor : Qt.SizeAllCursor
             onPressed: mouse => {
                 canvas.forceActiveFocus();
                 page.selected = box.index;
@@ -1213,7 +1471,7 @@ Kirigami.Page {
                 page.editor.beginGesture();
             }
             onPositionChanged: mouse => {
-                if (!pressed)
+                if (!pressed || box.spec.locked)
                     return;
                 const p = mapToItem(monitor, mouse.x, mouse.y);
                 const snapped = page.editor.snapMove(box.index, startValue.x + (p.x - start.x) / monitor.width * 100,
@@ -1226,8 +1484,16 @@ Kirigami.Page {
             onReleased: page.endDrag()
             onCanceled: page.endDrag()
         }
+        Kirigami.Icon {
+            visible: box.spec.locked ?? false
+            anchors.right: parent.right
+            anchors.top: parent.top
+            width: Kirigami.Units.iconSizes.small
+            height: width
+            source: "object-locked"
+        }
         Rectangle {
-            visible: box.current
+            visible: box.current && !(box.spec.locked ?? false)
             width: Kirigami.Units.smallSpacing * 3
             height: width
             x: parent.width - width / 2
@@ -1279,6 +1545,12 @@ Kirigami.Page {
             id: colorPicker
         }
     }
+    // Palette from an image's main colours (Q3).
+    FileDialog {
+        id: paletteImageDialog
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg *.webp *.svg)")]
+        onAccepted: page.message = page.editor.newPaletteFromImage(selectedFile)
+    }
     FileDialog {
         id: imageDialog
 
@@ -1293,6 +1565,8 @@ Kirigami.Page {
                 page.editor.setBackground({ image: added.hash });
             else if (purpose === "replace")
                 page.editor.setElement(page.selected, { asset: added.hash });
+            else if (purpose === "spinner")
+                page.editor.setElement(page.selected, { style: "image", asset: added.hash });
             else if (purpose === "shared")
                 page.message = page.editor.setSharedLogo(page.element.shared, added.hash);
             else if (purpose.startsWith("icon:")) {
@@ -1570,6 +1844,14 @@ Kirigami.Page {
                     required property var modelData
 
                     Layout.fillWidth: true
+                    Image {
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 6 * 9 / 16
+                        source: versionRow.modelData.thumbnail ?? ""
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false // a later save may write the same file again
+                    }
                     QQC2.Label {
                         Layout.fillWidth: true
                         text: qsTr("Version %1 · %2").arg(versionRow.modelData.version).arg(versionRow.modelData.savedAt.toLocaleString(Qt.locale(), Locale.ShortFormat))
@@ -1622,7 +1904,7 @@ Kirigami.Page {
                 icon.name: "document-save"
                 onTriggered: {
                     leaveDialog.close();
-                    if (page.saveDesign()) {
+                    if (page.saveDesign(false)) { // leaving: no time for a thumbnail
                         page.editor.close();
                         page.leave();
                     }

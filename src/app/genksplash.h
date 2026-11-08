@@ -10,16 +10,20 @@
 // Design content (positions and sizes in % of the screen, top-left corner):
 //   background: {color: "#rrggbb" | "#aarrggbb", color2: a gradient's other end (optional),
 //                angle: its direction in degrees as in CSS (180, the default, top to
-//                bottom; gencommon.h), image: <asset hash, optional>}
+//                bottom; gencommon.h), image: <asset hash, optional>, motion: bool (a slow pan
+//                and zoom over the image), particles: "" | "snow" | "stars", vignette: bool,
+//                grain: bool}
 //   fadeIn: milliseconds, 0 = none
 //   elements: [
 //     {type: "image", asset, x, y, width, height}            (aspect ratio kept)
 //     {type: "text", text, font: <asset hash, optional>, size: % of screen height,
 //      color, align: "left" | "center" | "right", x, y, width, height}
-//     {type: "spinner", color, x, y, width, height}
+//     {type: "spinner", color, style, speed (gencommon.h), asset (style "image"), x, y, width, height}
 //     {type: "video", asset: <silent MP4>, fill: "crop" | "fit", x, y, width, height}
 //     {type: "frames", frames: [<image asset>, …], seconds, x, y, width, height}  a loop
-//     {type: "progress", color, background, x, y, width, height}  follows Plasma's start
+//     {type: "progress", color, background, style: "flat" (default) | "rounded" | "glow"
+//      | "segmented" (one segment per stage), shimmer: bool, x, y, width, height}
+//                                                   follows Plasma's start
 //   ]
 //   author, licence: package metadata (default nomoruyi, MIT)
 //

@@ -1,5 +1,7 @@
 #include "designeditor.h"
 
+#include "playback.h"
+
 #include "gencommon.h"
 #include "genksplash.h"
 #include "validate.h"
@@ -240,6 +242,84 @@ QJsonObject starterContent(Stage stage, const QString &starter, QColor accent)
                 {QStringLiteral("elements"),
                  QJsonArray{text(DesignEditor::tr("Starting…"), 2.5, light, 30, 44, 40, 6),
                             element(QStringLiteral("progress"), 40, 52, 20, 0.4, {{QStringLiteral("color"), accentName}, {QStringLiteral("background"), dim}})}}};
+    }
+
+    // The same four looks for every stage, built from the styles and effects.
+    const auto with = [](QJsonObject o, const QJsonObject &more) {
+        for (auto it = more.constBegin(); it != more.constEnd(); ++it)
+            o.insert(it.key(), *it);
+        return o;
+    };
+    const auto look = [&](const QJsonObject &background, const QJsonArray &elements, bool hideMessages = false) {
+        QJsonObject content{{QStringLiteral("background"), background}, {QStringLiteral("elements"), elements}};
+        if (stage == Stage::BootSplash)
+            content.insert(QStringLiteral("hideMessages"), hideMessages);
+        if (stage == Stage::PlasmaSplash)
+            content.insert(QStringLiteral("fadeIn"), 300);
+        return content;
+    };
+    const auto gradient = [](const QString &from, const QString &to, double angle) {
+        return QJsonObject{{QStringLiteral("color"), from}, {QStringLiteral("color2"), to}, {QStringLiteral("angle"), angle}};
+    };
+    const auto bar = [&](double x, double y, double w, double h, const QString &colour, const QString &back, const QString &style) {
+        return element(QStringLiteral("progress"), x, y, w, h, {{QStringLiteral("color"), colour}, {QStringLiteral("background"), back}, {QStringLiteral("style"), style}});
+    };
+    const auto styledSpinner = [&](const QString &colour, const QString &style, double y) {
+        return with(spinner(colour, y), {{QStringLiteral("style"), style}});
+    };
+    if (starter == QLatin1String("minimal")) {
+        const QString grey = QStringLiteral("#d0d0d0");
+        if (stage == Stage::BootMenu)
+            return look(QJsonObject{{QStringLiteral("color"), QStringLiteral("#0c0c0c")}},
+                        {with(menu(32, 34, 36, 36, QStringLiteral("underline"), grey), {{QStringLiteral("color"), QStringLiteral("#9a9a9a")}}),
+                         with(countdown(80), {{QStringLiteral("text"), QStringLiteral("%d")}, {QStringLiteral("color"), QStringLiteral("#6a6a6a")}})});
+        return look(QJsonObject{{QStringLiteral("color"), QStringLiteral("#0c0c0c")}}, {styledSpinner(grey, QStringLiteral("arc"), 60)}, true);
+    }
+    if (starter == QLatin1String("neon")) {
+        const QString pink = QStringLiteral("#ff2bd6"), cyan = QStringLiteral("#2bf0ff");
+        const QJsonObject title = with(text(DesignEditor::tr("Welcome"), 6, QStringLiteral("#ffffff"), 20, 30, 60, 12), {{QStringLiteral("glow"), pink}});
+        if (stage == Stage::BootMenu)
+            return look(gradient(QStringLiteral("#14022e"), QStringLiteral("#000000"), 160),
+                        {with(text(DesignEditor::tr("Choose a system"), 3, QStringLiteral("#ffffff"), 25, 16, 50, 7), {{QStringLiteral("glow"), pink}}),
+                         with(menu(30, 30, 40, 40, QStringLiteral("glow"), pink), {{QStringLiteral("color"), QStringLiteral("#c8c8ff")}}),
+                         bar(47.75, 76, 4.5, 8, cyan, QStringLiteral("#2a1450"), QStringLiteral("ring"))});
+        if (stage == Stage::BootSplash)
+            return look(gradient(QStringLiteral("#14022e"), QStringLiteral("#000000"), 160),
+                        {title, styledSpinner(cyan, QStringLiteral("comet"), 56), bar(40, 70, 20, 0.6, pink, QStringLiteral("#2a1450"), QStringLiteral("glow"))}, true);
+        QJsonObject background = gradient(QStringLiteral("#14022e"), QStringLiteral("#000000"), 160);
+        background.insert(QStringLiteral("particles"), QStringLiteral("stars"));
+        return look(background, {title, styledSpinner(cyan, QStringLiteral("comet"), 56), bar(40, 70, 20, 0.6, pink, QStringLiteral("#2a1450"), QStringLiteral("glow"))});
+    }
+    if (starter == QLatin1String("glass")) {
+        const QString deep = QColor::fromHslF(hue, std::min(0.7, saturation), 0.22).name(), deeper = QColor::fromHslF(hue, std::min(0.6, saturation), 0.07).name();
+        const QJsonObject title = with(text(DesignEditor::tr("Welcome"), 5, QStringLiteral("#ffffff"), 25, 32, 50, 10), {{QStringLiteral("shadow"), QStringLiteral("#66000000")}});
+        if (stage == Stage::BootMenu)
+            return look(gradient(deep, deeper, 135),
+                        {with(menu(30, 30, 40, 40, QStringLiteral("outline"), QStringLiteral("#b0ffffff")), {{QStringLiteral("color"), QStringLiteral("#e0e0e0")}}),
+                         countdown(76), bar(40, 81, 20, 0.8, QStringLiteral("#e6ffffff"), QStringLiteral("#33ffffff"), QStringLiteral("rounded"))});
+        QJsonObject background = gradient(deep, deeper, 135);
+        if (stage == Stage::PlasmaSplash)
+            background.insert(QStringLiteral("vignette"), true);
+        QJsonObject progress = bar(40, 58, 20, 0.6, QStringLiteral("#e6ffffff"), QStringLiteral("#33ffffff"), QStringLiteral("rounded"));
+        if (stage == Stage::PlasmaSplash)
+            progress.insert(QStringLiteral("shimmer"), true);
+        return look(background, {title, styledSpinner(QStringLiteral("#ffffff"), QStringLiteral("orbit"), 66), progress}, true);
+    }
+    if (starter == QLatin1String("retro")) {
+        const QString green = QStringLiteral("#33ff66"), dim = QStringLiteral("#0b3316");
+        const QJsonObject title = with(text(DesignEditor::tr("> BOOTING_"), 4, green, 20, 36, 60, 8), {{QStringLiteral("glow"), QStringLiteral("#8033ff66")}});
+        if (stage == Stage::BootMenu)
+            return look(QJsonObject{{QStringLiteral("color"), QStringLiteral("#000000")}},
+                        {with(text(DesignEditor::tr("> SELECT SYSTEM"), 2.6, green, 10, 16, 60, 6), {{QStringLiteral("glow"), QStringLiteral("#8033ff66")}, {QStringLiteral("align"), QStringLiteral("left")}}),
+                         with(menu(10, 26, 50, 50, QStringLiteral("bar"), green), {{QStringLiteral("color"), QStringLiteral("#22aa44")}, {QStringLiteral("selectedColor"), green}}),
+                         with(countdown(82), {{QStringLiteral("text"), DesignEditor::tr("> autoboot in %d s")}, {QStringLiteral("color"), green},
+                                              {QStringLiteral("align"), QStringLiteral("left")}, {QStringLiteral("x"), 10}})});
+        QJsonObject background{{QStringLiteral("color"), QStringLiteral("#000000")}};
+        if (stage == Stage::PlasmaSplash) {
+            background.insert(QStringLiteral("grain"), true);
+            background.insert(QStringLiteral("vignette"), true);
+        }
+        return look(background, {title, styledSpinner(green, QStringLiteral("bars"), 52), bar(35, 64, 30, 1, green, dim, QStringLiteral("segmented"))}, true);
     }
     return {};
 }
@@ -575,6 +655,60 @@ void DesignEditor::setElement(int index, const QVariantMap &values)
         elements[index] = e;
         s.content.insert(QStringLiteral("elements"), elements);
     });
+}
+
+int DesignEditor::duplicateElement(int index)
+{
+    const QJsonArray elements = elementsOf(m_current.content);
+    if (index < 0 || index >= elements.size())
+        return -1;
+    QJsonObject copy = elements.at(index).toObject();
+    if (copy.value(QStringLiteral("type")) == QLatin1String("menu"))
+        return -1;
+    const auto shifted = [&](const char *key, const char *size) {
+        return std::min(number(copy, key) + 2, std::max(0.0, 100 - number(copy, size)));
+    };
+    copy.insert(QStringLiteral("x"), shifted("x", "width"));
+    copy.insert(QStringLiteral("y"), shifted("y", "height"));
+    copy.remove(QStringLiteral("locked"));
+    edit([&](State &s) {
+        QJsonArray updated = elementsOf(s.content);
+        updated.insert(index + 1, copy);
+        s.content.insert(QStringLiteral("elements"), updated);
+    });
+    return index + 1;
+}
+
+namespace {
+// What an element shows and where, as opposed to how it looks.
+const QStringList notStyle = {QStringLiteral("type"),   QStringLiteral("x"),      QStringLiteral("y"),     QStringLiteral("width"), QStringLiteral("height"),
+                              QStringLiteral("text"),   QStringLiteral("asset"),  QStringLiteral("frames"), QStringLiteral("seconds"), QStringLiteral("shared"),
+                              QStringLiteral("locked"), QStringLiteral("fill")};
+const QStringList sharedStyle = {QStringLiteral("color"), QStringLiteral("font"), QStringLiteral("size"), QStringLiteral("align"),
+                                 QStringLiteral("shadow"), QStringLiteral("outline"), QStringLiteral("glow")};
+} // namespace
+
+QVariantMap DesignEditor::elementStyle(int index) const
+{
+    if (index < 0 || index >= elementsOf(m_current.content).size())
+        return {};
+    QVariantMap style = element(index).toVariantMap();
+    for (const QString &key : notStyle)
+        if (key != QLatin1String("type"))
+            style.remove(key);
+    return style;
+}
+
+void DesignEditor::pasteStyle(int index, const QVariantMap &style)
+{
+    if (index < 0 || index >= elementsOf(m_current.content).size() || style.isEmpty())
+        return;
+    const bool sameType = style.value(QStringLiteral("type")) == element(index).value(QStringLiteral("type")).toString();
+    QVariantMap values;
+    for (auto it = style.cbegin(); it != style.cend(); ++it)
+        if (!notStyle.contains(it.key()) && (sameType || sharedStyle.contains(it.key())))
+            values.insert(it.key(), *it);
+    setElement(index, values);
 }
 
 int DesignEditor::addElement(const QString &type, const QVariantMap &values)
@@ -962,21 +1096,11 @@ QString DesignEditor::newPalette(const QString &name)
                        {QStringLiteral("text"), first({QStringLiteral("text")}, QStringLiteral("#ffffff"))}};
     // The same colours again (e.g. a second click) link the palette made before instead
     // of a copy (issue #2); other colours get a name of their own.
-    QStringList errors;
-    const QList<SharedElement> existing = m_library->sharedElements(errors);
-    const auto same = std::find_if(existing.cbegin(), existing.cend(), [&](const SharedElement &e) {
-        return e.kind == SharedElement::Kind::Palette && e.colours == palette.colours;
-    });
-    if (same != existing.cend()) {
-        palette = *same;
-    } else {
-        const QString base = palette.name;
-        const auto taken = [&] { return std::any_of(existing.cbegin(), existing.cend(), [&](const SharedElement &e) { return e.name == palette.name; }); };
-        for (int n = 2; taken(); ++n)
-            palette.name = QStringLiteral("%1 %2").arg(base).arg(n);
-        if (const QString error = saveShared(palette); !error.isEmpty())
-            return error;
-    }
+    QString error;
+    if (!m_library->savePalette(palette, error))
+        return error;
+    reloadLists();
+    Q_EMIT libraryChanged();
     // Those colours now come from the palette.
     edit([&](State &s) {
         s.content = now.content;
@@ -1003,6 +1127,24 @@ QString DesignEditor::newPalette(const QString &name)
         }
         s.content.insert(QStringLiteral("elements"), updated);
     });
+    return {};
+}
+
+QString DesignEditor::newPaletteFromImage(const QUrl &file)
+{
+    if (!m_open || !m_library)
+        return tr("No design is open.");
+    const QString path = localPath(file);
+    const QImage image(path);
+    if (image.isNull())
+        return tr("%1 isn't an image Ekpo can read.").arg(QFileInfo(path).fileName());
+    SharedElement palette{{}, SharedElement::Kind::Palette, tr("Palette of %1").arg(QFileInfo(path).completeBaseName()), {}, paletteFromImage(image)};
+    QString error;
+    if (!m_library->savePalette(palette, error))
+        return error;
+    reloadLists();
+    Q_EMIT libraryChanged();
+    linkPalette(palette.id);
     return {};
 }
 
@@ -1154,29 +1296,11 @@ void DesignEditor::flushPreview()
         m_previewUrl = QUrl::fromLocalFile(dir + QStringLiteral("/contents/splash/Splash.qml"));
     } else {
         m_layout = layout;
-        QVariantList frames;
-        for (const QString &f : layout.frameFiles)
-            frames << QUrl::fromLocalFile(dir + QLatin1Char('/') + f);
-        m_plymouth = {{QStringLiteral("background"), QUrl::fromLocalFile(dir + QStringLiteral("/background.png"))},
-                      {QStringLiteral("frames"), frames},
-                      {QStringLiteral("seconds"), layout.seconds},
-                      {QStringLiteral("centreX"), layout.centre.x()},
-                      {QStringLiteral("centreY"), layout.centre.y()},
-                      {QStringLiteral("module"), layout.module},
-                      {QStringLiteral("hideMessages"), layout.hideMessages},
-                      {QStringLiteral("bytes"), double(layout.bytes)},
-                      {QStringLiteral("capBytes"), double(plymouthThemeCap)},
-                      {QStringLiteral("memory"), double(layout.decodedBytes)},
-                      {QStringLiteral("budgetBytes"), double(plymouthMemoryBudget)},
-                      {QStringLiteral("builtWidth"), builtScreen.width()},
-                      {QStringLiteral("builtHeight"), builtScreen.height()}};
-        if (layout.progress) {
-            const QRect r = *layout.progress;
-            m_plymouth.insert(QStringLiteral("progress"), QVariantMap{{QStringLiteral("x"), r.x()}, {QStringLiteral("y"), r.y()},
-                                                                        {QStringLiteral("width"), r.width()}, {QStringLiteral("height"), r.height()},
-                                                                        {QStringLiteral("color"), layout.progressColour},
-                                                                        {QStringLiteral("background"), layout.progressBackground}});
-        }
+        m_plymouth = plymouthPreviewMap(layout, dir);
+        m_plymouth.insert(QStringLiteral("bytes"), double(layout.bytes));
+        m_plymouth.insert(QStringLiteral("capBytes"), double(plymouthThemeCap));
+        m_plymouth.insert(QStringLiteral("memory"), double(layout.decodedBytes));
+        m_plymouth.insert(QStringLiteral("budgetBytes"), double(plymouthMemoryBudget));
         const auto megabytes = [](double bytes) { return QString::number(bytes / (1 << 20), 'f', 1); };
         if (layout.bytes > plymouthThemeCap)
             m_problems << tr("The theme takes %1 MB; a boot splash may take at most %2 MB, since it is copied into every initrd.")
@@ -1352,6 +1476,17 @@ Design DesignEditor::currentDesign() const
     return design;
 }
 
+QString DesignEditor::thumbnailFile() const
+{
+    return m_library && !m_id.isEmpty() && m_version > 0 ? m_library->designThumbnail(m_id, m_version) : QString();
+}
+
+void DesignEditor::thumbnailSaved()
+{
+    reloadLists();
+    Q_EMIT changed();
+}
+
 void DesignEditor::reloadLists()
 {
     m_assets.clear();
@@ -1389,7 +1524,11 @@ void DesignEditor::reloadLists()
         return;
     for (int n : m_library->designVersions(m_id)) {
         QString error;
-        if (const auto d = m_library->design(m_id, n, error))
-            m_versions.prepend(QVariantMap{{QStringLiteral("version"), n}, {QStringLiteral("savedAt"), d->savedAt.toLocalTime()}});
+        if (const auto d = m_library->design(m_id, n, error)) {
+            const QString thumbnail = m_library->designThumbnail(m_id, n);
+            m_versions.prepend(QVariantMap{{QStringLiteral("version"), n},
+                                           {QStringLiteral("savedAt"), d->savedAt.toLocalTime()},
+                                           {QStringLiteral("thumbnail"), QFile::exists(thumbnail) ? QUrl::fromLocalFile(thumbnail) : QUrl()}});
+        }
     }
 }

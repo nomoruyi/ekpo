@@ -5,6 +5,8 @@
 
 #include <QBuffer>
 #include <QFile>
+#include <QFont>
+#include <QFontMetrics>
 #include <QHash>
 #include <QImage>
 #include <QImageReader>
@@ -60,13 +62,48 @@ QString defaultFontFile()
     return file;
 }
 
-// The selected entry's box as GRUB's 9-slice pixmap style (select_*.png): corners,
-// edges GRUB stretches, and the centre. border = the width of each side.
-QList<PayloadFile> selectionImages(const QString &style, const QColor &colour, int border)
+// A box as GRUB's 9-slice pixmap style (<prefix>_*.png): corners, edges GRUB
+// stretches, and the centre. border = the width of each side.
+QList<PayloadFile> nineSlice(const QString &prefix, const QImage &box, int border)
+{
+    const int b = border;
+    const QList<std::pair<const char *, QRect>> pieces = {
+        {"nw", {0, 0, b, b}}, {"n", {b, 0, 1, b}}, {"ne", {b + 1, 0, b, b}}, {"w", {0, b, b, 1}}, {"c", {b, b, 1, 1}},
+        {"e", {b + 1, b, b, 1}}, {"sw", {0, b + 1, b, b}}, {"s", {b, b + 1, 1, b}}, {"se", {b + 1, b + 1, b, b}},
+    };
+    QList<PayloadFile> files;
+    for (const auto &[name, rect] : pieces)
+        files << PayloadFile{QStringLiteral("%1_%2.png").arg(prefix, QLatin1String(name)), png(box.copy(rect))};
+    return files;
+}
+
+// GRUB draws the borders outside an entry's item_height and moves its text down by
+// the top border (gui_list.c, GRUB 2.14). Clear item boxes with the selection's
+// borders keep every entry's text in the same place, selected or not.
+const QStringList selectionStyles = {QStringLiteral("flat"), QStringLiteral("rounded"), QStringLiteral("glow"),
+                                     QStringLiteral("outline"), QStringLiteral("underline"), QStringLiteral("bar")};
+
+int selectionBorder(const QString &style, int itemHeight, int line)
+{
+    if (style == QLatin1String("flat"))
+        return 1;
+    if (style == QLatin1String("glow"))
+        return int(std::lround(itemHeight * 0.35));
+    if (style == QLatin1String("underline"))
+        return std::max(2, int(std::lround(line * 0.1)));
+    if (style == QLatin1String("bar"))
+        return std::max(3, int(std::lround(line * 0.15)));
+    return int(std::lround(itemHeight * 0.25)); // rounded, outline
+}
+
+// The selected entry's box (select_*.png) and the clear boxes of the others (item_*.png).
+// GRUB stretches the edges, so shapes that need a fixed height (pills, arrows) can't be drawn.
+QList<PayloadFile> selectionImages(const QString &style, const QColor &colour, int border, int line)
 {
     const int s = 2 * border + 1;
     QImage box(s, s, QImage::Format_ARGB32_Premultiplied);
     box.fill(Qt::transparent);
+    QList<PayloadFile> files = nineSlice(QStringLiteral("item"), box, border);
     QPainter p(&box);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
@@ -89,19 +126,24 @@ QList<PayloadFile> selectionImages(const QString &style, const QColor &colour, i
         fill.setAlphaF(colour.alphaF() * 0.35);
         p.setBrush(fill);
         p.drawRect(QRectF(border, border, 1, 1));
+    } else if (style == QLatin1String("outline")) {
+        const double width = std::clamp(line * 0.08, 2.0, double(border));
+        p.setPen(QPen(colour, width));
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(width / 2, width / 2, s - width, s - width), border - width / 2, border - width / 2);
+    } else if (style == QLatin1String("underline")) {
+        p.fillRect(QRect(0, border + 1, s, border), colour);
+    } else if (style == QLatin1String("bar")) { // a faint fill with a strong left edge
+        QColor fill = colour;
+        fill.setAlphaF(colour.alphaF() * 0.25);
+        p.fillRect(box.rect(), fill);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.fillRect(QRect(0, 0, border, s), colour);
     } else { // flat
         p.fillRect(box.rect(), colour);
     }
     p.end();
-    const int b = border;
-    const QList<std::pair<const char *, QRect>> pieces = {
-        {"nw", {0, 0, b, b}}, {"n", {b, 0, 1, b}}, {"ne", {b + 1, 0, b, b}}, {"w", {0, b, b, 1}}, {"c", {b, b, 1, 1}},
-        {"e", {b + 1, b, b, 1}}, {"sw", {0, b + 1, b, b}}, {"s", {b, b + 1, 1, b}}, {"se", {b + 1, b + 1, b, b}},
-    };
-    QList<PayloadFile> files;
-    for (const auto &[name, rect] : pieces)
-        files << PayloadFile{QStringLiteral("select_%1.png").arg(QLatin1String(name)), png(box.copy(rect))};
-    return files;
+    return files << nineSlice(QStringLiteral("select"), box, border);
 }
 
 // Fonts: one .pf2 per font file and pixel size, named "Ekpo F<n> <style> <size>".
@@ -115,22 +157,29 @@ public:
     {
     }
 
-    // The font for o["font"] at pixels, or nothing after a problem.
-    const Pf2Font *get(const QJsonObject &o, int pixels)
+    // The font file for o["font"], or nothing after a problem.
+    QString file(const QJsonObject &o)
     {
         QString file = defaultFontFile();
         if (const QString hash = o.value(QStringLiteral("font")).toString(); !hash.isEmpty()) {
             const auto it = m_assets.constFind(hash);
             if (it == m_assets.cend() || it->kind != Asset::Kind::Font) {
                 m_problems << QStringLiteral("The design uses a font that is no longer in the library.");
-                return nullptr;
+                return {};
             }
             file = m_library.assetPath(*it);
         }
-        if (file.isEmpty()) {
+        if (file.isEmpty())
             m_problems << QStringLiteral("No font found for text without one (fc-match sans-serif).");
+        return file;
+    }
+
+    // The font for o["font"] at pixels, or nothing after a problem.
+    const Pf2Font *get(const QJsonObject &o, int pixels)
+    {
+        const QString file = this->file(o);
+        if (file.isEmpty())
             return nullptr;
-        }
         const QString key = QStringLiteral("%1@%2").arg(file).arg(pixels);
         if (const auto it = m_built.constFind(key); it != m_built.cend())
             return &*it;
@@ -248,10 +297,18 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                              rgb(readColour(background, QStringLiteral("color"), QStringLiteral("#000000"), problems)));
     // GRUB fills with one colour: a gradient or an image becomes background.png, built
     // at the screen's size so GRUB has nothing to scale.
+    // So does text with a shadow, outline or glow, which GRUB can't draw (labels are plain).
     const QString hash = background.value(QStringLiteral("image")).toString();
     const bool gradient = background.contains(QStringLiteral("color2"));
-    if (images && (gradient || !hash.isEmpty())) {
-        QImage canvas(screen, QImage::Format_RGB32);
+    const auto hasEffects = [](const QJsonObject &e) {
+        return e.value(QStringLiteral("type")).toString() == QLatin1String("text")
+            && (e.contains(QStringLiteral("shadow")) || e.contains(QStringLiteral("outline")) || e.contains(QStringLiteral("glow")));
+    };
+    const QJsonArray elementList = content.value(QStringLiteral("elements")).toArray();
+    const bool bakedText = std::any_of(elementList.cbegin(), elementList.cend(), [&](const QJsonValue &v) { return hasEffects(v.toObject()); });
+    QImage canvas;
+    if (images && (gradient || !hash.isEmpty() || bakedText)) {
+        canvas = QImage(screen, QImage::Format_RGB32);
         QPainter p(&canvas);
         const QColor top(readColour(background, QStringLiteral("color"), QStringLiteral("#000000"), problems));
         const QLineF line = gradientLine(screen, gradientAngle(background));
@@ -269,7 +326,6 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
             }
         }
         p.end();
-        files << PayloadFile{QStringLiteral("background.png"), png(canvas)};
         theme += QStringLiteral("desktop-image: \"background.png\"\ndesktop-image-scale-method: \"stretch\"\n");
     }
 
@@ -279,8 +335,8 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                                                   {QStringLiteral("center"), QStringLiteral("center")},
                                                   {QStringLiteral("right"), QStringLiteral("right")}};
     QString components;
-    int menus = 0, imageCount = 0, number = 0;
-    for (const QJsonValue &value : content.value(QStringLiteral("elements")).toArray()) {
+    int menus = 0, imageCount = 0, progressCount = 0, number = 0;
+    for (const QJsonValue &value : elementList) {
         const QJsonObject e = value.toObject();
         const QString type = e.value(QStringLiteral("type")).toString();
         ++number;
@@ -310,15 +366,16 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                 continue;
             // Spacing from the font's line height; GRUB's own defaults are for 1080p.
             const int line = font->ascent + font->descent;
-            const int itemHeight = int(std::lround(line * 1.4)), padding = int(std::lround(line * 0.25)), spacing = int(std::lround(line * 0.2));
+            const int itemHeight = int(std::lround(line * 1.4)), padding = int(std::lround(line * 0.25));
             const int icon = line, iconSpace = int(std::lround(line * 0.4));
             const QJsonObject selection = e.value(QStringLiteral("selection")).toObject();
             const QString style = selection.value(QStringLiteral("style")).toString(QStringLiteral("rounded"));
-            if (style != QLatin1String("flat") && style != QLatin1String("rounded") && style != QLatin1String("glow"))
+            if (!selectionStyles.contains(style))
                 problems << QStringLiteral("Element %1 has an unknown selection style “%2”.").arg(number).arg(style);
-            const int border = style == QLatin1String("flat") ? 1 : style == QLatin1String("glow") ? int(std::lround(itemHeight * 0.35))
-                                                                                                   : int(std::lround(itemHeight * 0.25));
-            files << selectionImages(style, QColor(readColour(selection, QStringLiteral("color"), QStringLiteral("#40ffffff"), problems)), std::max(1, border));
+            const int border = std::max(1, selectionBorder(style, itemHeight, line));
+            // The selected box reaches a border beyond its entry: entries keep that much more apart.
+            const int spacing = int(std::lround(line * 0.2)) + border;
+            files << selectionImages(style, QColor(readColour(selection, QStringLiteral("color"), QStringLiteral("#40ffffff"), problems)), border, line);
 
             // Text starts at padding + selection border + icon + space and must end
             // before width − padding − selection border (gui_list.c, GRUB 2.14);
@@ -353,7 +410,7 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                 + QStringLiteral("    item_font = %1\n    selected_item_font = %1\n    item_color = \"%2\"\n    selected_item_color = \"%3\"\n"
                                  "    item_height = %4\n    item_padding = %5\n    item_spacing = %6\n"
                                  "    icon_width = %7\n    icon_height = %7\n    item_icon_space = %8\n"
-                                 "    selected_item_pixmap_style = \"select_*.png\"\n    scrollbar = false\n}\n")
+                                 "    item_pixmap_style = \"item_*.png\"\n    selected_item_pixmap_style = \"select_*.png\"\n    scrollbar = false\n}\n")
                       .arg(themeString(font->name), itemColour, selectedColour, QString::number(itemHeight), QString::number(padding),
                            QString::number(spacing), QString::number(icon), QString::number(iconSpace));
 
@@ -376,6 +433,31 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                 if (!image.isNull())
                     files << PayloadFile{QStringLiteral("icons/%1.png").arg(it.key()), png(image)};
             }
+        } else if (hasEffects(e)) { // drawn into background.png
+            if (canvas.isNull())
+                continue;
+            const QString align = e.value(QStringLiteral("align")).toString(QStringLiteral("center"));
+            if (!aligns.contains(align))
+                problems << QStringLiteral("Element %1 has an unknown alignment “%2”.").arg(number).arg(align);
+            const QString file = fonts.file(e);
+            const QString family = file.isEmpty() ? QString() : registerFont(file);
+            if (family.isEmpty()) {
+                if (!file.isEmpty())
+                    problems << QStringLiteral("The font of element %1 can't be loaded.").arg(number);
+                continue;
+            }
+            QFont font(family);
+            font.setPixelSize(textPixels(e, number));
+            const QString text = e.value(QStringLiteral("text")).toString();
+            if (layout && QFontMetrics(font).horizontalAdvance(text) > rect.width())
+                layout->clippedTexts << text;
+            QPainter p(&canvas);
+            p.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing);
+            p.setFont(font);
+            p.setClipRect(rect.adjusted(-rect.height(), -rect.height(), rect.height(), rect.height())); // effects reach a little beyond
+            const Qt::Alignment horizontal = align == QLatin1String("left") ? Qt::AlignLeft : align == QLatin1String("right") ? Qt::AlignRight : Qt::AlignHCenter;
+            drawStyledText(p, rect, int(Qt::AlignVCenter | horizontal), text, QColor(readColour(e, QStringLiteral("color"), QStringLiteral("#ffffff"), problems)),
+                           readTextEffects(e, problems));
         } else if (type == QLatin1String("text") || type == QLatin1String("countdown")) {
             const Pf2Font *font = fonts.get(e, textPixels(e, number));
             if (!font)
@@ -394,10 +476,64 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
                       .arg(themeString(text), themeString(font->name), rgb(readColour(e, QStringLiteral("color"), QStringLiteral("#ffffff"), problems)),
                            aligns.value(align, QStringLiteral("center")));
         } else if (type == QLatin1String("progress")) {
-            const QString bar = rgb(readColour(e, QStringLiteral("color"), QStringLiteral("#ffffff"), problems));
-            const QString back = rgb(readColour(e, QStringLiteral("background"), QStringLiteral("#404040"), problems));
+            // theme.txt colours are opaque; the images keep the alpha.
+            const QColor barColour(readColour(e, QStringLiteral("color"), QStringLiteral("#ffffff"), problems));
+            const QColor backColour(readColour(e, QStringLiteral("background"), QStringLiteral("#404040"), problems));
+            const QString bar = rgb(barColour.name(QColor::HexArgb)), back = rgb(backColour.name(QColor::HexArgb));
+            const QString style = e.value(QStringLiteral("style")).toString(QStringLiteral("flat"));
+            const QString prefix = QStringLiteral("progress-%1").arg(++progressCount);
+            if (style == QLatin1String("ring")) {
+                // A ring of dots that disappear as the time runs out, over a faint track
+                // (gui_circular_progress.c: ticks on a circle of min(w, h)/2 − tick/2 − 1).
+                const int side = std::min(rect.width(), rect.height());
+                const QRect square(rect.x() + (rect.width() - side) / 2, rect.y() + (rect.height() - side) / 2, side, side);
+                const int tick = std::max(4, int(std::lround(side * 0.07)));
+                const int radius = side / 2 - tick / 2 - 1;
+                const int ticks = std::clamp(int(std::lround(2 * M_PI * radius / (tick * 1.8))), 8, 72);
+                QImage centre(side, side, QImage::Format_ARGB32_Premultiplied);
+                centre.fill(Qt::transparent);
+                QPainter p(&centre);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setPen(QPen(backColour, tick * 0.5));
+                p.drawEllipse(QPointF(side / 2, side / 2), radius, radius);
+                p.end();
+                QImage dot(tick, tick, QImage::Format_ARGB32_Premultiplied);
+                dot.fill(Qt::transparent);
+                p.begin(&dot);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setPen(Qt::NoPen);
+                p.setBrush(barColour);
+                p.drawEllipse(QRectF(0, 0, tick, tick));
+                p.end();
+                files << PayloadFile{prefix + QStringLiteral("-centre.png"), png(centre)} << PayloadFile{prefix + QStringLiteral("-tick.png"), png(dot)};
+                components += QStringLiteral("\n+ circular_progress {\n    id = \"__timeout__\"\n") + place(square)
+                    + QStringLiteral("    num_ticks = %1\n    ticks_disappear = true\n    center_bitmap = \"%2-centre.png\"\n    tick_bitmap = \"%2-tick.png\"\n}\n")
+                          .arg(ticks)
+                          .arg(prefix);
+                continue;
+            }
+            if (style != QLatin1String("flat") && style != QLatin1String("rounded"))
+                problems << QStringLiteral("Element %1 has an unknown progress style “%2”.").arg(number).arg(style);
             components += QStringLiteral("\n+ progress_bar {\n    id = \"__timeout__\"\n") + place(rect)
-                + QStringLiteral("    fg_color = \"%1\"\n    bg_color = \"%2\"\n    border_color = \"%2\"\n    text = \"\"\n}\n").arg(bar, back);
+                + QStringLiteral("    fg_color = \"%1\"\n    bg_color = \"%2\"\n    border_color = \"%2\"\n    text = \"\"\n").arg(bar, back);
+            if (style == QLatin1String("rounded") && rect.height() >= 3) {
+                // Round ends: 9-slice boxes whose stretched middle is 1 pixel high. The fill
+                // lies over the track (highlight_overlay), from the left (gui_progress_bar.c).
+                const int border = (rect.height() - 1) / 2, s = 2 * border + 1;
+                const auto pill = [&](const QColor &colour) {
+                    QImage image(s, s, QImage::Format_ARGB32_Premultiplied);
+                    image.fill(Qt::transparent);
+                    QPainter p(&image);
+                    p.setRenderHint(QPainter::Antialiasing);
+                    p.setPen(Qt::NoPen);
+                    p.setBrush(colour);
+                    p.drawRoundedRect(QRectF(0, 0, s, s), s / 2.0, s / 2.0);
+                    return image;
+                };
+                files << nineSlice(prefix + QStringLiteral("-track"), pill(backColour), border) << nineSlice(prefix + QStringLiteral("-fill"), pill(barColour), border);
+                components += QStringLiteral("    bar_style = \"%1-track_*.png\"\n    highlight_style = \"%1-fill_*.png\"\n    highlight_overlay = true\n").arg(prefix);
+            }
+            components += QStringLiteral("}\n");
         } else if (images) { // image: scaled here to the size it is shown at
             const QString file = imageFile(e.value(QStringLiteral("asset")).toString());
             QImageReader reader(file);
@@ -419,6 +555,8 @@ QList<PayloadFile> buildBootMenu(const Design &design, const Library &library, Q
     }
     if (menus == 0)
         problems << QStringLiteral("A boot menu design needs a menu.");
+    if (!canvas.isNull())
+        files << PayloadFile{QStringLiteral("background.png"), png(canvas)};
 
     files << fonts.files << PayloadFile{QStringLiteral("theme.txt"), (theme + components).toUtf8()};
     std::sort(files.begin(), files.end(), [](const PayloadFile &a, const PayloadFile &b) { return a.path < b.path; });
@@ -488,6 +626,20 @@ QImage renderBootMenu(const QList<PayloadFile> &theme, QSize screen, const QStri
     p.setRenderHint(QPainter::SmoothPixmapTransform);
     if (const QString file = global(QStringLiteral("desktop-image")); files.contains(file))
         p.drawImage(QRect(QPoint(), screen), QImage::fromData(files.value(file)));
+    // A 9-slice pixmap style ("name_*.png") around box, its borders outside the content.
+    const auto drawBox = [&](const QString &pattern, const QRect &box) {
+        const auto piece = [&](const char *name) { return QImage::fromData(files.value(QString(pattern).replace(QLatin1Char('*'), QLatin1String(name)))); };
+        const int b = piece("nw").width();
+        p.drawImage(QRect(box.x(), box.y(), b, b), piece("nw"));
+        p.drawImage(QRect(box.x() + b, box.y(), box.width() - 2 * b, b), piece("n"));
+        p.drawImage(QRect(box.right() + 1 - b, box.y(), b, b), piece("ne"));
+        p.drawImage(QRect(box.x(), box.y() + b, b, box.height() - 2 * b), piece("w"));
+        p.drawImage(QRect(box.x() + b, box.y() + b, box.width() - 2 * b, box.height() - 2 * b), piece("c"));
+        p.drawImage(QRect(box.right() + 1 - b, box.y() + b, b, box.height() - 2 * b), piece("e"));
+        p.drawImage(QRect(box.x(), box.bottom() + 1 - b, b, b), piece("sw"));
+        p.drawImage(QRect(box.x() + b, box.bottom() + 1 - b, box.width() - 2 * b, b), piece("s"));
+        p.drawImage(QRect(box.right() + 1 - b, box.bottom() + 1 - b, b, b), piece("se"));
+    };
     const auto drawText = [&](const Pf2Font &font, const QString &string, const QColor &colour, const QRect &box, int x) {
         // One line, clipped to its box like GRUB's viewports, centred vertically.
         p.save();
@@ -500,9 +652,26 @@ QImage renderBootMenu(const QList<PayloadFile> &theme, QSize screen, const QStri
         const QRect r = c.rect();
         if (c.type == QLatin1String("image")) {
             p.drawImage(r, QImage::fromData(files.value(c.values.value(QStringLiteral("file")))));
-        } else if (c.type == QLatin1String("progress_bar")) {
+        } else if (c.type == QLatin1String("progress_bar")) { // half the time gone
+            if (const QString track = c.values.value(QStringLiteral("bar_style")); !track.isEmpty()) {
+                drawBox(track, r);
+                if (const int width = r.width() / 2; width >= 2 * QImage::fromData(files.value(QString(track).replace(QLatin1Char('*'), QLatin1String("nw")))).width())
+                    drawBox(c.values.value(QStringLiteral("highlight_style")), QRect(r.topLeft(), QSize(width, r.height())));
+                continue;
+            }
             p.fillRect(r, QColor(c.values.value(QStringLiteral("bg_color"))));
             p.fillRect(QRect(r.topLeft(), QSize(r.width() / 2, r.height())), QColor(c.values.value(QStringLiteral("fg_color"))));
+        } else if (c.type == QLatin1String("circular_progress")) {
+            const QImage centre = QImage::fromData(files.value(c.values.value(QStringLiteral("center_bitmap"))));
+            const QImage tick = QImage::fromData(files.value(c.values.value(QStringLiteral("tick_bitmap"))));
+            p.drawImage(r.x() + (r.width() - centre.width()) / 2, r.y() + (r.height() - centre.height()) / 2, centre);
+            const int ticks = c.number("num_ticks"), radius = std::min(r.width(), r.height()) / 2 - std::max(tick.width(), tick.height()) / 2 - 1;
+            for (int i = ticks / 2; i < ticks; ++i) { // they disappear clockwise from the top
+                const double angle = -M_PI / 2 + 2 * M_PI * i / ticks;
+                p.drawImage(QPointF(r.x() + r.width() / 2 + std::trunc(std::cos(angle) * radius) - tick.width() / 2,
+                                    r.y() + r.height() / 2 + std::trunc(std::sin(angle) * radius) - tick.height() / 2),
+                            tick);
+            }
         } else if (c.type == QLatin1String("label")) {
             const auto font = fonts.constFind(c.values.value(QStringLiteral("font")));
             if (font == fonts.cend())
@@ -527,27 +696,19 @@ QImage renderBootMenu(const QList<PayloadFile> &theme, QSize screen, const QStri
                 if (!(submenu && entry.contains(QLatin1String(", with Linux "))))
                     shown << entry;
             }
+            // As gui_list.c draws it: each box is item_height plus its borders, drawn
+            // from the entry's top; the text sits below the top border.
+            const int rows = (r.height() + spacing - 2 * pad - 2 * border) / std::max(1, height + spacing);
             int top = r.y() + pad;
-            for (qsizetype i = 0; i < shown.size() && top + height <= r.bottom() + 1 - pad; ++i) {
-                const QRect row(r.x() + pad, top, r.width() - 2 * pad, height);
-                if (i == 0 && border > 0) { // the selected entry's 9-slice box
-                    const auto piece = [&](const char *name) { return QImage::fromData(files.value(QStringLiteral("select_%1.png").arg(QLatin1String(name)))); };
-                    const int b = border;
-                    p.drawImage(QRect(row.x(), row.y(), b, b), piece("nw"));
-                    p.drawImage(QRect(row.x() + b, row.y(), row.width() - 2 * b, b), piece("n"));
-                    p.drawImage(QRect(row.right() + 1 - b, row.y(), b, b), piece("ne"));
-                    p.drawImage(QRect(row.x(), row.y() + b, b, row.height() - 2 * b), piece("w"));
-                    p.drawImage(QRect(row.x() + b, row.y() + b, row.width() - 2 * b, row.height() - 2 * b), piece("c"));
-                    p.drawImage(QRect(row.right() + 1 - b, row.y() + b, b, row.height() - 2 * b), piece("e"));
-                    p.drawImage(QRect(row.x(), row.bottom() + 1 - b, b, b), piece("sw"));
-                    p.drawImage(QRect(row.x() + b, row.bottom() + 1 - b, row.width() - 2 * b, b), piece("s"));
-                    p.drawImage(QRect(row.right() + 1 - b, row.bottom() + 1 - b, b, b), piece("se"));
-                }
+            for (qsizetype i = 0; i < shown.size() && i < rows; ++i) {
+                const QRect row(r.x() + pad, top, r.width() - 2 * pad, height + 2 * border);
+                if (i == 0 && border > 0) // the selected entry's 9-slice box
+                    drawBox(QStringLiteral("select_*.png"), row);
                 const QString iconFile = QStringLiteral("icons/%1.png").arg(classOf(shown[i]));
                 if (files.contains(iconFile))
-                    p.drawImage(QPoint(row.x() + border, row.y() + (height - icon) / 2), QImage::fromData(files.value(iconFile)));
+                    p.drawImage(QPoint(row.x() + border, row.y() + border + (height - icon) / 2), QImage::fromData(files.value(iconFile)));
                 const int textLeft = row.x() + border + icon + iconSpace;
-                const QRect textBox(textLeft, row.y(), row.right() + 1 - border - textLeft, height);
+                const QRect textBox(textLeft, row.y() + border, row.right() + 1 - border - textLeft, height);
                 const QString colour = c.values.value(i == 0 ? QStringLiteral("selected_item_color") : QStringLiteral("item_color"));
                 drawText(*font, shown[i], QColor(colour), textBox, textLeft);
                 top += height + spacing;
