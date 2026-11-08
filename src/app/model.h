@@ -131,6 +131,7 @@ struct Settings {
     bool showIntro = true; // the intro dialog at start (SPEC.md §4.2)
     bool rebuildAllKernels = false; // default of the review's switch for boot splash applies
     bool checkUpdates = true; // ask GitHub for a newer release at start (SPEC.md §4.14)
+    int previewResolution = 1440; // the editor opens at it: 1440, 1080 or 720 (SPEC.md §4.13)
 
     QJsonObject toJson() const;
     static Settings fromJson(const QJsonObject &json);

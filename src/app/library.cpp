@@ -707,28 +707,26 @@ bool Library::removeAsset(const QString &hash, QString &error)
     return writeJson(assetsManifest(m_path), entries, error);
 }
 
-namespace {
-// Every string in a JSON value: hashes and ids sit at different places in designs.
-void collectStrings(const QJsonValue &value, QSet<QString> &out)
+QSet<QString> stringsIn(const QJsonValue &value)
 {
+    QSet<QString> out;
     if (value.isString())
         out.insert(value.toString());
     else if (value.isArray())
         for (const QJsonValue &v : value.toArray())
-            collectStrings(v, out);
+            out.unite(stringsIn(v));
     else if (value.isObject())
         for (const QJsonValue &v : value.toObject())
-            collectStrings(v, out);
+            out.unite(stringsIn(v));
+    return out;
 }
-} // namespace
 
 QMap<QString, QList<Library::Use>> Library::uses(QStringList &errors) const
 {
     QMap<QString, QList<Use>> result;
     const auto add = [&](const QJsonObject &content, const Use &use) {
-        QSet<QString> strings;
-        collectStrings(content, strings);
-        for (const QString &s : std::as_const(strings))
+        const QSet<QString> strings = stringsIn(content);
+        for (const QString &s : strings)
             result[s].append(use);
     };
     for (const Design &d : designs(errors)) {

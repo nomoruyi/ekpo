@@ -45,18 +45,6 @@ QList<PayloadFile> filesIn(const QString &dir)
     return files;
 }
 
-QString slug(const QString &name)
-{
-    QString s = name.toLower();
-    s.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
-    s = s.left(32);
-    while (s.startsWith(QLatin1Char('-')))
-        s.remove(0, 1);
-    while (s.endsWith(QLatin1Char('-')))
-        s.chop(1);
-    return s.isEmpty() ? QStringLiteral("theme") : s;
-}
-
 // The first version whose folder is free or already holds exactly these files
 // (the helper accepts re-installing identical files).
 template<typename MakeFiles>
@@ -136,6 +124,18 @@ QString qmlEngine(const Target &before)
 }
 
 } // namespace
+
+QString slug(const QString &name)
+{
+    QString s = name.toLower();
+    s.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
+    s = s.left(32);
+    while (s.startsWith(QLatin1Char('-')))
+        s.remove(0, 1);
+    while (s.endsWith(QLatin1Char('-')))
+        s.chop(1);
+    return s.isEmpty() ? QStringLiteral("theme") : s;
+}
 
 QSize primaryScreenOr(const SystemState &state)
 {

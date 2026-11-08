@@ -3,9 +3,14 @@
 #include "model.h"
 #include "payload.h"
 
+#include <QSet>
 #include <QStringList>
 
 #include <optional>
+
+// Every string in a JSON value: asset hashes and shared ids sit at different places
+// in designs.
+QSet<QString> stringsIn(const QJsonValue &value);
 
 // The plain-file library (ARCHITECTURE.md §5): library.json, imports/, designs/,
 // assets/, masks/, builds/, history/.

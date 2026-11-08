@@ -103,6 +103,14 @@ Kirigami.ScrollablePage {
                         onClicked: maskDialog.edit(maskCard.modelData)
                     }
                     QQC2.ToolButton {
+                        icon.name: "document-export"
+                        text: qsTr("Export…")
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: exportDialog.start("mask", maskCard.modelData.id, maskCard.modelData.name)
+                    }
+                    QQC2.ToolButton {
                         icon.name: "edit-delete"
                         text: qsTr("Move to Trash")
                         display: QQC2.AbstractButton.IconOnly
@@ -176,5 +184,9 @@ Kirigami.ScrollablePage {
                 delegate: StagePicker {}
             }
         }
+    }
+
+    ExportDialog {
+        id: exportDialog
     }
 }

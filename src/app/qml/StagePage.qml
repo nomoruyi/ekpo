@@ -179,6 +179,15 @@ Kirigami.ScrollablePage {
                     }
                     QQC2.ToolButton {
                         visible: designCard.saved
+                        icon.name: "document-export"
+                        text: qsTr("Export…")
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        onClicked: exportDialog.start("design", designCard.modelData.id, designCard.modelData.name)
+                    }
+                    QQC2.ToolButton {
+                        visible: designCard.saved
                         icon.name: "edit-copy"
                         text: qsTr("Duplicate")
                         display: QQC2.AbstractButton.IconOnly
@@ -355,5 +364,9 @@ Kirigami.ScrollablePage {
                 text: reportDialog.theme ? qsTr("Source: %1").arg(reportDialog.theme.sourcePath) : ""
             }
         }
+    }
+
+    ExportDialog {
+        id: exportDialog
     }
 }

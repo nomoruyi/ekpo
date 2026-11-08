@@ -98,12 +98,19 @@ add_test(NAME smoke_update COMMAND ekpo)
 set_tests_properties(smoke_update PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_UPDATE_URL=file://${CMAKE_CURRENT_SOURCE_DIR}/fixtures/updates/release.json;EKPO_UPDATE_DIALOG=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/update.png")
 
+# Exporting the sample Mask: the export dialog with its licence list.
+add_test(NAME smoke_export COMMAND ekpo)
+set_tests_properties(smoke_export PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
+    "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_EXPORT=mask:00000000-0000-0000-0000-0000000000a1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/export.png")
+
 # Report a Bug from the Overview: the dialog with its screenshot preview.
 add_test(NAME smoke_bug_report COMMAND ekpo)
 set_tests_properties(smoke_bug_report PROPERTIES FIXTURES_REQUIRED sample_library ENVIRONMENT
     "${DEV_ENV};XDG_DATA_HOME=${SAMPLE_DATA};QT_QPA_PLATFORM=offscreen;QT_FATAL_WARNINGS=1;EKPO_BUG_REPORT=1;EKPO_SYSTEM_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference;EKPO_SYSTEM_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/roots/reference/home;EKPO_SCREENSHOT=${CMAKE_BINARY_DIR}/screenshots/bugReport.png")
 
 ekpo_test(tst_probe)
+ekpo_test(tst_exporter)
+set_tests_properties(tst_exporter PROPERTIES ENVIRONMENT "${DEV_ENV};QT_QPA_PLATFORM=offscreen")
 ekpo_test(tst_updater)
 target_link_libraries(tst_updater PRIVATE Qt6::Network)
 target_compile_definitions(tst_updater PRIVATE STUBS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stubs")

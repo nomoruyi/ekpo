@@ -374,12 +374,97 @@ QVariantMap Backend::removeUnused()
     return {{QStringLiteral("removed"), removed}, {QStringLiteral("errors"), errors}};
 }
 
+namespace {
+QString archivePath(const QUrl &file)
+{
+    QString path = file.toLocalFile();
+    if (!path.endsWith(QLatin1String(".tar.gz")) && !path.endsWith(QLatin1String(".tgz")))
+        path += QStringLiteral(".tar.gz");
+    return path;
+}
+} // namespace
+
+QVariantMap Backend::planExport(const QString &kind, const QString &id, const QString &screen)
+{
+    if (!m_library)
+        return {{QStringLiteral("problems"), QStringList{m_libraryError}}};
+    QSize size = primaryScreenOr(m_state);
+    static const QRegularExpression wxh(QStringLiteral("^(\\d+)x(\\d+)$"));
+    if (const QRegularExpressionMatch m = wxh.match(screen); m.hasMatch())
+        size = QSize(m.captured(1).toInt(), m.captured(2).toInt());
+    const bool mask = kind == QLatin1String("mask");
+    m_export = mask ? exportMask(*m_library, id, size, m_state.menuEntries) : exportDesign(*m_library, id, size, m_state.menuEntries);
+
+    // Boot menus and boot splashes Ekpo builds are made for one screen size.
+    QStringList errors;
+    QStringList designs;
+    if (mask) {
+        for (const Mask &m : m_library->masks(errors)) {
+            if (m.id == id)
+                for (const Slot &slot : m.stageSlots)
+                    if (slot.kind == Slot::Kind::Design)
+                        designs << slot.ref;
+        }
+    } else {
+        designs << id;
+    }
+    bool needsScreen = false;
+    for (const QString &d : std::as_const(designs)) {
+        QString error;
+        if (const auto design = m_library->design(d, 0, error))
+            needsScreen = needsScreen || design->stage != Stage::PlasmaSplash;
+    }
+    QStringList screens{QStringLiteral("%1x%2").arg(primaryScreenOr(m_state).width()).arg(primaryScreenOr(m_state).height())};
+    for (const char *common : {"2560x1440", "1920x1080", "1280x720"}) {
+        if (!screens.contains(QLatin1String(common)))
+            screens << QLatin1String(common);
+    }
+    QVariantList items;
+    for (const ExportItem &item : std::as_const(m_export.thirdParty))
+        items << QVariantMap{{QStringLiteral("kind"), item.kind},
+                             {QStringLiteral("name"), item.name},
+                             {QStringLiteral("source"), item.source},
+                             {QStringLiteral("licence"), item.licence},
+                             {QStringLiteral("free"), item.free}};
+    return {{QStringLiteral("folder"), m_export.folder},
+            {QStringLiteral("thirdParty"), items},
+            {QStringLiteral("problems"), m_export.problems},
+            {QStringLiteral("needsScreen"), needsScreen},
+            {QStringLiteral("screen"), QStringLiteral("%1x%2").arg(size.width()).arg(size.height())},
+            {QStringLiteral("screens"), screens}};
+}
+
+QString Backend::writeExport(const QUrl &file)
+{
+    if (m_export.files.isEmpty())
+        return tr("There is nothing to export.");
+    return writeArchive(m_export.files, archivePath(file));
+}
+
+QString Backend::exportLibraryTo(const QUrl &file)
+{
+    if (!m_library)
+        return m_libraryError;
+    return exportLibrary(*m_library, archivePath(file));
+}
+
 void Backend::setCheckUpdates(bool check)
 {
     if (!m_library)
         return;
     Settings settings = m_library->settings();
     settings.checkUpdates = check;
+    QString error;
+    m_library->saveSettings(settings, error);
+    Q_EMIT changed();
+}
+
+void Backend::setPreviewResolution(int resolution)
+{
+    if (!m_library || (resolution != 1440 && resolution != 1080 && resolution != 720))
+        return;
+    Settings settings = m_library->settings();
+    settings.previewResolution = resolution;
     QString error;
     m_library->saveSettings(settings, error);
     Q_EMIT changed();

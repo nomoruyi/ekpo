@@ -64,6 +64,8 @@ QSize primaryScreenOr(const SystemState &state);
 inline const QString defaultGfxmode = QStringLiteral("2560x1440,1920x1080,1280x720,auto");
 
 Plan planMask(const PlanContext &context, const Mask &mask);
+// A name as theme folders use it: lower case, a-z, 0-9 and "-", at most 32 characters.
+QString slug(const QString &name);
 // Restores and Masks both end here. builds holds files of builds not yet in the library.
 Plan planTarget(const PlanContext &context, const Target &target, const QString &title, const QMap<QString, QList<PayloadFile>> &builds = {});
 // The Target that restores Original, for stages Ekpo has changed.

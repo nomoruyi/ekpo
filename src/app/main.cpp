@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
         start.insert(QStringLiteral("startBugReport"), qEnvironmentVariableIsSet("EKPO_BUG_REPORT"));
         start.insert(QStringLiteral("startTour"), qEnvironmentVariableIsSet("EKPO_TOUR"));
         start.insert(QStringLiteral("startUpdateDialog"), qEnvironmentVariableIsSet("EKPO_UPDATE_DIALOG"));
+        start.insert(QStringLiteral("startExport"), qEnvironmentVariable("EKPO_EXPORT"));
     }
     engine.setInitialProperties(start);
     engine.loadFromModule("Ekpo", "Main");

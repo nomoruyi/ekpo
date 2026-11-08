@@ -166,6 +166,17 @@ The releases come from `https://api.github.com/repos/nomoruyi/ekpo/releases/late
 1. `updater` core: version compare, parsing the release (tag, notes, the `.deb` and `SHA256SUMS` assets), download into the cache with progress, cancel and redirects (GitHub serves assets through a redirect), the two checks, install through the launcher, restart; `tst_updater` against a local HTTP server and the stub installer.
 2. UI: check at start (Settings switch, "Check Now" with its result), the Overview banner, the update dialog (notes, progress, password prompt, restart); a smoke test with a `file://` release fixture.
 
+## 9d. Build order for export (approved 2026-11-08)
+
+SPEC.md §4.13: exports are plain packages that work without Ekpo; the whole library goes into one archive. Archives are written with `tar` (essential, always installed), to a file the user picks in KDE's save dialog.
+
+1. `export` core: a design as its plain theme package in a `.tar.gz`, built like an apply (boot menu and boot splash for a chosen screen size, the primary one by default): the theme folder (`ekpo-<slug>-v<n>/`) with a `README.md` (what it is, author, licence, the install commands for that stage) and `LICENSE` from the design's licence field; a Plasma splash as its look-and-feel package (installable with System Settings' "Install from File" or `kpackagetool6`). Golden files for the README and the archive listing.
+2. A Mask: one archive with a folder per stage (its design built, or the imported theme's files as imported) and one README for all three.
+3. Licence check before writing: everything third-party in the export (fonts with their licence texts, images and videos with their source, imported themes) listed in the dialog; fonts under a known free licence (OFL, Apache, MIT, GPL, Ubuntu Font Licence, Bitstream Vera) pass, anything else is marked "check before sharing". Nothing is blocked: the owner decides.
+4. The library: one `.tar.gz` of the library folder (designs, assets, shared elements, Masks, imports, history and builds, `library.json`), restorable by unpacking it and pointing Settings' library location at the folder (already supported).
+5. UI: "Export…" on design and Mask cards, "Export Library…" in Settings; the export dialog shows the screen size (boot stages), the licence list and the target file.
+6. Leftovers for v1.0: Settings' default preview resolution (SPEC.md §4.13; the editor opens at it), and removing the placeholder page no section reaches any more.
+
 ## 10. Decisions for the owner
 
 1. pkexec helper with stdin payload and own framing (above), or KAuth?

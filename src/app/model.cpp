@@ -235,6 +235,7 @@ QJsonObject Settings::toJson() const
         {QStringLiteral("showIntro"), showIntro},
         {QStringLiteral("rebuildAllKernels"), rebuildAllKernels},
         {QStringLiteral("checkUpdates"), checkUpdates},
+        {QStringLiteral("previewResolution"), previewResolution},
     };
 }
 
@@ -246,5 +247,7 @@ Settings Settings::fromJson(const QJsonObject &json)
     s.showIntro = json.value(QStringLiteral("showIntro")).toBool(s.showIntro);
     s.rebuildAllKernels = json.value(QStringLiteral("rebuildAllKernels")).toBool(s.rebuildAllKernels);
     s.checkUpdates = json.value(QStringLiteral("checkUpdates")).toBool(s.checkUpdates);
+    if (const int r = json.value(QStringLiteral("previewResolution")).toInt(); r == 1440 || r == 1080 || r == 720)
+        s.previewResolution = r;
     return s;
 }

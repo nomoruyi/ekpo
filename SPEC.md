@@ -157,7 +157,9 @@ C++ with Qt 6 Quick + Kirigami, CMake, QtTest; a small C++ root helper. Generato
 | **M1: manage** | Library, import with report, Masks, apply with review, history and restore (incl. Original), after-reboot check, outside-change detection, timeout setting, first start and intro dialog, CLI, `.deb` with helper and polkit policy. No designers. |
 | **M2: splash designers** | Asset library (fonts, provenance), editor shell, Plymouth two-step designer (incl. video → frames, size meter, hide messages), Plasma splash designer (MP4 video, Run real splash), starters, linked shared elements. |
 | **M3: GRUB designer** | Boot Menu designer incl. `.pf2` build, adaptive entry width, icon set, countdown. |
-| **v1.0** | M1–M3 plus design/Mask/library export. |
+| **M4: export** | Design/Mask/library export (ARCHITECTURE.md §9d), shipped as a minor release (decided 2026-11-08). |
+| **Polish** | Feature extensions and quality-of-life additions the owner picks, plus the bugs found while testing. |
+| **v1.0** | M1–M4 after polish and bug fixes; released only then. |
 
 Later, not scheduled: SDDM login screen; pixel-exact GRUB preview from a rescue ISO in QEMU; real Plymouth preview via `plymouth-x11`.
 

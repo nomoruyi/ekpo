@@ -34,6 +34,7 @@ Kirigami.ApplicationWindow {
     property string startEdit: "" // EKPO_EDIT_DESIGN (dev only): open this design in the editor
     property bool startBugReport: false // EKPO_BUG_REPORT (dev only): open Report a Bug
     property bool startUpdateDialog: false // EKPO_UPDATE_DIALOG (dev only): open the update dialog once a check finds one
+    property string startExport: "" // EKPO_EXPORT (dev only): "design:<id>" or "mask:<id>" opens its export dialog
     property bool startTour: false // EKPO_TOUR (dev only): switch pages as clicks would, see the tour below
     property bool tourDone: false // the screenshot follows it
     property bool editing: false // the editor has the window; the sidebar is hidden
@@ -44,7 +45,7 @@ Kirigami.ApplicationWindow {
         currentSection = allSections.find(s => s.name === name);
     }
     function pageFor(name) {
-        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, assets: assetsPage, history: historyPage, settings: settingsPage, about: aboutPage })[name] ?? placeholderPage;
+        return ({ overview: overviewPage, bootMenu: bootMenuPage, bootSplash: bootSplashPage, plasmaSplash: plasmaSplashPage, masks: masksPage, assets: assetsPage, history: historyPage, settings: settingsPage, about: aboutPage })[name] ?? overviewPage;
     }
     function showPage(page) {
         const old = pageStack.currentItem;
@@ -99,6 +100,14 @@ Kirigami.ApplicationWindow {
     }
     UpdateDialog {
         id: updateDialog
+    }
+    ExportDialog {
+        id: startExportDialog
+    }
+    Timer {
+        running: root.startExport !== ""
+        interval: 300
+        onTriggered: startExportDialog.start(root.startExport.split(":")[0], root.startExport.split(":")[1], qsTr("Dev export"))
     }
     // (Opened once the window is laid out, like Report a Bug's: Kirigami centres
     // dialogs on the window's size.)
@@ -206,7 +215,7 @@ Kirigami.ApplicationWindow {
     // emits changed() on every refresh and setting change, restarting a bound timer.
     property bool startDialogsShown: false
     Timer {
-        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === "" && !root.startBugReport
+        running: !root.startDialogsShown && root.startReview === "" && root.startEdit === "" && !root.startBugReport && root.startExport === ""
         interval: 500
         onTriggered: {
             root.startDialogsShown = true;
@@ -376,23 +385,6 @@ Kirigami.ApplicationWindow {
                 root.globalDrawer.drawerOpen = true;
                 root.showPage(root.pageFor(root.currentSection.name));
             }
-        }
-    }
-
-    // ponytail: one placeholder for the sections later steps build.
-    Kirigami.Page {
-        id: placeholderPage
-        visible: false
-        title: root.currentSection.title
-        actions: [
-            ReportBugAction {}
-        ]
-
-        Kirigami.PlaceholderMessage {
-            anchors.centerIn: parent
-            width: parent.width - Kirigami.Units.gridUnit * 4
-            text: qsTr("Not built yet")
-            explanation: qsTr("This page arrives in a later M1 step.")
         }
     }
 }

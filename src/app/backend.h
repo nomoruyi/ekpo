@@ -2,6 +2,7 @@
 
 #include "designeditor.h"
 #include "executor.h"
+#include "exporter.h"
 #include "library.h"
 #include "planner.h"
 #include "probe.h"
@@ -54,6 +55,7 @@ class Backend : public QObject
     // added, source, licenceUrl, colours, usedBy (short), uses (all)}, by kind and name.
     Q_PROPERTY(QVariantList assetList READ assetList NOTIFY assetsChanged)
     Q_PROPERTY(bool checkUpdates READ checkUpdates NOTIFY changed)
+    Q_PROPERTY(int previewResolution READ previewResolution NOTIFY changed)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -118,10 +120,20 @@ public:
     Q_INVOKABLE QString removeItem(const QString &key); // to the trash; refused while used
     Q_INVOKABLE QVariantMap removeUnused(); // {removed, errors}
 
+    // Export (SPEC.md §4.13). planExport prepares one for the export dialog: {folder,
+    // thirdParty: [{kind, name, source, licence, free}], problems, needsScreen, screen,
+    // screens}; kind is "design" or "mask", screen "WxH" (empty: the primary one).
+    // writeExport writes it; .tar.gz is added when missing. Empty on success.
+    Q_INVOKABLE QVariantMap planExport(const QString &kind, const QString &id, const QString &screen = {});
+    Q_INVOKABLE QString writeExport(const QUrl &file);
+    Q_INVOKABLE QString exportLibraryTo(const QUrl &file);
+
     // Updates from GitHub releases (SPEC.md §4.14).
     QVariantMap updateInfo() const { return m_update; }
     bool checkUpdates() const { return !m_library || m_library->settings().checkUpdates; }
     Q_INVOKABLE void setCheckUpdates(bool check);
+    int previewResolution() const { return m_library ? m_library->settings().previewResolution : 1440; }
+    Q_INVOKABLE void setPreviewResolution(int resolution); // 1440, 1080 or 720
     Q_INVOKABLE void checkForUpdates();
     Q_INVOKABLE void startUpdate(); // the newer release checkForUpdates found
     Q_INVOKABLE void cancelUpdate();
@@ -210,4 +222,5 @@ private:
     Release m_release; // the newer release, once a check found one
     QVariantMap m_update;
     QVariantList m_assetList;
+    ExportPlan m_export;
 };

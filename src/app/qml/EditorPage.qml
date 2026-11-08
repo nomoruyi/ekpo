@@ -21,7 +21,7 @@ Kirigami.Page {
     readonly property var backgroundSpec: editor.content.background ?? ({})
     property int selected: -1 // -1 = the background
     readonly property var element: selected >= 0 && selected < elements.length ? elements[selected] : null
-    property int resolution: 1440
+    property int resolution: Backend.previewResolution // Settings' default
     readonly property size screenSize: Qt.size(resolution * 16 / 9, resolution)
     readonly property real tolerance: Kirigami.Units.smallSpacing * 1.5 // snapping, in canvas pixels
     property real guideX: -1

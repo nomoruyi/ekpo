@@ -1,3 +1,4 @@
+import QtCore
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
@@ -16,11 +17,27 @@ Kirigami.ScrollablePage {
     property bool removalOk: false
     property bool removing: false
     property string libraryMessage: ""
+    property bool libraryOk: false
 
     FolderDialog {
         id: libraryDialog
         title: qsTr("Choose an empty folder, or one that holds an Ekpo library")
-        onAccepted: page.libraryMessage = Backend.setLibraryLocation(selectedFolder)
+        onAccepted: {
+            page.libraryMessage = Backend.setLibraryLocation(selectedFolder);
+            page.libraryOk = false;
+        }
+    }
+    // The whole library as one archive (SPEC.md §4.13).
+    FileDialog {
+        id: libraryExportDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Archives (*.tar.gz)")]
+        currentFile: StandardPaths.writableLocation(StandardPaths.DocumentsLocation) + "/ekpo-library.tar.gz"
+        onAccepted: {
+            const error = Backend.exportLibraryTo(selectedFile);
+            page.libraryOk = error === "";
+            page.libraryMessage = error || qsTr("Saved. To use it elsewhere, unpack it and choose its folder with Change….");
+        }
     }
 
     title: qsTr("Settings")
@@ -54,18 +71,23 @@ Kirigami.ScrollablePage {
                 enabled: !Backend.applying
                 onClicked: libraryDialog.open()
             }
+            QQC2.Button {
+                text: qsTr("Export…")
+                icon.name: "document-export"
+                onClicked: libraryExportDialog.open()
+            }
         }
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 26
             wrapMode: Text.Wrap
             opacity: 0.7
-            text: qsTr("An empty folder: the library moves there. A folder with an Ekpo library: Ekpo uses that one instead.")
+            text: qsTr("An empty folder: the library moves there. A folder with an Ekpo library: Ekpo uses that one instead. Export saves the whole library as one archive.")
         }
         Kirigami.InlineMessage {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 26
             Layout.fillWidth: true
             visible: page.libraryMessage !== ""
-            type: Kirigami.MessageType.Error
+            type: page.libraryOk ? Kirigami.MessageType.Positive : Kirigami.MessageType.Error
             text: page.libraryMessage
         }
         RowLayout {
@@ -97,6 +119,13 @@ Kirigami.ScrollablePage {
             text: qsTr("Show file changes and commands")
             checked: Backend.technicalDetailsExpanded
             onToggled: Backend.setTechnicalDetailsExpanded(checked)
+        }
+        QQC2.ComboBox {
+            Kirigami.FormData.label: qsTr("Editor preview:")
+            readonly property var resolutions: [1440, 1080, 720]
+            model: resolutions.map(r => qsTr("%1p").arg(r))
+            currentIndex: resolutions.indexOf(Backend.previewResolution)
+            onActivated: index => Backend.setPreviewResolution(resolutions[index])
         }
         QQC2.Switch {
             Kirigami.FormData.label: qsTr("At start:")
